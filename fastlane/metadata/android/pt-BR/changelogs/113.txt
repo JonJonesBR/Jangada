@@ -1,0 +1,1 @@
+Projetos com repositório: Novo projeto cria a pasta com git e, com login no gh ou no glab, o repositório no GitHub ou no GitLab; Clonar copia um repositório pelo endereço, com progresso e aviso ao terminar. Em Mudanças: vincular, enviar (git push), trocar ou desvincular o remoto, ou criá-lo no site. O chat guarda o rascunho do texto não enviado de cada trabalho.

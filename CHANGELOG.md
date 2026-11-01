@@ -1,5 +1,12 @@
 # Novidades
 
+## 1.9.0
+
+- Novo projeto: no Novo trabalho da tela inicial e no seletor de pasta do chat, cria uma pasta em ~/projetos com git init e, com login no gh ou no glab, o repositório privado no GitHub ou no GitLab. O chat abre direto nela.
+- Clonar um repositório: cole o endereço (https ou ssh) e o app copia o repositório para uma pasta nova, com progresso, Cancelar e Em segundo plano (um aviso chega quando termina). Falhas mostram o registro com uma dica (login, chave ssh, ssh ausente, repositório não encontrado).
+- Mudanças: repositório remoto. Vincular um endereço, enviar (git push), trocar o endereço e desvincular; sem remoto, criar no GitHub ou no GitLab (privado ou público), ou entrar e instalar o gh e o glab pelo terminal.
+- Chat: o texto ainda não enviado fica como rascunho de cada trabalho e volta ao reabrir o chat.
+
 ## 1.8.0
 
 - Painel que sobe de baixo, no alcance do polegar, no lugar das listas em diálogo: ajustes do chat, pastas, trabalhos, histórico, ações do resumo, menu do agente e compartilhar. Cada opção tem uma frase explicando e o valor atual.

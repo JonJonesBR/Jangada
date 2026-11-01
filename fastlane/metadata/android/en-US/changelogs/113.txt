@@ -1,0 +1,1 @@
+Projects with repositories: New project creates the folder with git and, when signed in to gh or glab, the repository on GitHub or GitLab; Clone copies a repository from its address, with progress and a notice when done. In Changes: link, push, change or unlink the remote, or create it on the site. The chat keeps a draft of the unsent text of each job.
