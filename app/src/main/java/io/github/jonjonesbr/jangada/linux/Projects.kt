@@ -27,10 +27,23 @@ object Projects {
     /** Endereço no formato scp (usuario@host:caminho). Usuário e host não começam com hífen. */
     private val SCP_URL = Regex("""^[A-Za-z0-9._][A-Za-z0-9._-]*@[A-Za-z0-9][A-Za-z0-9.-]*:\S+$""")
     private val SCHEMES = listOf("https://", "http://", "ssh://")
+    /** Esquema de um endereço com "://" (ex.: "https://"), no começo. */
+    private val SCHEME_PREFIX = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
     private val NAME_CHAR = Regex("[A-Za-z0-9._-]")
 
     /** Código de saída do script de clone quando a pasta de destino já existe. */
     const val CLONE_EXISTS = 3
+
+    /**
+     * Argumentos `-c` do git para operações de rede (envio): sem resposta, o git desiste (velocidade
+     * mínima por tempo), e o ssh não pergunta nada (BatchMode, aceita uma chave de servidor nova
+     * na primeira vez) e tem tempo limite. Nada fica pendurado com a tela esperando.
+     */
+    val SAFE_NETWORK: Array<String> = arrayOf(
+        "-c", "http.lowSpeedLimit=1000",
+        "-c", "http.lowSpeedTime=30",
+        "-c", "core.sshCommand=ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=20 -o ServerAliveInterval=15 -o ServerAliveCountMax=2",
+    )
 
     /**
      * Cria a pasta [name] na raiz dos projetos. Nunca cria através de link: a raiz tem que ser
@@ -63,6 +76,18 @@ object Projects {
             return rest.isNotEmpty() && !rest.startsWith("-")
         }
         return SCP_URL.matches(url)
+    }
+
+    /**
+     * Endereço para mostrar na tela, sem usuário e senha: `https://usuario:token@host/a/b` vira
+     * `https://host/a/b`. Só a parte entre "://" e a barra seguinte pode ter credenciais (usa o último
+     * "@" dela). Sem esquema (formato scp, `git@host:a/b.git`) ou sem "@" ali, fica igual.
+     */
+    fun displayUrl(url: String): String {
+        val prefix = SCHEME_PREFIX.find(url)?.value ?: return url
+        val end = url.indexOf('/', prefix.length).let { if (it < 0) url.length else it }
+        val at = url.lastIndexOf('@', end - 1)
+        return if (at < prefix.length) url else prefix + url.substring(at + 1)
     }
 
     /**
@@ -109,7 +134,7 @@ object Projects {
         "[ -L ${q(Workspace.ROOT)} ] || rm -rf -- ${q("${Workspace.ROOT}/${cloneTemp(name)}")}"
 
     /**
-     * Dica (id de string) para a saída de um clone que falhou, ou null se não reconhece o erro.
+     * Dica (id de string) para a saída de um clone ou envio que falhou, ou null se não reconhece o erro.
      * Pelo texto em inglês do git e do ssh, que são os que o app roda.
      */
     fun authHint(output: String): Int? = when {
@@ -118,6 +143,9 @@ object Projects {
         "Permission denied (publickey)" in output || "Host key verification failed" in output ->
             R.string.clone_hint_ssh_key
         "ssh: not found" in output || "cannot run ssh" in output -> R.string.clone_hint_ssh_missing
+        // Envio recusado: o remoto tem commits que este repositório não tem.
+        "[rejected]" in output || "fetch first" in output || "non-fast-forward" in output ->
+            R.string.push_hint_rejected
         "Repository not found" in output ||
             (output.contains("not found", ignoreCase = true) && output.contains("repository", ignoreCase = true)) ->
             R.string.clone_hint_not_found

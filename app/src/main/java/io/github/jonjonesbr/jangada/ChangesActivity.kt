@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.Editable
+import android.text.InputType
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
@@ -20,12 +21,15 @@ import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.widget.doAfterTextChanged
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.ui.Sheet
 import java.io.File
@@ -47,6 +51,10 @@ class ChangesActivity : JangadaActivity() {
         val ahead: Int?,
         /** A saída do status foi cortada: a lista não está completa. */
         val cut: Boolean = false,
+        /** Endereço do origin; null = sem remoto. */
+        val remote: String? = null,
+        /** A branch tem upstream (só então o git conta os commits à frente). */
+        val hasUpstream: Boolean = false,
     )
 
     private lateinit var linux: LinuxEnv
@@ -55,6 +63,8 @@ class ChangesActivity : JangadaActivity() {
     private var cwd = ""
     private lateinit var subtitle: TextView
     private lateinit var summary: TextView
+    /** Linha do repositório remoto, logo abaixo do resumo. */
+    private lateinit var remoteRow: TextView
     private lateinit var list: ListView
     private lateinit var empty: TextView
     private lateinit var commitBar: View
@@ -68,6 +78,13 @@ class ChangesActivity : JangadaActivity() {
     private var isRepo = false
     /** Há pelo menos um commit (sem ele, o diff compara com o indexado). */
     private var hasHead = false
+    /** Endereço do origin (null = sem remoto) e se a branch tem upstream. */
+    private var remote: String? = null
+    private var hasUpstream = false
+    /** Uma ação do remoto (vincular, trocar, desvincular) ou um envio está rodando. */
+    private var remoteBusy = false
+    /** Diálogo de progresso do envio; fecha também se a tela for destruída no meio. */
+    private var pushDialog: AlertDialog? = null
     /** Uma leitura está rodando; outro pedido nesse meio tempo só marca [reloadWanted]. */
     private var loading = false
     /** Pedido de leitura que chegou durante outra: roda quando ela terminar (uma thread por vez). */
@@ -91,6 +108,7 @@ class ChangesActivity : JangadaActivity() {
         cwd = Workspace.path(folder)
         subtitle = findViewById(R.id.changes_subtitle)
         summary = findViewById(R.id.changes_summary)
+        remoteRow = findViewById(R.id.changes_remote)
         list = findViewById(R.id.changes_list)
         empty = findViewById(R.id.changes_empty)
         commitBar = findViewById(R.id.changes_commit_bar)
@@ -102,6 +120,7 @@ class ChangesActivity : JangadaActivity() {
         list.setOnItemClickListener { _, _, position, _ -> changes.getOrNull(position)?.let { openChange(it) } }
         findViewById<View>(R.id.changes_back).setOnClickListener { finish() }
         findViewById<View>(R.id.changes_refresh).setOnClickListener { load() }
+        remoteRow.setOnClickListener { showRemote() }
         commitButton.setOnClickListener { commit() }
         askAgentButton.setOnClickListener { askAgentToCommit() }
         messageField.addTextChangedListener(object : TextWatcher {
@@ -114,6 +133,12 @@ class ChangesActivity : JangadaActivity() {
     override fun onResume() {
         super.onResume()
         load()
+    }
+
+    override fun onDestroy() {
+        runCatching { pushDialog?.dismiss() }
+        pushDialog = null
+        super.onDestroy()
     }
 
     /**
@@ -156,7 +181,19 @@ class ChangesActivity : JangadaActivity() {
         // Sem upstream o git erra: não é um problema a mostrar, só não há contagem.
         val ahead = Git.run(linux, cwd, "rev-list", "--count", "@{u}..HEAD")
             .takeIf { it.code == 0 }?.output?.trim()?.toIntOrNull()
-        return State(true, branch, hasHead, parsed, ahead, status.cut)
+        // Sem origin o git erra (código diferente de 0): então não há remoto.
+        val remote = Git.run(linux, cwd, "remote", "get-url", "origin")
+            .takeIf { it.code == 0 }?.output?.trim()?.lineSequence()?.firstOrNull()?.takeIf { it.isNotEmpty() }
+        return State(
+            isRepo = true,
+            branch = branch,
+            hasHead = hasHead,
+            changes = parsed,
+            ahead = ahead,
+            cut = status.cut,
+            remote = remote,
+            hasUpstream = ahead != null,
+        )
     }
 
     /** Mostra a leitura: título, resumo, lista ou o aviso de vazio, e o campo de commit. */
@@ -164,11 +201,14 @@ class ChangesActivity : JangadaActivity() {
         isRepo = read.isRepo
         hasHead = read.hasHead
         changes = read.changes
+        remote = read.remote
+        hasUpstream = read.hasUpstream
         askAgentButton.visibility = if (read.isRepo && changes.isNotEmpty() && agentId != null) View.VISIBLE else View.GONE
         val label = Workspace.label(folder, getString(R.string.chat_folder_root))
         subtitle.text = read.branch?.let { "$label · $it" } ?: label
         if (!read.isRepo) {
             summary.visibility = View.GONE
+            remoteRow.visibility = View.GONE
             list.visibility = View.GONE
             commitBar.visibility = View.GONE
             empty.text = getString(R.string.changes_not_repo)
@@ -182,6 +222,7 @@ class ChangesActivity : JangadaActivity() {
         read.ahead?.let { parts += resources.getQuantityString(R.plurals.changes_ahead, it, it) }
         summary.text = parts.joinToString(" · ")
         summary.visibility = View.VISIBLE
+        updateRemoteRow()
         commitBar.visibility = View.VISIBLE
         val any = changes.isNotEmpty()
         list.visibility = if (any) View.VISIBLE else View.GONE
@@ -205,6 +246,169 @@ class ChangesActivity : JangadaActivity() {
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP),
         )
         finish()
+    }
+
+    /** Linha do remoto: "não vinculado", ou o endereço (sem credenciais) e, se for o caso, "ainda não enviado". */
+    private fun updateRemoteRow() {
+        val current = remote
+        remoteRow.text = if (current == null) {
+            getString(R.string.remote_none)
+        } else {
+            buildString {
+                append("☁ ").append(Projects.displayUrl(current))
+                if (!hasUpstream && hasHead) append(" · ").append(getString(R.string.remote_not_pushed))
+            }
+        }
+        remoteRow.visibility = View.VISIBLE
+    }
+
+    /**
+     * Painel do remoto. Sem origin: vincular. Com origin: enviar, trocar o endereço e desvincular
+     * (só tira o vínculo; nada é apagado no site).
+     */
+    private fun showRemote() {
+        val current = remote
+        val rows = if (current == null) {
+            listOf(
+                Sheet.Row(
+                    title = getString(R.string.remote_link),
+                    description = getString(R.string.remote_link_desc),
+                    icon = "🔗",
+                ) { askRemoteUrl(null) },
+            )
+        } else {
+            listOf(
+                Sheet.Row(
+                    title = getString(R.string.remote_push),
+                    description = getString(if (hasHead) R.string.remote_push_desc else R.string.remote_push_no_commit),
+                    value = Projects.displayUrl(current),
+                    icon = "⇡",
+                ) {
+                    if (hasHead) push() else Toast.makeText(this, R.string.remote_push_no_commit, Toast.LENGTH_SHORT).show()
+                },
+                Sheet.Row(title = getString(R.string.remote_change), icon = "✎") { askRemoteUrl(current) },
+                Sheet.Row(
+                    title = getString(R.string.remote_unlink),
+                    description = getString(R.string.remote_unlink_desc),
+                    icon = "✕",
+                    destructive = true,
+                ) { confirmUnlink() },
+            )
+        }
+        Sheet(this).title(getString(R.string.remote_title)).rows(rows).show()
+    }
+
+    /**
+     * Diálogo com o endereço do remoto: vincular ([current] null, `git remote add`) ou trocar
+     * (`git remote set-url`). Endereço inválido mantém o diálogo aberto com o erro no campo.
+     */
+    private fun askRemoteUrl(current: String?) {
+        val explain = TextView(this).apply {
+            text = getString(R.string.remote_link_explain)
+            textSize = 14f
+            setTextColor(getColor(R.color.setup_muted))
+            setPadding(0, 0, 0, dp(8))
+        }
+        val field = EditText(this).apply {
+            hint = getString(R.string.clone_url_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine(true)
+            setText(current ?: "")
+        }
+        // Digitar de novo tira o erro do campo.
+        field.doAfterTextChanged { field.error = null }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(explain)
+            addView(field)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(if (current == null) R.string.remote_link else R.string.remote_change)
+            .setView(content)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        // O OK é ligado depois de mostrar o diálogo: com endereço errado, ele fica aberto.
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val url = field.text.toString().trim()
+                if (!Projects.isCloneUrl(url)) {
+                    field.error = getString(R.string.clone_url_invalid)
+                } else {
+                    dialog.dismiss()
+                    runRemote("remote", if (current == null) "add" else "set-url", "origin", url)
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /**
+     * Um comando do git que mexe no remoto, numa thread. Sucesso: aviso e a tela relê o estado.
+     * Erro: a saída do git, e a tela também relê (o comando pode ter mudado algo pela metade).
+     */
+    private fun runRemote(vararg args: String) {
+        if (remoteBusy) return
+        remoteBusy = true
+        thread(name = "changes-remote") {
+            val out = runCatching { Git.run(linux, cwd, *args) }.getOrElse { Git.Result(-1, it.message ?: "") }
+            runOnUiThread {
+                remoteBusy = false
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (out.code == 0) {
+                    Toast.makeText(this, R.string.remote_saved, Toast.LENGTH_SHORT).show()
+                } else {
+                    showText(R.string.git_failed_title, out.shown.ifBlank { getString(R.string.git_failed_title) })
+                }
+                load()
+            }
+        }
+    }
+
+    /**
+     * `git push -u origin HEAD` numa thread, com um diálogo de progresso que não se fecha sozinho.
+     * O diálogo fecha em todo caminho, até com a tela já saindo. Erro: a dica (se conhecida) e a saída.
+     */
+    private fun push() {
+        if (remoteBusy) return
+        remoteBusy = true
+        val progress = AlertDialog.Builder(this)
+            .setTitle(R.string.remote_pushing)
+            .setView(ProgressBar(this).apply {
+                isIndeterminate = true
+                setPadding(0, dp(16), 0, dp(16))
+            })
+            .setCancelable(false)
+            .show()
+        pushDialog = progress
+        thread(name = "changes-push") {
+            val out = runCatching { Git.run(linux, cwd, *Projects.SAFE_NETWORK, "push", "-u", "origin", "HEAD") }
+                .getOrElse { Git.Result(-1, it.message ?: "") }
+            runOnUiThread {
+                runCatching { progress.dismiss() }
+                if (pushDialog === progress) pushDialog = null
+                remoteBusy = false
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (out.code == 0) {
+                    Toast.makeText(this, R.string.remote_pushed, Toast.LENGTH_SHORT).show()
+                } else {
+                    val hint = Projects.authHint(out.output)?.let { getString(it) }
+                    val body = listOfNotNull(hint, out.shown.takeIf { it.isNotBlank() }).joinToString("\n\n")
+                    showText(R.string.remote_push_failed, body.ifBlank { getString(R.string.remote_push_failed) })
+                }
+                load()
+            }
+        }
+    }
+
+    /** Confirma antes de tirar o vínculo com o origin. */
+    private fun confirmUnlink() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.remote_unlink_confirm)
+            .setPositiveButton(R.string.remote_unlink) { _, _ -> runRemote("remote", "remove", "origin") }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     /** Commit só com repositório, mudanças e mensagem; e sem outro commit rodando. */

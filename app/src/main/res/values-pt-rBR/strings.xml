@@ -510,6 +510,25 @@
     <string name="changes_diff_empty">Sem diferenças de texto</string>
     <string name="changes_diff_cut">… o resto não aparece aqui</string>
     <string name="changes_list_cut">lista cortada</string>
+    <!-- Repositório remoto (origin) na tela de Mudanças -->
+    <string name="remote_title">Repositório remoto</string>
+    <string name="remote_none">☁ Vincular a um repositório remoto…</string>
+    <string name="remote_not_pushed">ainda não enviado</string>
+    <string name="remote_link">Vincular a um repositório</string>
+    <string name="remote_link_desc">Crie um repositório vazio no GitHub, GitLab ou outro site e cole o endereço</string>
+    <string name="remote_link_explain">Cole o endereço do repositório (https ou ssh). O envio usa o login do gh, do glab ou a sua chave ssh.</string>
+    <string name="remote_push">Enviar (git push)</string>
+    <string name="remote_push_desc">Envia os commits desta branch para o repositório remoto</string>
+    <string name="remote_push_no_commit">Faça um commit antes</string>
+    <string name="remote_change">Trocar o endereço</string>
+    <string name="remote_unlink">Desvincular</string>
+    <string name="remote_unlink_desc">Remove só o vínculo (origin); nada é apagado no site</string>
+    <string name="remote_unlink_confirm">Desvincular o repositório remoto?</string>
+    <string name="remote_saved">Repositório remoto salvo</string>
+    <string name="remote_pushing">Enviando…</string>
+    <string name="remote_pushed">Enviado</string>
+    <string name="remote_push_failed">O envio falhou</string>
+    <string name="push_hint_rejected">O repositório remoto tem commits que você não tem (por exemplo, um README criado no site). Peça ao agente para fazer o pull e juntar, e envie de novo.</string>
     <string name="git_failed_title">O git falhou</string>
     <!-- Trabalho isolado (git worktree) -->
     <string name="chat_worktree_new">Novo trabalho isolado (worktree)…</string>

@@ -68,6 +68,23 @@
         android:textSize="14sp"
         android:visibility="gone" />
 
+    <!-- Repositório remoto (origin): toque abre o painel para vincular, enviar ou desvincular. Só num repositório. -->
+    <TextView
+        android:id="@+id/changes_remote"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="?android:attr/selectableItemBackground"
+        android:ellipsize="end"
+        android:gravity="center_vertical"
+        android:maxLines="2"
+        android:minHeight="48dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
+        android:textColor="@color/accent_text"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
     <ListView
         android:id="@+id/changes_list"
         android:layout_width="match_parent"

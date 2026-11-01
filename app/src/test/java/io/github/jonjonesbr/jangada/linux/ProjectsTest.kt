@@ -43,4 +43,12 @@ class ProjectsTest {
     fun nomeInvalidoDevolveVazio() {
         assertEquals("", Projects.nameFromUrl("https://x/.."))
     }
+
+    @Test
+    fun enderecoMostradoSemCredenciais() {
+        assertEquals("https://host/a/b", Projects.displayUrl("https://usuario:token@host/a/b"))
+        assertEquals("https://host/a", Projects.displayUrl("https://host/a"))
+        assertEquals("git@github.com:a/b.git", Projects.displayUrl("git@github.com:a/b.git"))
+        assertEquals("ssh://host/a", Projects.displayUrl("ssh://git@host/a"))
+    }
 }
