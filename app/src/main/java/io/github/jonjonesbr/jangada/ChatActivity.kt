@@ -71,8 +71,11 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
+import io.github.jonjonesbr.jangada.ui.showCloneFailure
+import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -1440,6 +1443,11 @@ class ChatActivity : JangadaActivity() {
             icon = "＋",
             description = getString(R.string.project_new_desc),
         ) { newProject() }
+        rows += Sheet.Row(
+            title = getString(R.string.clone_new),
+            icon = "⇣",
+            description = getString(R.string.clone_new_desc),
+        ) { startClone() }
         if (folders.any { Worktrees.canStart(it) }) rows += Sheet.Row(
             title = getString(R.string.chat_worktree_new),
             icon = "⎇",
@@ -1739,6 +1747,27 @@ class ChatActivity : JangadaActivity() {
         askNewProject(linux) { created, gitOutput ->
             if (gitOutput != null) Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
             pickFolder(created)
+        }
+    }
+
+    /**
+     * Clonar um repositório para uma pasta nova de ~/projetos (deste agente): acompanha o clone e,
+     * terminando bem, o trabalho abre nela. Falhou, mostra o motivo e fica nesta pasta.
+     */
+    private fun startClone() {
+        if (service == null) return
+        askCloneRepo(linux.rootfs) { url, name ->
+            // A tela pode ter saído e voltado com o diálogo aberto: usa o serviço ligado agora.
+            val svc = service ?: return@askCloneRepo
+            val task = svc.runClone(agentId, url, name)
+            if (task == null) {
+                Toast.makeText(this, R.string.clone_busy, Toast.LENGTH_LONG).show()
+                return@askCloneRepo
+            }
+            showCloneProgress(svc, task) { done ->
+                if (done.state == TerminalService.CloneTask.State.OK) pickFolder(done.folder)
+                else showCloneFailure(done)
+            }
         }
     }
 

@@ -45,8 +45,11 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
+import io.github.jonjonesbr.jangada.ui.showCloneFailure
+import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
@@ -901,8 +904,34 @@ class HomeActivity : JangadaActivity() {
                 openChat(recipe.id, created)
             }
         }
+        rows += Sheet.Row(
+            title = getString(R.string.clone_new),
+            icon = "⇣",
+            description = getString(R.string.clone_new_desc),
+        ) { startClone(recipe) }
         for (item in folders) rows += jobFolderRow(recipe, item, checked = item.name == last)
         Sheet(this).title(getString(R.string.home_job_pick_folder)).rows(rows).show()
+    }
+
+    /**
+     * Clonar um repositório para uma pasta nova de ~/projetos: pede o endereço, acompanha o clone e,
+     * terminando bem, abre o chat do agente nessa pasta. Falhou, mostra o motivo.
+     */
+    private fun startClone(recipe: AgentRecipe) {
+        if (service == null) return
+        askCloneRepo(linux.rootfs) { url, folder ->
+            // A tela pode ter saído e voltado com o diálogo aberto: usa o serviço ligado agora.
+            val svc = service ?: return@askCloneRepo
+            val task = svc.runClone(recipe.id, url, folder)
+            if (task == null) {
+                Toast.makeText(this, R.string.clone_busy, Toast.LENGTH_LONG).show()
+                return@askCloneRepo
+            }
+            showCloneProgress(svc, task) { done ->
+                if (done.state == TerminalService.CloneTask.State.OK) openChat(recipe.id, done.folder)
+                else showCloneFailure(done)
+            }
+        }
     }
 
     /** Uma linha do painel de pastas; [item] null é a raiz (todos os projetos). "aberto" se o agente já tem trabalho ali. */

@@ -33,6 +33,7 @@ import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.PermissionOption
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.linux.Workspace
 import java.io.File
@@ -146,8 +147,41 @@ class TerminalService : Service() {
         }
     }
 
+    /** Clone de um repositório para uma pasta nova de ~/projetos, em segundo plano. */
+    class CloneTask(val agentId: String, val url: String, val folder: String) {
+        enum class State { RUNNING, OK, EXISTS, FAILED }
+
+        @Volatile var state = State.RUNNING
+        @Volatile var lastLine = ""
+        /** Processo do git em andamento (para cancelar). */
+        @Volatile var process: Process? = null
+        /** true quando o usuário cancelou; o estado final fica FAILED (OK se o clone já tinha terminado). */
+        @Volatile var cancelled = false
+        /** Thread que roda o clone (o fechamento espera por ela). */
+        @Volatile var worker: Thread? = null
+        /** Uma tela mostra o progresso: ao terminar, ela abre o chat (sem aviso). */
+        @Volatile var watched = true
+        /** O aviso de fim já saiu ou a tela já tratou o resultado. */
+        @Volatile var reported = false
+        private val log = StringBuilder()
+
+        fun append(line: String) = synchronized(log) {
+            log.append(line).append('\n')
+            if (log.length > MAX_LOG) log.delete(0, log.length - MAX_LOG)
+        }
+
+        fun logText(): String = synchronized(log) { log.toString() }
+
+        private companion object {
+            const val MAX_LOG = 200_000
+        }
+    }
+
     /** Tarefas por id do agente (a mais recente de cada um). */
     val tasks = ConcurrentHashMap<String, AgentTask>()
+
+    /** Clones por pasta de destino (o último de cada pasta). */
+    val clones = ConcurrentHashMap<String, CloneTask>()
 
     /** Avisa a tela inicial quando alguma tarefa muda. */
     var onTasksChanged: (() -> Unit)? = null
@@ -469,6 +503,115 @@ class TerminalService : Service() {
     /** Cancela todas as tarefas em andamento (ao sair pela notificação ou fechar tudo). */
     private fun cancelRunningTasks() {
         tasks.keys.toList().forEach { cancelTask(it) }
+        clones.keys.toList().forEach { cancelClone(it) }
+    }
+
+    /**
+     * Clona [url] para a pasta nova [folder] de ~/projetos, em segundo plano, para o agente [agentId].
+     * Devolve null (e não clona) se a pasta já está sendo clonada, ou se o endereço ou o nome são
+     * inválidos. Quem chama deve ter dado startService antes (goForeground já faz isso).
+     */
+    fun runClone(agentId: String, url: String, folder: String): CloneTask? {
+        if (clones[folder]?.state == CloneTask.State.RUNNING) return null
+        if (!Projects.isCloneUrl(url) || !Workspace.isValidName(folder)) return null
+        val task = CloneTask(agentId, url, folder)
+        clones[folder] = task
+        goForeground()
+        updateNotification()
+        val worker = thread(start = false, name = "jangada-clone-$folder") {
+            val exit = runCatching {
+                LinuxEnv(this).runBash(Projects.cloneScript(url, folder), onStart = { process ->
+                    task.process = process
+                    // Cancelado antes de o processo nascer: encerra logo.
+                    if (task.cancelled) process.destroy()
+                }) { raw ->
+                    val line = cleanLine(raw)
+                    if (line.isEmpty()) return@runBash
+                    task.append(line)
+                    task.lastLine = line
+                }
+            }.getOrElse { e ->
+                // Ao cancelar, a leitura da saída falha de propósito: não é erro.
+                if (!task.cancelled) task.append(getString(R.string.task_error, e.message.orEmpty()))
+                -1
+            }
+            task.process = null
+            if (task.cancelled && exit != 0) task.append(getString(R.string.task_cancelled))
+            // Sem o clone, a pasta oculta pode ter ficado (o processo foi morto no meio): apaga.
+            if (exit != 0) runCatching { LinuxEnv(this).run(Projects.cleanupScript(folder)) { } }
+            task.state = when {
+                // Cancelar tarde demais (o script já tinha renomeado a pasta): o clone vale.
+                exit == 0 -> CloneTask.State.OK
+                task.cancelled -> CloneTask.State.FAILED
+                exit == Projects.CLONE_EXISTS -> CloneTask.State.EXISTS
+                else -> CloneTask.State.FAILED
+            }
+            main.post {
+                updateNotification()
+                if (!task.watched) reportClone(task)
+                leaveForegroundIfIdle()
+            }
+        }
+        task.worker = worker
+        worker.start()
+        return task
+    }
+
+    /**
+     * Cancela o clone da pasta [folder]: pede para o git sair e, se ele não sair em 2 s, força.
+     * Sem clone rodando nessa pasta, não faz nada.
+     */
+    fun cancelClone(folder: String) {
+        val task = clones[folder]?.takeIf { it.state == CloneTask.State.RUNNING } ?: return
+        task.cancelled = true
+        task.process?.destroy()
+        thread(name = "jangada-cancel-clone-$folder") {
+            runCatching { Thread.sleep(2_000) }
+            task.process?.takeIf { it.isAlive }?.destroyForcibly()
+        }
+        main.post { updateNotification() }
+    }
+
+    /**
+     * A tela deixou de acompanhar o clone (Em segundo plano, ou a tela fechou): o aviso sai quando
+     * ele terminar. Se já terminou, o aviso sai agora. Thread principal.
+     */
+    fun unwatchClone(task: CloneTask) {
+        task.watched = false
+        if (task.state != CloneTask.State.RUNNING) reportClone(task)
+    }
+
+    /**
+     * Aviso do fim de um clone que nenhuma tela está acompanhando. Clone OK abre o chat na pasta
+     * nova; pasta que já existia ou falha abrem a tela inicial. Cancelado (sem clone) não avisa.
+     */
+    private fun reportClone(task: CloneTask) {
+        if (task.reported) return
+        task.reported = true
+        if (task.cancelled && task.state != CloneTask.State.OK) return
+        // Um código por pasta: com o mesmo, o PendingIntent de um aviso trocaria o extra do outro.
+        val requestCode = REQUEST_CLONE + task.folder.hashCode() * 31
+        if (task.state == CloneTask.State.OK) {
+            val open = Intent(this, ChatActivity::class.java)
+                .putExtra(ChatActivity.EXTRA_AGENT_ID, task.agentId)
+                .putExtra(ChatActivity.EXTRA_FOLDER, task.folder)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            attentionNotification(
+                requestCode, NOTIFICATION_CLONE,
+                getString(R.string.clone_notify_done, task.folder),
+                getString(R.string.clone_notify_done_text),
+                open, tag = task.folder,
+            )
+        } else {
+            val open = Intent(this, HomeActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val text = if (task.state == CloneTask.State.EXISTS) getString(R.string.project_exists) else task.lastLine
+            attentionNotification(
+                requestCode, NOTIFICATION_CLONE,
+                getString(R.string.clone_notify_failed, task.folder), text,
+                open, tag = task.folder,
+            )
+        }
     }
 
     /**
@@ -494,7 +637,8 @@ class TerminalService : Service() {
     private fun cleanLine(raw: String): String =
         raw.substringAfterLast('\r').replace(ANSI, "").trim()
 
-    private fun hasRunningTasks() = tasks.values.any { it.state == AgentTask.State.RUNNING }
+    private fun hasRunningTasks() =
+        tasks.values.any { it.state == AgentTask.State.RUNNING } || clones.values.any { it.state == CloneTask.State.RUNNING }
 
     /** Há algo que mantenha o serviço em primeiro plano (sessão, chat, instalação ou Linux)? */
     private fun hasWork() =
@@ -613,7 +757,7 @@ class TerminalService : Service() {
         // Espera a saída de todos os chats soltos (sem nenhum, o latch já está liberado).
         val chatsGone = java.util.concurrent.CountDownLatch(gone.size)
         gone.forEach { it.stop { chatsGone.countDown() } }
-        val workers = tasks.values.mapNotNull { it.worker }
+        val workers = tasks.values.mapNotNull { it.worker } + clones.values.mapNotNull { it.worker }
         thread(name = "jangada-close") {
             runCatching { chatsGone.await(5, java.util.concurrent.TimeUnit.SECONDS) }
             workers.forEach { runCatching { it.join(5_000) } }
@@ -663,6 +807,7 @@ class TerminalService : Service() {
         )
         val count = sessions.size + chats.size
         val running = tasks.values.firstOrNull { it.state == AgentTask.State.RUNNING }
+        val cloning = clones.values.firstOrNull { it.state == CloneTask.State.RUNNING }
         val setup = Setup.state as? Setup.State.Running
         val text = when {
             setup != null -> {
@@ -670,6 +815,7 @@ class TerminalService : Service() {
                 if (progress != null) getString(R.string.service_setup_progress, (progress * 100).toInt())
                 else getString(R.string.service_setup)
             }
+            cloning != null -> getString(R.string.clone_running, cloning.folder)
             running != null -> getString(
                 when {
                     running.uninstalling -> R.string.task_uninstalling
@@ -967,8 +1113,12 @@ class TerminalService : Service() {
         private const val NOTIFICATION_CHAT = 3
         /** Aviso de tarefa de agente ou da instalação do Linux terminada. */
         private const val NOTIFICATION_TASK = 4
+        /** Aviso de clone terminado (ou falhou): um por pasta, com o nome da pasta como tag. */
+        private const val NOTIFICATION_CLONE = 5
         private const val REQUEST_HOME = 10
         private const val REQUEST_SETUP = 11
+        /** Base do código do PendingIntent de cada aviso de clone (soma o hash da pasta). */
+        private const val REQUEST_CLONE = 12
         /** Limites do texto do aviso de permissão (linha de baixo e texto expandido). */
         private const val NOTIFY_TEXT_MAX = 200
         private const val NOTIFY_BIG_MAX = 1000
