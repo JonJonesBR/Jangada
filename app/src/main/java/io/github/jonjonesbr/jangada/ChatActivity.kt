@@ -56,6 +56,7 @@ import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
+import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
@@ -190,6 +191,8 @@ class ChatActivity : JangadaActivity() {
     private val chatKey: String get() = TerminalService.chatKey(agentId, folder)
     /** Nomes dos agentes pelo id (o catálogo é lido uma vez, para as linhas de trabalho). */
     private val agentNames by lazy { AgentCatalog.load(this).associate { it.id to it.name } }
+    /** Rascunhos da caixa de texto, um por trabalho (o texto não enviado sobrevive a sair da tela). */
+    private val drafts by lazy { ChatDrafts(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -231,6 +234,15 @@ class ChatActivity : JangadaActivity() {
         updateTitle()
         empty.text = getString(R.string.chat_empty, agentName)
         input.hint = getString(R.string.chat_hint_agent, agentName)
+        // Rascunho deste trabalho (o que ficou na caixa ao sair). Girar a tela não entra aqui: o próprio
+        // campo restaura o texto. Vem antes do "Enter envia" (mais abaixo), para uma quebra de linha
+        // do rascunho não mandar a mensagem sozinha.
+        if (savedInstanceState == null) {
+            drafts.get(chatKey).takeIf { it.isNotEmpty() }?.let {
+                input.setText(it)
+                input.setSelection(input.text.length)
+            }
+        }
 
         // Pedido de envio (Mudanças). Girar a tela não repete o extra: vale o que ficou guardado.
         pendingSend = if (savedInstanceState != null) {
@@ -340,6 +352,9 @@ class ChatActivity : JangadaActivity() {
         resumed = false
         // Só larga o aviso se ele ainda for o deste trabalho.
         if (service?.visibleChat == chatKey) service?.visibleChat = null
+        // O texto não enviado vira rascunho deste trabalho: ir à tela inicial, trocar de trabalho,
+        // abrir o terminal ou ir para outro app não o perde. Os anexos ficam de fora.
+        drafts.put(chatKey, input.text.toString())
         dismissCommandSuggestions()
         super.onPause()
     }
@@ -1068,6 +1083,8 @@ class ChatActivity : JangadaActivity() {
         val text = input.text.toString().trim()
         val files = pendingAttachments.toList()
         input.setText("")
+        // Enviado: o rascunho sai já, para não voltar se o app morrer antes do onPause.
+        drafts.put(chatKey, "")
         pendingAttachments.clear()
         renderAttachments()
         chat.sendMessage(text, files)
