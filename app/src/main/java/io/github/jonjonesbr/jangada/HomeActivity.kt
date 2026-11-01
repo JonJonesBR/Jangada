@@ -45,6 +45,7 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -889,6 +890,17 @@ class HomeActivity : JangadaActivity() {
         val last = AppSettings(this).chatFolder
         val rows = mutableListOf<Sheet.Row>()
         rows += jobFolderRow(recipe, null, checked = last.isEmpty())
+        // Novo projeto: pasta nova em ~/projetos (com git, se marcado) e o trabalho abre nela.
+        rows += Sheet.Row(
+            title = getString(R.string.project_new),
+            icon = "＋",
+            description = getString(R.string.project_new_desc),
+        ) {
+            askNewProject(linux) { created, gitOutput ->
+                if (gitOutput != null) Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
+                openChat(recipe.id, created)
+            }
+        }
         for (item in folders) rows += jobFolderRow(recipe, item, checked = item.name == last)
         Sheet(this).title(getString(R.string.home_job_pick_folder)).rows(rows).show()
     }

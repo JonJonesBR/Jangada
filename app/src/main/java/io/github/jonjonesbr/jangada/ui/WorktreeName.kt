@@ -42,7 +42,7 @@ fun Activity.askWorktreeName(repo: String, onName: (name: String, done: (Boolean
         .setPositiveButton(android.R.string.ok, null)
         .setNegativeButton(android.R.string.cancel, null)
         .create()
-    // Como em Nova pasta: o OK é ligado depois de mostrar o diálogo; nome inválido o mantém aberto.
+    // O OK é ligado depois de mostrar o diálogo: com nome inválido, ele fica aberto.
     dialog.setOnShowListener {
         val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
         ok.setOnClickListener {
@@ -65,5 +65,6 @@ fun Activity.askWorktreeName(repo: String, onName: (name: String, done: (Boolean
     dialog.show()
 }
 
-private fun Activity.dpToPx(value: Int): Int =
+/** Dp para pixels; também usado pelo diálogo de Novo projeto. */
+internal fun Activity.dpToPx(value: Int): Int =
     TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value.toFloat(), resources.displayMetrics).toInt()

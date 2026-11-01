@@ -66,12 +66,12 @@ import io.github.jonjonesbr.jangada.chat.PermissionOption
 import io.github.jonjonesbr.jangada.chat.SlashCommand
 import io.github.jonjonesbr.jangada.chat.ToolText
 import io.github.jonjonesbr.jangada.chat.friendlyModel
-import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
 import java.io.File
 import java.util.Collections
@@ -1435,7 +1435,11 @@ class ChatActivity : JangadaActivity() {
                 pickFolder(item.name)
             }
         }
-        rows += Sheet.Row(title = getString(R.string.chat_folder_new), icon = "＋") { newFolderDialog() }
+        rows += Sheet.Row(
+            title = getString(R.string.project_new),
+            icon = "＋",
+            description = getString(R.string.project_new_desc),
+        ) { newProject() }
         if (folders.any { Worktrees.canStart(it) }) rows += Sheet.Row(
             title = getString(R.string.chat_worktree_new),
             icon = "⎇",
@@ -1727,52 +1731,14 @@ class ChatActivity : JangadaActivity() {
         overridePendingTransition(0, 0)
     }
 
-    /** Nova pasta: o nome (validado) cria a pasta na raiz dos projetos e a escolhe. */
-    private fun newFolderDialog() {
-        val field = EditText(this).apply {
-            hint = getString(R.string.chat_folder_new_hint)
-            setSingleLine(true)
-        }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.chat_folder_new_title)
-            .setView(field)
-            .setPositiveButton(android.R.string.ok, null)
-            .setNegativeButton(android.R.string.cancel, null)
-            .create()
-        // O OK é ligado depois de mostrar o diálogo: com nome inválido, ele fica aberto.
-        dialog.setOnShowListener {
-            val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            ok.setOnClickListener {
-                val name = field.text.toString().trim()
-                if (!Workspace.isValidName(name)) {
-                    field.error = getString(R.string.chat_folder_invalid)
-                    return@setOnClickListener
-                }
-                createFolder(name, dialog, ok)
-            }
-        }
-        dialog.show()
-    }
-
-    /** Cria a pasta fora da thread principal; se ela já existe como pasta de verdade, só usa. */
-    private fun createFolder(name: String, dialog: AlertDialog, ok: View) {
-        ok.isEnabled = false
-        val host = Workspace.hostPath(linux.rootfs, Workspace.path(name))
-        val root = Workspace.hostPath(linux.rootfs, Workspace.ROOT)
-        thread(name = "chat-folder-new") {
-            // Nunca cria através de link: a raiz dos projetos tem que ser pasta de verdade.
-            val made = Fs.isDir(root.toPath()) &&
-                (Fs.isDir(host.toPath()) || runCatching { host.mkdir() }.getOrDefault(false))
-            runOnUiThread {
-                if (isDestroyed || isFinishing) return@runOnUiThread
-                if (made) {
-                    dialog.dismiss()
-                    pickFolder(name)
-                } else {
-                    ok.isEnabled = true
-                    Toast.makeText(this, R.string.chat_folder_create_failed, Toast.LENGTH_LONG).show()
-                }
-            }
+    /**
+     * Novo projeto: pasta nova na raiz dos projetos (com git init, se marcado) e o trabalho abre
+     * nela. Se o git falhou, a pasta fica e um aviso sai antes de trocar de pasta.
+     */
+    private fun newProject() {
+        askNewProject(linux) { created, gitOutput ->
+            if (gitOutput != null) Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
+            pickFolder(created)
         }
     }
 
