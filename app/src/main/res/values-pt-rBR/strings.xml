@@ -529,6 +529,26 @@
     <string name="remote_pushed">Enviado</string>
     <string name="remote_push_failed">O envio falhou</string>
     <string name="push_hint_rejected">O repositório remoto tem commits que você não tem (por exemplo, um README criado no site). Peça ao agente para fazer o pull e juntar, e envie de novo.</string>
+    <!-- Criar o repositório no site (GitHub pelo gh, GitLab pelo glab) -->
+    <string name="host_create">Criar no %1$s</string>
+    <string name="host_create_desc">Cria o repositório no site, vincula e envia os commits</string>
+    <string name="host_login">Entrar no %1$s</string>
+    <string name="host_login_desc">Abre o terminal para entrar; depois volte aqui</string>
+    <string name="host_install">Instalar a ferramenta do %1$s</string>
+    <string name="host_install_desc">Instala o %1$s pelo terminal (apt)</string>
+    <string name="host_private">Privado</string>
+    <string name="host_private_desc">Só você e quem você convidar veem</string>
+    <string name="host_public">Público</string>
+    <string name="host_public_desc">Qualquer pessoa pode ver</string>
+    <string name="host_checking">Procurando o gh e o glab…</string>
+    <string name="host_creating">Criando no %1$s…</string>
+    <string name="host_created">Repositório criado no %1$s</string>
+    <string name="host_failed">Não foi possível criar o repositório</string>
+    <string name="host_no_remote">O repositório pode ter sido criado no site, mas não foi vinculado aqui. Copie o endereço no site e use Vincular a um repositório.</string>
+    <string name="host_new_where">Guardar também em:</string>
+    <string name="host_new_local">Só neste celular</string>
+    <string name="host_new_on">%1$s (privado)</string>
+    <string name="host_new_failed">Pasta criada, mas o repositório no site não; tente de novo em Mudanças</string>
     <string name="git_failed_title">O git falhou</string>
     <!-- Trabalho isolado (git worktree) -->
     <string name="chat_worktree_new">Novo trabalho isolado (worktree)…</string>

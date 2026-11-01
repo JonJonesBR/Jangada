@@ -12,8 +12,11 @@ object Projects {
 
     /** Resultado de [create]. */
     sealed class Result {
-        /** Pasta criada; [gitOutput] não é null quando o git init falhou (a pasta fica, sem git). */
-        class Created(val folder: String, val gitOutput: String? = null) : Result()
+        /**
+         * Pasta criada; [gitOutput] não é null quando o git init falhou (a pasta fica, sem git).
+         * [hostOutput] não é null quando o repositório no site (pedido junto) não foi criado.
+         */
+        class Created(val folder: String, val gitOutput: String? = null, val hostOutput: String? = null) : Result()
         /** Já existe algo com esse nome em ~/projetos. */
         object Exists : Result()
         /** Não deu para criar a pasta. */
@@ -48,18 +51,23 @@ object Projects {
     /**
      * Cria a pasta [name] na raiz dos projetos. Nunca cria através de link: a raiz tem que ser
      * pasta de verdade, e a checagem de existência não segue links (um link com esse nome conta
-     * como existente). Com [gitInit], roda `git init -b main` na pasta nova.
+     * como existente). Com [gitInit], roda `git init -b main` na pasta nova. Com [host] (e o git
+     * deu certo), cria também o repositório privado no site ([Hosting.create]), sem enviar nada.
      */
-    fun create(linux: LinuxEnv, name: String, gitInit: Boolean): Result {
+    fun create(linux: LinuxEnv, name: String, gitInit: Boolean, host: Hosting.Host? = null): Result {
         if (!Workspace.isValidName(name)) return Result.Failed
         val root = Workspace.hostPath(linux.rootfs, Workspace.ROOT)
         if (!Fs.isDir(root.toPath())) return Result.Failed
-        val host = Workspace.hostPath(linux.rootfs, Workspace.path(name))
-        if (Fs.exists(host.toPath())) return Result.Exists
-        if (!runCatching { host.mkdir() }.getOrDefault(false)) return Result.Failed
+        val folder = Workspace.hostPath(linux.rootfs, Workspace.path(name))
+        if (Fs.exists(folder.toPath())) return Result.Exists
+        if (!runCatching { folder.mkdir() }.getOrDefault(false)) return Result.Failed
         if (!gitInit) return Result.Created(name)
         val init = Git.run(linux, Workspace.path(name), "init", "-b", "main")
-        return if (init.code == 0) Result.Created(name) else Result.Created(name, init.shown)
+        if (init.code != 0) return Result.Created(name, init.shown)
+        if (host == null) return Result.Created(name)
+        val made = Hosting.create(linux, name, host, isPrivate = true, push = false)
+        val hostOutput = if (made.code == 0) null else made.shown.ifBlank { "exit ${made.code}" }
+        return Result.Created(name, null, hostOutput)
     }
 
     /**

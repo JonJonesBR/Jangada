@@ -28,6 +28,7 @@ import android.widget.Toast
 import androidx.core.widget.doAfterTextChanged
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
+import io.github.jonjonesbr.jangada.linux.Hosting
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
@@ -83,8 +84,10 @@ class ChangesActivity : JangadaActivity() {
     private var hasUpstream = false
     /** Uma ação do remoto (vincular, trocar, desvincular) ou um envio está rodando. */
     private var remoteBusy = false
-    /** Diálogo de progresso do envio; fecha também se a tela for destruída no meio. */
+    /** Diálogo de progresso do envio, da criação no host ou da checagem dos hosts; fecha também se a tela for destruída no meio. */
     private var pushDialog: AlertDialog? = null
+    /** Os hosts (GitHub, GitLab) estão sendo verificados para o painel de vincular: um toque por vez. */
+    private var detecting = false
     /** Uma leitura está rodando; outro pedido nesse meio tempo só marca [reloadWanted]. */
     private var loading = false
     /** Pedido de leitura que chegou durante outra: roda quando ela terminar (uma thread por vez). */
@@ -263,39 +266,183 @@ class ChangesActivity : JangadaActivity() {
     }
 
     /**
-     * Painel do remoto. Sem origin: vincular. Com origin: enviar, trocar o endereço e desvincular
-     * (só tira o vínculo; nada é apagado no site).
+     * Painel do remoto. Com origin: enviar, trocar o endereço e desvincular (só tira o vínculo;
+     * nada é apagado no site). Sem origin: antes confere os hosts (ver [detectHosts]).
      */
     private fun showRemote() {
         val current = remote
-        val rows = if (current == null) {
-            listOf(
-                Sheet.Row(
-                    title = getString(R.string.remote_link),
-                    description = getString(R.string.remote_link_desc),
-                    icon = "🔗",
-                ) { askRemoteUrl(null) },
-            )
-        } else {
-            listOf(
-                Sheet.Row(
-                    title = getString(R.string.remote_push),
-                    description = getString(if (hasHead) R.string.remote_push_desc else R.string.remote_push_no_commit),
-                    value = Projects.displayUrl(current),
-                    icon = "⇡",
-                ) {
-                    if (hasHead) push() else Toast.makeText(this, R.string.remote_push_no_commit, Toast.LENGTH_SHORT).show()
-                },
-                Sheet.Row(title = getString(R.string.remote_change), icon = "✎") { askRemoteUrl(current) },
-                Sheet.Row(
-                    title = getString(R.string.remote_unlink),
-                    description = getString(R.string.remote_unlink_desc),
-                    icon = "✕",
-                    destructive = true,
-                ) { confirmUnlink() },
-            )
+        if (current == null) {
+            detectHosts()
+            return
         }
+        val rows = listOf(
+            Sheet.Row(
+                title = getString(R.string.remote_push),
+                description = getString(if (hasHead) R.string.remote_push_desc else R.string.remote_push_no_commit),
+                value = Projects.displayUrl(current),
+                icon = "⇡",
+            ) {
+                if (hasHead) push() else Toast.makeText(this, R.string.remote_push_no_commit, Toast.LENGTH_SHORT).show()
+            },
+            Sheet.Row(title = getString(R.string.remote_change), icon = "✎") { askRemoteUrl(current) },
+            Sheet.Row(
+                title = getString(R.string.remote_unlink),
+                description = getString(R.string.remote_unlink_desc),
+                icon = "✕",
+                destructive = true,
+            ) { confirmUnlink() },
+        )
         Sheet(this).title(getString(R.string.remote_title)).rows(rows).show()
+    }
+
+    /**
+     * Confere GitHub e GitLab numa thread (pode demorar: o gh e o glab consultam o login) e abre o
+     * painel de vincular. Um toque por vez.
+     */
+    private fun detectHosts() {
+        if (detecting) return
+        detecting = true
+        // A checagem leva alguns segundos: o progresso aparece e fecha em todo caminho (também no onDestroy).
+        val progress = busyDialog(getString(R.string.host_checking))
+        pushDialog = progress
+        thread(name = "changes-host-detect") {
+            val states = runCatching { Hosting.detect(linux) }
+                .getOrElse { emptyMap<Hosting.Host, Hosting.Status>() }
+            runOnUiThread {
+                runCatching { progress.dismiss() }
+                if (pushDialog === progress) pushDialog = null
+                detecting = false
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                // Um vínculo pode ter terminado nesse meio tempo: aí o painel é o do remoto vinculado.
+                if (remote != null) showRemote() else showLinkSheet(states)
+            }
+        }
+    }
+
+    /**
+     * Painel de vincular. Numa pasta (não na raiz), cada host mostra o próximo passo: criar o
+     * repositório (se a ferramenta está pronta), entrar (instalada, sem login) ou instalar a
+     * ferramenta. Depois, sempre, vincular um endereço que já existe.
+     */
+    private fun showLinkSheet(states: Map<Hosting.Host, Hosting.Status>) {
+        val rows = mutableListOf<Sheet.Row>()
+        // A raiz (folder vazio) e nomes que o gh leria como opção ficam só com o vincular.
+        if (Hosting.canCreate(folder)) {
+            for (host in Hosting.Host.entries) {
+                val label = getString(host.label)
+                when (states[host] ?: Hosting.Status.MISSING) {
+                    Hosting.Status.READY -> rows += Sheet.Row(
+                        title = getString(R.string.host_create, label),
+                        description = getString(R.string.host_create_desc),
+                        icon = "＋",
+                    ) { chooseVisibility(host) }
+                    Hosting.Status.LOGGED_OUT -> {
+                        val title = getString(R.string.host_login, label)
+                        rows += Sheet.Row(
+                            title = title,
+                            description = getString(R.string.host_login_desc),
+                            icon = "🔑",
+                        ) { openTerminal(title, Hosting.loginScript(host)) }
+                    }
+                    Hosting.Status.MISSING -> {
+                        val title = getString(R.string.host_install, label)
+                        rows += Sheet.Row(
+                            title = title,
+                            description = getString(R.string.host_install_desc, host.tool),
+                            icon = "⇣",
+                        ) { openTerminal(title, Hosting.installScript(host)) }
+                    }
+                }
+            }
+        }
+        rows += Sheet.Row(
+            title = getString(R.string.remote_link),
+            description = getString(R.string.remote_link_desc),
+            icon = "🔗",
+        ) { askRemoteUrl(null) }
+        Sheet(this).title(getString(R.string.remote_title)).rows(rows).show()
+    }
+
+    /** Visibilidade do repositório novo no [host]: privado (o primeiro, marcado) ou público. */
+    private fun chooseVisibility(host: Hosting.Host) {
+        Sheet(this)
+            .title(getString(R.string.host_create, getString(host.label)))
+            .rows(
+                listOf(
+                    Sheet.Row(
+                        title = getString(R.string.host_private),
+                        description = getString(R.string.host_private_desc),
+                        icon = "🔒",
+                        checked = true,
+                    ) { createOnHost(host, true) },
+                    Sheet.Row(
+                        title = getString(R.string.host_public),
+                        description = getString(R.string.host_public_desc),
+                        icon = "🌐",
+                    ) { createOnHost(host, false) },
+                ),
+            )
+            .show()
+    }
+
+    /**
+     * Cria o repositório no [host] para esta pasta, numa thread, com o progresso na tela. O
+     * [Hosting.create] vincula o origin e, se já há commit, envia a branch. Erro: a saída do host
+     * (com a dica, se reconhecida), ou o aviso de que pode ter sido criado no site sem o vínculo aqui.
+     */
+    private fun createOnHost(host: Hosting.Host, isPrivate: Boolean) {
+        if (remoteBusy || !Hosting.canCreate(folder)) return
+        remoteBusy = true
+        val label = getString(host.label)
+        val progress = busyDialog(getString(R.string.host_creating, label))
+        pushDialog = progress
+        // Lidos aqui, na thread principal: a outra thread não toca nestes campos.
+        val name = folder
+        val withPush = hasHead
+        thread(name = "changes-host-create") {
+            val out = runCatching { Hosting.create(linux, name, host, isPrivate, withPush) }
+                .getOrElse { Git.Result(-1, it.message ?: "") }
+            runOnUiThread {
+                runCatching { progress.dismiss() }
+                if (pushDialog === progress) pushDialog = null
+                remoteBusy = false
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                when (out.code) {
+                    0 -> Toast.makeText(this, getString(R.string.host_created, label), Toast.LENGTH_LONG).show()
+                    Hosting.NO_REMOTE -> showText(
+                        R.string.host_failed,
+                        listOfNotNull(getString(R.string.host_no_remote), out.shown.takeIf { it.isNotBlank() })
+                            .joinToString("\n\n"),
+                    )
+                    else -> {
+                        val hint = Projects.authHint(out.output)?.let { getString(it) }
+                        val body = listOfNotNull(hint, out.shown.takeIf { it.isNotBlank() }).joinToString("\n\n")
+                        showText(R.string.host_failed, body.ifBlank { getString(R.string.host_failed) })
+                    }
+                }
+                load()
+            }
+        }
+    }
+
+    /** Diálogo de progresso sem botões: não some sozinho; quem chama o fecha. */
+    private fun busyDialog(title: CharSequence): AlertDialog = AlertDialog.Builder(this)
+        .setTitle(title)
+        .setView(ProgressBar(this).apply {
+            isIndeterminate = true
+            setPadding(0, dp(16), 0, dp(16))
+        })
+        .setCancelable(false)
+        .show()
+
+    /** Abre o terminal com [script] (instalar ou entrar num host), na pasta desta tela. Ao voltar, a tela relê. */
+    private fun openTerminal(title: String, script: String) {
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .putExtra(MainActivity.EXTRA_TITLE, title)
+                .putExtra(MainActivity.EXTRA_SCRIPT, script)
+                .putExtra(MainActivity.EXTRA_FOLDER, folder),
+        )
     }
 
     /**
@@ -373,14 +520,7 @@ class ChangesActivity : JangadaActivity() {
     private fun push() {
         if (remoteBusy) return
         remoteBusy = true
-        val progress = AlertDialog.Builder(this)
-            .setTitle(R.string.remote_pushing)
-            .setView(ProgressBar(this).apply {
-                isIndeterminate = true
-                setPadding(0, dp(16), 0, dp(16))
-            })
-            .setCancelable(false)
-            .show()
+        val progress = busyDialog(getString(R.string.remote_pushing))
         pushDialog = progress
         thread(name = "changes-push") {
             val out = runCatching { Git.run(linux, cwd, *Projects.SAFE_NETWORK, "push", "-u", "origin", "HEAD") }

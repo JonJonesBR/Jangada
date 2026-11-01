@@ -899,8 +899,12 @@ class HomeActivity : JangadaActivity() {
             icon = "＋",
             description = getString(R.string.project_new_desc),
         ) {
-            askNewProject(linux) { created, gitOutput ->
-                if (gitOutput != null) Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
+            askNewProject(linux) { created, gitOutput, hostOutput ->
+                if (hostOutput != null) {
+                    Toast.makeText(this, R.string.host_new_failed, Toast.LENGTH_LONG).show()
+                } else if (gitOutput != null) {
+                    Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
+                }
                 openChat(recipe.id, created)
             }
         }

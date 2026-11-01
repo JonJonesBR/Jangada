@@ -531,6 +531,28 @@
     <string name="remote_pushed">Pushed</string>
     <string name="remote_push_failed">Push failed</string>
     <string name="push_hint_rejected">The remote repository has commits you do not have (for example a README created on the site). Ask the agent to pull and merge, then push again.</string>
+    <!-- Criar o repositório no site (GitHub pelo gh, GitLab pelo glab) -->
+    <string name="host_github" translatable="false">GitHub</string>
+    <string name="host_gitlab" translatable="false">GitLab</string>
+    <string name="host_create">Create on %1$s</string>
+    <string name="host_create_desc">Creates the repository on the site, links it and pushes the commits</string>
+    <string name="host_login">Sign in to %1$s</string>
+    <string name="host_login_desc">Opens the terminal to sign in; then come back here</string>
+    <string name="host_install">Install the %1$s tool</string>
+    <string name="host_install_desc">Installs %1$s in the terminal (apt)</string>
+    <string name="host_private">Private</string>
+    <string name="host_private_desc">Only you and who you invite can see it</string>
+    <string name="host_public">Public</string>
+    <string name="host_public_desc">Anyone can see it</string>
+    <string name="host_checking">Checking gh and glab…</string>
+    <string name="host_creating">Creating on %1$s…</string>
+    <string name="host_created">Repository created on %1$s</string>
+    <string name="host_failed">Could not create the repository</string>
+    <string name="host_no_remote">The repository may have been created on the site, but it was not linked here. Copy its address from the site and use Link to a repository.</string>
+    <string name="host_new_where">Also keep it on:</string>
+    <string name="host_new_local">Only on this phone</string>
+    <string name="host_new_on">%1$s (private)</string>
+    <string name="host_new_failed">Folder created, but the repository on the site was not; try again in Changes</string>
     <string name="git_failed_title">Git failed</string>
     <!-- Trabalho isolado (git worktree) -->
     <string name="chat_worktree_new">New isolated job (worktree)…</string>

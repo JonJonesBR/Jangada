@@ -1744,8 +1744,12 @@ class ChatActivity : JangadaActivity() {
      * nela. Se o git falhou, a pasta fica e um aviso sai antes de trocar de pasta.
      */
     private fun newProject() {
-        askNewProject(linux) { created, gitOutput ->
-            if (gitOutput != null) Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
+        askNewProject(linux) { created, gitOutput, hostOutput ->
+            if (hostOutput != null) {
+                Toast.makeText(this, R.string.host_new_failed, Toast.LENGTH_LONG).show()
+            } else if (gitOutput != null) {
+                Toast.makeText(this, R.string.project_git_failed, Toast.LENGTH_LONG).show()
+            }
             pickFolder(created)
         }
     }
