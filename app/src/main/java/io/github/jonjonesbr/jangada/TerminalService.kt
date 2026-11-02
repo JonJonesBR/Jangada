@@ -484,11 +484,13 @@ class TerminalService : Service() {
         if (tasks[recipe.id]?.state == AgentTask.State.RUNNING) return
         // Pedido novo substitui o que esperava na fila para este agente.
         taskQueue.removeAll { it.recipe.id == recipe.id }
-        if (tasks.values.any { it.state == AgentTask.State.RUNNING }) {
+        // Com fila, entra no fim mesmo sem nada rodando (a anterior pode estar acabando): não passa na frente.
+        if (taskQueue.isNotEmpty() || tasks.values.any { it.state == AgentTask.State.RUNNING }) {
             taskQueue.addLast(QueuedTask(recipe, updating, uninstalling))
             goForeground()
             updateNotification()
             onTasksChanged?.invoke()
+            runNextQueued()
             return
         }
         startAgentTask(recipe, updating, uninstalling)
@@ -496,10 +498,11 @@ class TerminalService : Service() {
 
     /** Começa a tarefa do agente agora, sem olhar a fila. Desinstalar fecha antes os chats do agente. */
     private fun startAgentTask(recipe: AgentRecipe, updating: Boolean, uninstalling: Boolean) {
-        val chatsGone = if (uninstalling) closeAgent(recipe.id) else null
         val task = AgentTask(recipe, updating, uninstalling)
         tasks[recipe.id] = task
         goForeground()
+        // Depois de registrar a tarefa: fechar a última sessão do agente não pode tirar o serviço do primeiro plano.
+        val chatsGone = if (uninstalling) closeAgent(recipe.id) else null
         updateNotification()
         onTasksChanged?.invoke()
         val worker = thread(start = false, name = "jangada-agent-${recipe.id}") {
@@ -533,7 +536,8 @@ class TerminalService : Service() {
                 // Com a fila andando, um aviso só no fim, mostrando a primeira falha se houve.
                 if (task.state == AgentTask.State.FAILED && !task.cancelled && batchFailure == null) batchFailure = task
                 if (taskQueue.isEmpty()) {
-                    val report = batchFailure ?: task.takeIf { !it.cancelled }
+                    // A falha só vale se ainda for a última tarefa do agente (Tentar de novo pode ter resolvido).
+                    val report = batchFailure?.takeIf { tasks[it.recipe.id] === it } ?: task.takeIf { !it.cancelled }
                     batchFailure = null
                     if (!homeScreenVisible && report != null) notifyTaskDone(report)
                 }
