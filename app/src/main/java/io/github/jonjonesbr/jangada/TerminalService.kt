@@ -74,14 +74,24 @@ class TerminalService : Service() {
     /** Memória total do aparelho em bytes; -1 = ainda não lida (ver totalMem). */
     private var totalMemBytes = -1L
 
+    /** Último trabalho de chat que esteve na tela (chave de [chatKey]): o toque na notificação volta para ele. */
+    private var lastChat: String? = null
+
     /**
      * Trabalho de chat aberto na tela de chat agora (chave de [chatKey]; null se nenhum).
-     * Ao virar uma chave, o aviso desse trabalho some (o usuário já viu). Só a thread principal mexe.
+     * Ao virar uma chave, o aviso desse trabalho some (o usuário já viu) e ele vira o [lastChat]
+     * (a notificação é refeita). Só a thread principal mexe.
      */
     var visibleChat: String? = null
         set(value) {
             field = value
-            if (value != null) notifications().cancel(value, NOTIFICATION_CHAT)
+            if (value != null) {
+                notifications().cancel(value, NOTIFICATION_CHAT)
+                if (value != lastChat) {
+                    lastChat = value
+                    updateNotification()
+                }
+            }
         }
 
     /** Tela inicial visível agora: ao virar true, o aviso de tarefa some. */
@@ -931,10 +941,18 @@ class TerminalService : Service() {
     }
 
     private fun buildNotification(): Notification {
+        // O toque volta para a tela em que o usuário estava (ver ReturnActivity): o último chat, senão o mais recente.
+        val slot = lastChat?.let { chats[it] } ?: chats.values.lastOrNull()
         val open = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE,
+            Intent(this, ReturnActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (slot != null) {
+                    putExtra(ChatActivity.EXTRA_AGENT_ID, slot.agentId)
+                    putExtra(ChatActivity.EXTRA_FOLDER, slot.folder)
+                }
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val exit = PendingIntent.getService(
             this, 1,

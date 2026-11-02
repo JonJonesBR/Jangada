@@ -98,6 +98,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Toque na notificação do serviço: volta para a tela em que o usuário estava (ver ReturnActivity). -->
+        <activity
+            android:name=".ReturnActivity"
+            android:exported="false"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".TerminalService"
             android:exported="false" />
