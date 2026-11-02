@@ -147,7 +147,7 @@ class AgentRecipeTest {
 
     @Test
     fun caminhoInvalidoTiraAsInstrucoes() {
-        val base = """{"id":"x","name":"X","command":"x","install":"true"""
+        val base = "{\"id\":\"x\",\"name\":\"X\",\"command\":\"x\",\"install\":\"true\""
         assertNull(AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["../fora"]}}""")).instructions)
         assertNull(AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["relativo/a"]}}""")).instructions)
         assertNull(AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["~/a"],"create":"b/c"}}""")).instructions)
