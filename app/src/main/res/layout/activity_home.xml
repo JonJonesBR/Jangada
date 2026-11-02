@@ -204,12 +204,17 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Título da seção de agentes, com Atualizar todos à direita (aparece com 2 ou mais para atualizar). -->
+        <!--
+            Título da seção de agentes, com Atualizar todos à direita (aparece com 2 ou mais para atualizar).
+            Altura mínima de 48dp, a do botão: o título não muda de altura quando o botão aparece, e a
+            lista não desce. As margens compensam o espaço que o mínimo acrescenta.
+        -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="10dp"
+            android:minHeight="48dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="0dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
