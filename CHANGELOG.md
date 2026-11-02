@@ -1,5 +1,15 @@
 # Novidades
 
+## 1.10.0
+
+- Memória: os comandos que os agentes rodam (navegador de testes, builds, servidores) cedem primeiro quando a memória acaba. O Android encerra o comando, que falha com "Killed", e o agente continua.
+- Memória: agentes parados dormem para liberar memória (memória apertada, tempo parado escolhido nos Ajustes ou para abrir outro agente) e aparecem como Dormindo; a próxima mensagem os acorda na mesma conversa. Quem trabalha, espera você ou tem comandos rodando não dorme.
+- Memória: Agentes ao mesmo tempo, nos Ajustes: automático pela RAM do celular (até 4) ou de 1 a 4. Aviso de pouca memória com o trabalho que mais usa, e um painel ao abrir mais um agente com a memória apertada.
+- Memória: o app orienta os agentes (Claude, Codex, OpenCode, Qwen, Pi e outros) a rodar um navegador de testes por vez e fechá-lo ao terminar, nas instruções globais de cada um. Desliga nos Ajustes.
+- Chat: o erro 137 explica que o Android encerrou o agente por falta de memória e que dá para continuar a conversa.
+- Chat: ao digitar "/", sugestões começando por /new, /resume e /compact (o app executa na hora), seguidas dos comandos do agente, agora também no Claude. /new, /clear e /reset digitados abrem a Nova conversa; /resume abre o Histórico.
+- Chat: aviso quando a conversa é compactada, e o "Trabalhando…" não fica mais preso depois do /compact.
+
 ## 1.9.0
 
 - Novo projeto: no Novo trabalho da tela inicial e no seletor de pasta do chat, cria uma pasta em ~/projetos com git init e, com login no gh ou no glab, o repositório privado no GitHub ou no GitLab. O chat abre direto nela.
