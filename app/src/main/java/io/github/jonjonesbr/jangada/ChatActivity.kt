@@ -95,6 +95,8 @@ class ChatActivity : JangadaActivity() {
     private lateinit var list: ListView
     private lateinit var empty: TextView
     private lateinit var status: View
+    private lateinit var statusText: TextView
+    private lateinit var stopButton: View
     private lateinit var input: EditText
     private lateinit var subtitle: TextView
     private lateinit var titleBlock: View
@@ -219,6 +221,8 @@ class ChatActivity : JangadaActivity() {
         list = findViewById(R.id.chat_list)
         empty = findViewById(R.id.chat_empty)
         status = findViewById(R.id.chat_status)
+        statusText = findViewById(R.id.chat_status_text)
+        stopButton = findViewById(R.id.chat_stop)
         input = findViewById(R.id.chat_input)
         subtitle = findViewById(R.id.chat_subtitle)
         titleBlock = findViewById(R.id.chat_title_block)
@@ -268,7 +272,7 @@ class ChatActivity : JangadaActivity() {
         findViewById<View>(R.id.chat_home).setOnClickListener { goHome() }
         sendButton.setOnClickListener { send() }
         findViewById<View>(R.id.chat_attach).setOnClickListener { pickAttachment() }
-        findViewById<View>(R.id.chat_stop).setOnClickListener { engine?.interrupt() }
+        stopButton.setOnClickListener { engine?.interrupt() }
         findViewById<View>(R.id.chat_terminal).setOnClickListener { switchToTerminal() }
         findViewById<View>(R.id.chat_menu).setOnClickListener { showMenu() }
         continueChip.setOnClickListener { sendAwake(getString(R.string.chat_continue_prompt)) }
@@ -885,12 +889,32 @@ class ChatActivity : JangadaActivity() {
         val isEmpty = adapter.snapshot.isEmpty()
         empty.visibility = if (isEmpty) View.VISIBLE else View.GONE
         list.visibility = if (isEmpty) View.GONE else View.VISIBLE
-        status.visibility = if (chat.busy) View.VISIBLE else View.GONE
+        updateStatus(chat)
         continueChip.visibility = if (chat.interrupted && !chat.busy) View.VISIBLE else View.GONE
         updatePermissionBar(chat)
         updateQuickbar()
         // Comandos que o agente acabou de anunciar também podem entrar na sugestão.
         updateCommandSuggestions()
+    }
+
+    /**
+     * Faixa de status: "Trabalhando…" no turno e, com tarefas em segundo plano (subagentes, comandos),
+     * o que elas são, mesmo depois que o turno acabou. Parar só aparece com turno: ele interrompe o turno.
+     */
+    private fun updateStatus(chat: AgentChat) {
+        val background = chat.background
+        status.visibility = if (chat.busy || background.isNotEmpty()) View.VISIBLE else View.GONE
+        stopButton.visibility = if (chat.busy) View.VISIBLE else View.GONE
+        val lines = mutableListOf<String>()
+        if (chat.busy) lines += getString(R.string.chat_working)
+        if (background.size == 1) {
+            val task = background[0]
+            val what = listOfNotNull(task.description.ifBlank { null }, task.activity?.ifBlank { null }).distinct().joinToString(" · ")
+            lines += getString(R.string.chat_background_one, what)
+        } else if (background.size > 1) {
+            lines += getString(R.string.chat_background_many, background.size, background.joinToString(", ") { it.description })
+        }
+        statusText.text = lines.joinToString("\n")
     }
 
     /**

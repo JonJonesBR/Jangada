@@ -80,7 +80,8 @@ fun chatState(chat: AgentChat): ChatState {
     }
     return when {
         waiting -> ChatState.WAITING
-        chat.busy -> ChatState.WORKING
+        // Tarefas em segundo plano contam como trabalho, para não dormir nem parecer pronto.
+        chat.busy || chat.background.isNotEmpty() -> ChatState.WORKING
         else -> ChatState.READY
     }
 }
@@ -98,6 +99,12 @@ class ContextUsage(val used: Long, val size: Long) {
     val percent: Int
         get() = if (size <= 0) 0 else ((used * 100 + size / 2) / size).toInt().coerceIn(0, 100)
 }
+
+/**
+ * Tarefa que o agente deixou rodando em segundo plano (um subagente ou um comando).
+ * [activity] é o que ela faz agora (vem do progresso), ou null se ainda não informou.
+ */
+class BackgroundTask(val id: String, val description: String, val activity: String?)
 
 /** Comando com "/" que o agente anuncia (ex.: "/review"); o chat sugere quando o usuário digita "/". */
 data class SlashCommand(val name: String, val description: String)
@@ -161,6 +168,8 @@ interface AgentChat {
     val supportsHistory: Boolean
     /** Comandos de barra que o agente oferece (sugestões ao digitar "/"). */
     val commands: List<SlashCommand> get() = emptyList()
+    /** Tarefas que o agente deixou rodando em segundo plano (subagentes, comandos). Vazia se não há ou se o agente não informa. */
+    val background: List<BackgroundTask> get() = emptyList()
     /** Dormindo: o agente foi fechado de propósito para liberar memória, e a próxima mensagem o acorda. */
     val asleep: Boolean get() = false
     /** Enviar uma mensagem agora retoma a mesma conversa (e não abre outra). */

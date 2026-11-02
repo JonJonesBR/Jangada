@@ -157,10 +157,13 @@
             android:indeterminateTint="@color/key_active" />
 
         <TextView
+            android:id="@+id/chat_status_text"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
             android:layout_weight="1"
+            android:maxLines="3"
+            android:ellipsize="end"
             android:text="@string/chat_working"
             android:textColor="@color/setup_muted"
             android:textSize="13sp" />

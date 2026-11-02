@@ -38,6 +38,9 @@ class ChatEngine(
     /** Comandos "/" que o Claude anunciou ao iniciar (ver [claudeCommands]). */
     @Volatile override var commands: List<SlashCommand> = emptyList()
         private set
+    /** Tarefas em segundo plano que o Claude informou (ver [updateBackground]). Só a thread principal escreve; a lista é trocada inteira. */
+    @Volatile override var background: List<BackgroundTask> = emptyList()
+        private set
 
     /** Chaves liberadas com "Sempre permitir nesta conversa" (ver [permissionKey]). */
     private val alwaysAllowed = HashSet<String>()
@@ -275,9 +278,21 @@ class ChatEngine(
                     add(ChatItem.Info(context.getString(R.string.chat_compacted)))
                     changed()
                 }
+                // O conjunto inteiro de tarefas em segundo plano (troca tudo, não soma).
+                "background_tasks_changed" -> {
+                    updateBackground(json.optJSONArray("tasks"))
+                    changed()
+                }
+                "task_progress" -> updateActivity(json.optString("task_id"), json.optString("description"))
             }
-            "stream_event" -> if (!fromSubagent) handleStreamEvent(json.optJSONObject("event"))
+            "stream_event" -> {
+                if (!fromSubagent) {
+                    startOwnTurn()
+                    handleStreamEvent(json.optJSONObject("event"))
+                }
+            }
             "assistant" -> {
+                if (!fromSubagent) startOwnTurn()
                 handleAssistant(json.optJSONObject("message"), fromSubagent)
                 if (!fromSubagent) updateUsage(json.optJSONObject("message")?.optJSONObject("usage"))
             }
@@ -317,6 +332,43 @@ class ChatEngine(
     }
 
     /**
+     * Monta a lista de tarefas em segundo plano a partir do sinal do CLI (null = nenhuma). Ignora as
+     * entradas `ambient` e mostra só as de cima: a que está dentro de outra tarefa já é parte dela.
+     * Mantém o que o agente fazia (activity) quando a tarefa continua na lista.
+     */
+    private fun updateBackground(tasks: JSONArray?) {
+        val live = tasks?.let { array -> (0 until array.length()).mapNotNull { array.optJSONObject(it) } }
+            .orEmpty()
+            .filter { !it.optBoolean("ambient") }
+        val ids = live.map { it.optString("task_id") }.toSet()
+        val previous = background.associateBy { it.id }
+        background = live
+            .filter { task ->
+                val parent = task.optString("parent_task_id")
+                parent.isEmpty() || parent !in ids
+            }
+            .map { task ->
+                val id = task.optString("task_id")
+                BackgroundTask(id, task.optString("description"), previous[id]?.activity)
+            }
+    }
+
+    /** O que uma tarefa em segundo plano está fazendo agora (task_progress). Ignorada se não está na lista. */
+    private fun updateActivity(id: String, activity: String) {
+        if (activity.isEmpty() || background.none { it.id == id }) return
+        background = background.map { if (it.id == id) BackgroundTask(it.id, it.description, activity) else it }
+        changed(throttle = true)
+    }
+
+    /**
+     * O agente começou um turno sozinho (ex.: um subagente em segundo plano terminou e ele foi avisado):
+     * vira um turno como os outros, com "Trabalhando…", fila e aviso de fim (o "result" fecha).
+     */
+    private fun startOwnTurn() {
+        if (running && !busy) busy = true
+    }
+
+    /**
      * Tokens que a conversa ocupa agora, pelo uso da última resposta. A janela é a que o
      * Claude informou; sem ela, 1M para modelos com "[1m]" no nome e 200 mil no resto.
      */
@@ -346,6 +398,11 @@ class ChatEngine(
             .firstOrNull { it.requestId == requestId && it.chosen == null } ?: return
         refuse(item, reply = false)
         changed()
+    }
+
+    /** O conjunto é por processo do CLI: ao parar, não há tarefas em segundo plano. */
+    override fun onStopped() {
+        background = emptyList()
     }
 
     /** Nenhuma resposta fica com o cursor piscando depois que o Claude parou de escrever. */

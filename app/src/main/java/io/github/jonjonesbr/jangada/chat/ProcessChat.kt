@@ -323,10 +323,11 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * uma linha na conversa. A próxima mensagem o acorda na mesma conversa ([sendMessage] reinicia).
      * Recusa (false) com turno em andamento, sem como retomar, ou com pedido de permissão ou login
      * sem resposta ou em andamento: nesses casos parar perderia o que o usuário precisa responder
-     * (no login em andamento, o agente espera a volta do navegador).
+     * (no login em andamento, o agente espera a volta do navegador). Também recusa com tarefas
+     * em segundo plano: pararia o que o agente ainda está fazendo.
      */
     override fun sleep(): Boolean {
-        if (!running || busy || !canResume) return false
+        if (!running || busy || background.isNotEmpty() || !canResume) return false
         val waiting = items.any { item ->
             (item is ChatItem.Permission && item.chosen == null) ||
                 (item is ChatItem.Login &&

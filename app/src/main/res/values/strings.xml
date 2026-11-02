@@ -110,6 +110,8 @@
     <string name="chat_cmd_compact">Summarize the conversation to free up room</string>
     <string name="chat_terminal">Terminal</string>
     <string name="chat_working">Working…</string>
+    <string name="chat_background_one">In the background: %1$s</string>
+    <string name="chat_background_many">In the background (%1$d): %2$s</string>
     <string name="chat_stop">Stop</string>
     <string name="chat_hint">Message Claude</string>
     <string name="chat_empty">Talk to %1$s here. It works in the ~/projetos folder.\n\nTap &gt;_ at the top to open the agent’s full screen.</string>
