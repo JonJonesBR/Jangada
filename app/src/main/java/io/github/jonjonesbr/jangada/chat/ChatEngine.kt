@@ -35,6 +35,9 @@ class ChatEngine(
     @Volatile override var model: String? = null
         private set
     override val supportsHistory = true
+    /** Comandos "/" que o Claude anunciou ao iniciar (ver [claudeCommands]). */
+    @Volatile override var commands: List<SlashCommand> = emptyList()
+        private set
 
     /** Chaves liberadas com "Sempre permitir nesta conversa" (ver [permissionKey]). */
     private val alwaysAllowed = HashSet<String>()
@@ -237,6 +240,24 @@ class ChatEngine(
         )
     }
 
+    /**
+     * Comandos "/" do Claude a partir do "init". Os que só funcionam no terminal não funcionam no chat,
+     * e os internos (começam com "__") não interessam ao usuário; cada nome aparece uma vez.
+     */
+    private fun claudeCommands(json: JSONObject): List<SlashCommand> {
+        val terminalOnly = jsonNames(json.optJSONArray("terminal_slash_commands")).toSet()
+        return jsonNames(json.optJSONArray("slash_commands"))
+            .filter { it.isNotEmpty() && !it.startsWith("__") && it !in terminalOnly }
+            .distinct()
+            .map { SlashCommand(it, "") }
+    }
+
+    /** Textos de um array JSON, sem a barra inicial; array ausente vira lista vazia. */
+    private fun jsonNames(array: JSONArray?): List<String> {
+        if (array == null) return emptyList()
+        return (0 until array.length()).map { array.optString(it).removePrefix("/") }
+    }
+
     override fun handle(json: JSONObject) {
         json.optString("session_id").takeIf { it.isNotEmpty() && it != "default" }?.let { sessionId = it }
         // Mensagens de subagentes trazem o id da ferramenta que os chamou: não são a resposta principal.
@@ -245,6 +266,7 @@ class ChatEngine(
             "system" -> when (json.optString("subtype")) {
                 "init" -> {
                     model = json.optString("model").ifEmpty { null }
+                    if (json.optJSONArray("slash_commands") != null) commands = claudeCommands(json)
                     changed()
                 }
                 // A conversa foi compactada: o uso volta a ser medido no próximo turno.

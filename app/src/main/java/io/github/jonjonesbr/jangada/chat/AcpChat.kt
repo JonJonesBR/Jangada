@@ -58,7 +58,7 @@ class AcpChat(
         private set
 
     /** Comandos "/" que o agente anunciou (podem mudar durante a conversa). */
-    @Volatile var commands: List<SlashCommand> = emptyList()
+    @Volatile override var commands: List<SlashCommand> = emptyList()
         private set
 
     private var nextId = 1

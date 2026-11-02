@@ -182,10 +182,20 @@ class ChatActivity : JangadaActivity() {
     /** Adaptador ACP ainda não pronto (instalando, ou falhou): campo de texto e Enviar desligados. */
     private var preparing = false
 
-    /** Sugestões de comandos "/" do agente, acima da caixa de texto. */
+    /** Sugestões de comandos "/" (do app e do agente), acima da caixa de texto. */
     private var commandPopup: ListPopupWindow? = null
-    /** Comandos que o popup mostra agora (mesma ordem da lista). */
-    private var commandMatches: List<SlashCommand> = emptyList()
+    /** Sugestões que o popup mostra agora (mesma ordem da lista). */
+    private var commandMatches: List<Suggestion> = emptyList()
+
+    /** Comandos "/" que o próprio app atende (além dos do agente); o popup os põe primeiro. */
+    private enum class AppCommand(val command: String, val descRes: Int) {
+        NEW("new", R.string.chat_cmd_new),
+        RESUME("resume", R.string.chat_cmd_resume),
+        COMPACT("compact", R.string.chat_cmd_compact),
+    }
+
+    /** Uma linha do popup: um comando do app ou um comando do agente (o outro fica nulo). */
+    private data class Suggestion(val label: String, val app: AppCommand?, val agent: SlashCommand?)
 
     private val isClaude get() = agentId == TerminalService.CLAUDE
     private val agentName get() = recipe?.name ?: getString(R.string.chat_title)
@@ -1066,19 +1076,18 @@ class ChatActivity : JangadaActivity() {
             .show()
     }
 
-    // ---- Sugestões de comandos "/" (agentes ACP) ----
+    // ---- Sugestões de comandos "/" (do app e do agente) ----
 
     /**
-     * Mostra até 6 comandos do agente que começam como o texto digitado, enquanto o
-     * texto começa com "/" e não tem espaço. Fecha quando não há o que sugerir.
+     * Mostra até 6 sugestões (comandos do app, depois os do agente) que começam como o texto
+     * digitado, enquanto o texto começa com "/" e não tem espaço. Fecha quando não há o que sugerir.
      */
     private fun updateCommandSuggestions() {
         val text = input.text.toString()
-        val acp = engine as? AcpChat
+        val chat = engine
         // Só com a tela em primeiro plano: em segundo plano o popup fica para o próximo onResume.
-        val matches = if (resumed && acp != null && text.startsWith("/") && text.none { it.isWhitespace() } && input.width > 0) {
-            val query = text.drop(1)
-            acp.commands.filter { it.name.startsWith(query, ignoreCase = true) }.take(COMMAND_SUGGESTIONS)
+        val matches = if (resumed && chat != null && text.startsWith("/") && text.none { it.isWhitespace() } && input.width > 0) {
+            suggestionsFor(chat, text.drop(1))
         } else {
             emptyList()
         }
@@ -1093,13 +1102,13 @@ class ChatActivity : JangadaActivity() {
             // Fica junto da caixa de texto, nunca por cima do teclado.
             it.inputMethodMode = ListPopupWindow.INPUT_METHOD_NEEDED
             it.setBackgroundDrawable(getDrawable(R.drawable.card_bg))
-            it.setOnItemClickListener { _, _, position, _ -> applyCommand(commandMatches[position]) }
+            it.setOnItemClickListener { _, _, position, _ -> pickSuggestion(commandMatches[position]) }
             commandPopup = it
         }
         // Se a lista já está aberta com esses mesmos comandos, não redesenha.
         if (popup.isShowing && matches == commandMatches) return
         commandMatches = matches
-        popup.setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, matches.map { commandLabel(it) }))
+        popup.setAdapter(ArrayAdapter(this, android.R.layout.simple_list_item_1, matches.map { it.label }))
         popup.width = input.width
         // Altura fixa e deslocada para cima: o popup fica sobre a caixa, não embaixo (teclado).
         val height = matches.size * dp(COMMAND_ROW_DP)
@@ -1110,6 +1119,49 @@ class ChatActivity : JangadaActivity() {
 
     private fun commandLabel(command: SlashCommand): String =
         if (command.description.isBlank()) "/${command.name}" else "/${command.name} — ${command.description}"
+
+    /**
+     * Sugestões para o que vem depois da "/": primeiro os comandos do app que este agente oferece,
+     * depois os do agente (sem os nomes que o app já atende).
+     */
+    private fun suggestionsFor(chat: AgentChat, query: String): List<Suggestion> {
+        val appCommands = AppCommand.entries
+            .filter { offersApp(it, chat) && it.command.startsWith(query, ignoreCase = true) }
+            .map { Suggestion("/${it.command} — ${getString(it.descRes)}", it, null) }
+        val agentCommands = chat.commands
+            .filter { it.name.startsWith(query, ignoreCase = true) && it.name.lowercase() !in APP_COMMAND_NAMES }
+            .map { Suggestion(commandLabel(it), null, it) }
+        return (appCommands + agentCommands).take(COMMAND_SUGGESTIONS)
+    }
+
+    /** Os comandos do app que o popup oferece com este agente. */
+    private fun offersApp(app: AppCommand, chat: AgentChat): Boolean = when (app) {
+        AppCommand.NEW -> true
+        AppCommand.RESUME -> chat.supportsHistory
+        AppCommand.COMPACT -> chat.commands.any { it.name.equals("compact", ignoreCase = true) }
+    }
+
+    /** Toque numa sugestão: comando do app o executa aqui; comando do agente preenche a caixa. */
+    private fun pickSuggestion(suggestion: Suggestion) {
+        dismissCommandSuggestions()
+        val agent = suggestion.agent
+        val app = suggestion.app
+        if (agent != null) {
+            applyCommand(agent)
+        } else if (app != null) {
+            when (app) {
+                AppCommand.NEW -> startNewConversationFromBox()
+                AppCommand.RESUME -> openHistoryFromBox()
+                AppCommand.COMPACT -> {
+                    // Sem o serviço ligado, nada enviaria: o texto fica na caixa.
+                    if (service == null) return
+                    input.setText("")
+                    drafts.put(chatKey, "")
+                    sendAwake("/compact")
+                }
+            }
+        }
+    }
 
     /** Toque numa sugestão: preenche "/nome " na caixa (o espaço fecha o popup). */
     private fun applyCommand(command: SlashCommand) {
@@ -1123,6 +1175,26 @@ class ChatActivity : JangadaActivity() {
         commandMatches = emptyList()
     }
 
+    /** /new no campo (ou na sugestão): começa uma conversa nova, se o agente não está respondendo. */
+    private fun startNewConversationFromBox() {
+        if (engine?.busy == true) {
+            Toast.makeText(this, R.string.chat_new_wait, Toast.LENGTH_LONG).show()
+            return
+        }
+        // Sem o serviço ligado, nada abriria: o texto fica na caixa.
+        if (service == null) return
+        input.setText("")
+        drafts.put(chatKey, "")
+        newConversation()
+    }
+
+    /** /resume no campo (ou na sugestão): abre o Histórico, sem mandar o comando ao agente. */
+    private fun openHistoryFromBox() {
+        input.setText("")
+        drafts.put(chatKey, "")
+        showHistory()
+    }
+
     private fun send() {
         dismissCommandSuggestions()
         if (preparing) return
@@ -1130,23 +1202,13 @@ class ChatActivity : JangadaActivity() {
         if (text.isEmpty() && pendingAttachments.isEmpty()) return
         // /new, /clear e /reset viram a Nova conversa do menu: o agente zeraria a conversa por dentro, mas a tela continuaria com as mensagens antigas. Vale para todos os agentes.
         if (pendingAttachments.isEmpty() && text.lowercase() in NEW_CONVERSATION_COMMANDS) {
-            if (engine?.busy == true) {
-                Toast.makeText(this, R.string.chat_new_wait, Toast.LENGTH_LONG).show()
-                return
-            }
-            // Sem o serviço ligado, nada abriria: o texto fica na caixa.
-            if (service == null) return
-            input.setText("")
-            drafts.put(chatKey, "")
-            newConversation()
+            startNewConversationFromBox()
             return
         }
         // /resume vira o Histórico do menu: o agente trocaria de conversa por dentro (ou abriria uma lista
         // que o chat não mostra), e a tela continuaria com a conversa atual.
         if (pendingAttachments.isEmpty() && text.lowercase() == "/resume") {
-            input.setText("")
-            drafts.put(chatKey, "")
-            showHistory()
+            openHistoryFromBox()
             return
         }
         val svc = service ?: return
@@ -2669,6 +2731,8 @@ class ChatActivity : JangadaActivity() {
         const val COMPACT_PERCENT = 80
         /** Comandos digitados na caixa que começam uma conversa nova (ver [send]). */
         private val NEW_CONVERSATION_COMMANDS = setOf("/new", "/clear", "/reset")
+        /** Comandos do agente que o app já atende (ou oferece como os seus): não aparecem duplicados no popup. */
+        private val APP_COMMAND_NAMES = setOf("new", "clear", "reset", "resume", "compact")
         /** Hash de commit (SHA-1 ou SHA-256) como o rev-parse devolve. */
         private val SHA = Regex("[0-9a-f]{40,64}")
         const val EXTRA_AGENT_ID = "agent_id"

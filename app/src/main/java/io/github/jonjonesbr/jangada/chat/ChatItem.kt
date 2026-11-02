@@ -159,6 +159,8 @@ interface AgentChat {
     val contextUsage: ContextUsage?
     /** O agente lista as conversas anteriores. */
     val supportsHistory: Boolean
+    /** Comandos de barra que o agente oferece (sugestões ao digitar "/"). */
+    val commands: List<SlashCommand> get() = emptyList()
     /** Dormindo: o agente foi fechado de propósito para liberar memória, e a próxima mensagem o acorda. */
     val asleep: Boolean get() = false
     /** Enviar uma mensagem agora retoma a mesma conversa (e não abre outra). */

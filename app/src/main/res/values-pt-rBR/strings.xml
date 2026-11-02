@@ -99,6 +99,9 @@
     <string name="chat_title">Claude Code</string>
     <string name="chat_new">Nova conversa</string>
     <string name="chat_new_wait">Espere a resposta terminar (ou toque em Parar) para começar uma conversa nova.</string>
+    <string name="chat_cmd_new">Nova conversa</string>
+    <string name="chat_cmd_resume">Retomar uma conversa anterior</string>
+    <string name="chat_cmd_compact">Resumir a conversa para liberar espaço</string>
     <string name="chat_terminal">Terminal</string>
     <string name="chat_working">Trabalhando…</string>
     <string name="chat_stop">Parar</string>
