@@ -90,7 +90,7 @@ class AcpChat(
         contextUsage = null
         launch(interactive = true) {
             runCatching { linux.refreshIntegration(trustFolder = cwd) }.onFailure { Log.w(TAG, "integração", it) }
-            "${AgentRecipe.enterDir(cwd)} && exec $command"
+            "${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(command, jobId)}"
         }
 
         val capabilities = JSONObject()

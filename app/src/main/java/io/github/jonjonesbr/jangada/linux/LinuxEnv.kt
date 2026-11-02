@@ -288,6 +288,24 @@ class LinuxEnv(context: Context) {
                     // Outra chamada criou o link ao mesmo tempo: já está certo.
                 }
             }
+            // jangada-agent: o wrapper que inicia os agentes (ver AgentRecipe.wrap). Lido dos assets uma vez.
+            val wrapper = jobWrapperCache ?: linuxAsset("jangada-agent")?.also { jobWrapperCache = it }
+            if (wrapper != null) {
+                val agent = File(bin, "jangada-agent")
+                writeReplacing(agent, wrapper)
+                Fs.setMode(agent.toPath(), "755".toInt(8))
+            }
+        }
+        // tool-env.sh: lido pelo bash não interativo dos agentes (BASH_ENV), dá prioridade aos comandos deles.
+        val lib = File(rootfs, "usr/local/lib")
+        val jangadaLib = File(lib, "jangada")
+        if (ensureRealDir(lib) && ensureRealDir(jangadaLib)) {
+            val toolEnv = toolEnvCache ?: linuxAsset("tool-env.sh")?.also { toolEnvCache = it }
+            if (toolEnv != null) {
+                val file = File(jangadaLib, "tool-env.sh")
+                writeReplacing(file, toolEnv)
+                Fs.setMode(file.toPath(), "644".toInt(8))
+            }
         }
         ensureRealDir(linkInbox)
 
@@ -331,6 +349,11 @@ class LinuxEnv(context: Context) {
     fun cleanupLegacy() {
         File(rootfs, "root/.local/share/agy-acp").takeIf { it.exists() }?.let { Fs.deleteTree(it.toPath()) }
     }
+
+    /** Texto do asset linux/[name]; null (com aviso no log) se a leitura falhar. */
+    private fun linuxAsset(name: String): String? = runCatching {
+        app.assets.open("linux/$name").bufferedReader(Charsets.UTF_8).use { it.readText() }
+    }.onFailure { Log.w(TAG, "não consegui ler o asset $name", it) }.getOrNull()
 
     /**
      * Cria a pasta (com mkdirs) só se ela não for link simbólico. Se for, devolve
@@ -427,6 +450,12 @@ class LinuxEnv(context: Context) {
 
         /** A lista de assets tem o proot? Lida uma vez (os assets não mudam com o app aberto). */
         @Volatile private var prootInAssetsCache: Boolean? = null
+
+        /** Texto do asset linux/jangada-agent, lido uma vez (nulo até a primeira leitura bem-sucedida). */
+        @Volatile private var jobWrapperCache: String? = null
+
+        /** Texto do asset linux/tool-env.sh, lido uma vez (nulo até a primeira leitura bem-sucedida). */
+        @Volatile private var toolEnvCache: String? = null
 
         /** DNS públicos usados quando a rede do celular não fornece servidores suficientes. */
         private val FALLBACK_DNS = listOf("8.8.8.8", "1.1.1.1")

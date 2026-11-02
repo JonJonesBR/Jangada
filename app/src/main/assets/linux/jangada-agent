@@ -1,0 +1,92 @@
+#!/bin/sh
+# Gerado pelo Jangada a cada sessão. Uso: jangada-agent [--job ID] PROGRAMA [ARGUMENTOS...]
+# Roda um agente de IA cuidando da memória do celular: os comandos que o agente roda
+# (navegadores, testes, builds) ficam com prioridade máxima para o Linux encerrar se faltar
+# memória, e o agente fica por último. Com --job, informa ao app quanta memória o trabalho
+# usa, em /var/lib/jangada/jobs/ID ("kB_total processos", atualizado a cada 5 s).
+# O que o agente inicia nos primeiros ~10 s conta como parte dele, não como comando: há agentes
+# cujo programa só abre o de verdade como filho (o codex do npm, o pi-acp) e servidores MCP.
+job=
+if [ "$1" = "--job" ]; then job=$2; shift 2; fi
+case "$job" in *[!A-Za-z0-9-]*) job= ;; esac
+# Comandos em bash rodados pelo agente já nascem com a prioridade alta (o vigia pega o resto).
+export JANGADA_AGENT_PID=$$
+# Só se o arquivo existir: sem ele, todo bash do agente mostraria um erro ao abrir.
+[ -r /usr/local/lib/jangada/tool-env.sh ] && export BASH_ENV=/usr/local/lib/jangada/tool-env.sh
+agent=$$
+(
+  read -r line < /proc/self/stat
+  self=${line%% *}
+  { echo 1000 > /proc/self/oom_score_adj; } 2>/dev/null
+  dir=/var/lib/jangada/jobs
+  [ -n "$job" ] && mkdir -p "$dir" 2>/dev/null
+  # Processos que fazem parte do agente (ele e o que abriu logo no início) e quantas voltas já deu.
+  core=" $agent "
+  round=0
+  while :; do
+    # O agente terminou: este processo passou a ser filho de outro.
+    { read -r line < /proc/self/stat; } 2>/dev/null || break
+    rest=${line##*") "}
+    set -- $rest
+    [ "$2" = "$agent" ] || break
+    rss=0
+    { while read -r key value _; do
+        [ "$key" = "VmRSS:" ] && { rss=$value; break; }
+      done < /proc/$agent/status; } 2>/dev/null
+    agentadj=0
+    { read -r agentadj < /proc/$agent/oom_score_adj; } 2>/dev/null
+    round=$((round + 1))
+    newcore=" $agent "
+    tree=" $agent "
+    procs=0
+    # Duas passadas: um processo filho pode ter número menor que o pai.
+    for pass in 1 2; do
+      for f in /proc/[0-9]*/stat; do
+        { read -r line < "$f"; } 2>/dev/null || continue
+        pid=${line%% *}
+        [ "$pid" = "$self" ] && continue
+        case "$tree" in *" $pid "*) continue ;; esac
+        rest=${line##*") "}
+        set -- $rest
+        case "$tree" in *" $2 "*) ;; *) continue ;; esac
+        tree="$tree$pid "
+        # Nas 3 primeiras voltas (~10 s), filho de quem é parte do agente também é parte dele,
+        # menos um comando que o agente rodou logo na largada: um shell (bash, sh) ou quem já
+        # se deu 1000 pelo BASH_ENV (o "bash -c cmd" vira o próprio cmd, mas fica com o 1000).
+        part=0
+        case "$core" in *" $pid "*) part=1 ;; esac
+        if [ "$part" = 0 ] && [ "$round" -le 3 ]; then
+          case "$newcore" in *" $2 "*)
+            comm=${line#*(}
+            comm=${comm%") "*}
+            adj=
+            { read -r adj < /proc/$pid/oom_score_adj; } 2>/dev/null
+            case "$comm" in bash|sh|dash) ;; *) [ "$adj" = 1000 ] || part=1 ;; esac ;;
+          esac
+        fi
+        if [ "$part" = 1 ]; then
+          newcore="$newcore$pid "
+          want=$agentadj
+        else
+          procs=$((procs + 1))
+          want=1000
+        fi
+        { read -r adj < /proc/$pid/oom_score_adj
+          [ "$adj" = "$want" ] || echo "$want" > /proc/$pid/oom_score_adj; } 2>/dev/null
+        { while read -r key value _; do
+            [ "$key" = "VmRSS:" ] && { rss=$((rss + value)); break; }
+          done < /proc/$pid/status; } 2>/dev/null
+      done
+    done
+    # Quem saiu deixa de ser parte do agente (o número pode voltar como outro processo).
+    core=$newcore
+    [ -n "$job" ] && { printf '%s %s\n' "$rss" "$procs" > "$dir/$job"; } 2>/dev/null
+    # Espera 5 s, mas acorda logo (≈1 s) se o agente terminar: o proot só termina quando
+    # este processo sai, e o app espera o proot para dar o chat por encerrado.
+    # Se o tail não puder ser usado (saiu antes sem o agente ter terminado), espera com sleep.
+    timeout 5 tail --pid="$agent" -f /dev/null
+    [ $? = 124 ] || ! kill -0 "$agent" 2>/dev/null || sleep 5
+  done
+  [ -n "$job" ] && rm -f "$dir/$job"
+) </dev/null >/dev/null 2>&1 &
+exec "$@"

@@ -115,7 +115,7 @@ data class AgentRecipe(
     }
 
     /** Abre o agente na pasta de trabalho [cwd] (a raiz dos projetos por padrão), não na home. */
-    fun launchScript(cwd: String = Workspace.ROOT): String = "${enterDir(cwd)} && $command"
+    fun launchScript(cwd: String = Workspace.ROOT): String = "${enterDir(cwd)} && ${wrap(command)}"
 
     private fun localized(map: Map<String, String>): String {
         val lang = Locale.getDefault().language
@@ -126,17 +126,31 @@ data class AgentRecipe(
         /** Aspas simples seguras para o shell. */
         fun q(text: String) = "'" + text.replace("'", "'\\''") + "'"
 
+        /** Nome do wrapper instalado no Debian (assets/linux/jangada-agent, em /usr/local/bin). */
+        const val AGENT_WRAPPER = "jangada-agent"
+
+        /**
+         * Põe [command] (um agente) atrás do wrapper [AGENT_WRAPPER]: os comandos que o agente
+         * roda ficam com prioridade para o OOM killer do Linux, e o agente fica por último.
+         * Com [job], o wrapper grava a memória do trabalho em /var/lib/jangada/jobs/[job]
+         * (o app lê esse arquivo para mostrar o uso); sem ele, nada é gravado.
+         * [job] é o identificador do trabalho (ver ProcessChat.jobId); vai entre aspas.
+         */
+        fun wrap(command: String, job: String? = null): String =
+            "$AGENT_WRAPPER " + (job?.let { "--job ${q(it)} " } ?: "") + command
+
         /** Entra na pasta [cwd]; a raiz dos projetos é criada se faltar (subpasta tem que existir). */
         fun enterDir(cwd: String): String =
             if (cwd == Workspace.ROOT) "mkdir -p ${q(cwd)} && cd ${q(cwd)}" else "cd ${q(cwd)}"
 
         /**
-         * Entra em [cwd] e chama o Claude Code ([exec]: no lugar do shell). Numa subpasta,
+         * Entra em [cwd] e chama o Claude Code ([exec]: no lugar do shell), pelo wrapper
+         * (ver [wrap], com o [job] do trabalho, se houver). Numa subpasta,
          * libera a pasta dos anexos (na raiz; criada se faltar). O --add-dir vem logo depois
          * de "claude": ele aceita vários caminhos e engoliria um argumento solto depois dele.
          */
-        fun claudeIn(cwd: String, exec: Boolean): String {
-            val claude = (if (exec) "exec " else "") + "claude"
+        fun claudeIn(cwd: String, exec: Boolean, job: String? = null): String {
+            val claude = (if (exec) "exec " else "") + wrap("claude", job)
             if (cwd == Workspace.ROOT) return "${enterDir(cwd)} && $claude"
             val attachments = q(Workspace.ATTACHMENTS)
             return "mkdir -p $attachments 2>/dev/null; ${enterDir(cwd)} && $claude --add-dir $attachments"

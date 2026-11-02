@@ -88,7 +88,7 @@ class ChatEngine(
     }
 
     private fun command(resume: String?): String {
-        val args = StringBuilder(AgentRecipe.claudeIn(cwd, exec = true))
+        val args = StringBuilder(AgentRecipe.claudeIn(cwd, exec = true, job = jobId))
         args.append(" --output-format stream-json --verbose --input-format stream-json")
         args.append(" --include-partial-messages")
         if (askPermissions) {

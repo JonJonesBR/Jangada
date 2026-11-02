@@ -92,12 +92,45 @@ class AgentRecipeTest {
 
     @Test
     fun claudeNaRaizENaSubpasta() {
-        assertEquals("mkdir -p '/root/projetos' && cd '/root/projetos' && exec claude", AgentRecipe.claudeIn("/root/projetos", exec = true))
+        assertEquals("mkdir -p '/root/projetos' && cd '/root/projetos' && exec jangada-agent claude", AgentRecipe.claudeIn("/root/projetos", exec = true))
         // Numa subpasta, o --add-dir vem logo depois de "claude": o que vier depois não é engolido por ele.
         val sub = AgentRecipe.claudeIn("/root/projetos/meu app", exec = false)
-        assertEquals("mkdir -p '/root/projetos/anexos' 2>/dev/null; cd '/root/projetos/meu app' && claude --add-dir '/root/projetos/anexos'", sub)
+        assertEquals("mkdir -p '/root/projetos/anexos' 2>/dev/null; cd '/root/projetos/meu app' && jangada-agent claude --add-dir '/root/projetos/anexos'", sub)
         checkSyntax("claude subpasta", "$sub --resume 'id' 'continue'")
         checkSyntax("claude subpasta continue", "$sub --continue")
+    }
+
+    @Test
+    fun claudeComTrabalho() {
+        assertEquals(
+            "mkdir -p '/root/projetos' && cd '/root/projetos' && exec jangada-agent --job 'j-1' claude",
+            AgentRecipe.claudeIn("/root/projetos", exec = true, job = "j-1"),
+        )
+        assertEquals(
+            "mkdir -p '/root/projetos/anexos' 2>/dev/null; cd '/root/projetos/x' && jangada-agent --job 'j-1' claude --add-dir '/root/projetos/anexos'",
+            AgentRecipe.claudeIn("/root/projetos/x", exec = false, job = "j-1"),
+        )
+    }
+
+    @Test
+    fun wrapComESemTrabalho() {
+        assertEquals("jangada-agent claude", AgentRecipe.wrap("claude"))
+        assertEquals("jangada-agent --job 'abc-1' claude", AgentRecipe.wrap("claude", "abc-1"))
+        // A aspa do trabalho passa pelo q: o wrapper recebe o valor inteiro, como um argumento só.
+        assertEquals(
+            listOf("jangada-agent", "--job", "a'b", "x"),
+            runBash("set -- ${AgentRecipe.wrap("x", "a'b")}; printf '%s\\n' \"\$@\""),
+        )
+    }
+
+    @Test
+    fun launchScriptUsaOWrapper() {
+        for (recipe in recipes) {
+            assertEquals(
+                "mkdir -p '/root/projetos' && cd '/root/projetos' && jangada-agent ${recipe.command}",
+                recipe.launchScript(),
+            )
+        }
     }
 
     @Test

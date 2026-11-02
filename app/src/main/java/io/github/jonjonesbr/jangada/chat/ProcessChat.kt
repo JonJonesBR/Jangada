@@ -29,6 +29,12 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
 
     protected val context: Context = linux.context
 
+    /**
+     * Identificador do trabalho para o relatório de memória do jangada-agent (ver
+     * AgentRecipe.wrap). É o mesmo em todas as execuções deste chat.
+     */
+    val jobId: String = java.util.UUID.randomUUID().toString()
+
     override val items = mutableListOf<ChatItem>()
 
     /**
