@@ -23,6 +23,7 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.text.format.DateUtils
+import android.text.format.Formatter
 import android.text.method.LinkMovementMethod
 import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
@@ -148,6 +149,8 @@ class ChatActivity : JangadaActivity() {
     private var pendingRemoval: Pair<WorktreeJob, Boolean>? = null
     /** Diálogo "já há agentes demais" aberto (evita abrir dois). */
     private var jobsFullDialog: Dialog? = null
+    /** Painel de pouca memória aberto (evita abrir dois). */
+    private var memoryLowDialog: Dialog? = null
     /** Pasta do trabalho desta tela (nome dentro de ~/projetos; "" = a raiz); validada em onCreate. */
     private var folder = ""
     /** Branch do git da pasta (null = não é repositório, ou ainda não foi lido); lido fora da thread principal. */
@@ -459,12 +462,66 @@ class ChatActivity : JangadaActivity() {
     /**
      * Roda [open] se este trabalho pode abrir. Um par que já tem chat sempre pode; um novo
      * precisa de vaga (um agente parado pode dormir para liberá-la). Sem vaga, mostra os
-     * trabalhos abertos para dormir ou fechar um antes.
+     * trabalhos abertos para dormir ou fechar um antes. Com vaga, um agente novo ainda confere
+     * a memória do celular (ver [checkMemory]).
      */
     private fun withRoom(svc: TerminalService, open: () -> Unit) {
         // A pasta do trabalho isolado está saindo: nenhum chat novo nela.
         if (removingWorktree) return
-        if (svc.makeRoomFor(agentId, folder)) open() else showJobsFull(svc, open)
+        // Par rodando é substituído (não soma) e par dormindo só acorda: nenhum deles sobe agente novo.
+        val existing = svc.chat(agentId, folder)
+        val startsNew = existing?.running != true && existing?.asleep != true
+        // Sem vaga, um parado dorme para liberá-la (freeSlotFor): troca um por outro, sem somar
+        // agente, como ao escolher na lista de [showJobsFull]. Aí a memória não é conferida.
+        val hadRoom = svc.canOpenChat(agentId, folder)
+        when {
+            !svc.makeRoomFor(agentId, folder) -> showJobsFull(svc, open)
+            startsNew && hadRoom -> checkMemory(svc, open)
+            else -> open()
+        }
+    }
+
+    /**
+     * Confere a memória antes de subir um agente novo. Com folga, abre direto; apertada (TIGHT ou
+     * CRITICAL), mostra o painel de [showMemoryLow] e o usuário decide.
+     */
+    private fun checkMemory(svc: TerminalService, open: () -> Unit) {
+        val info = svc.memoryWatch.memoryInfo()
+        if (MemoryPolicy.level(info.availMem, info.threshold, info.lowMemory) == MemoryPolicy.Level.OK) {
+            open()
+            return
+        }
+        showMemoryLow(svc, Formatter.formatShortFileSize(this, info.availMem), open)
+    }
+
+    /**
+     * Painel de pouca memória: pôr os parados para dormir e abrir (só aparece se há quem dorme), ou
+     * abrir mesmo assim. Cancelar sai desta tela se ela não tem conversa para mostrar.
+     */
+    private fun showMemoryLow(svc: TerminalService, free: String, open: () -> Unit) {
+        if (memoryLowDialog?.isShowing == true) return
+        val rows = mutableListOf<Sheet.Row>()
+        if (svc.memoryWatch.idleCandidates(chatKey) > 0) {
+            rows += Sheet.Row(
+                title = getString(R.string.memory_low_sleep_open),
+                description = getString(R.string.memory_low_sleep_open_desc),
+            ) {
+                svc.memoryWatch.sleepIdleNow(chatKey)
+                if (!isDestroyed) open()
+            }
+        }
+        rows += Sheet.Row(
+            title = getString(R.string.memory_low_open),
+            description = getString(R.string.memory_low_open_desc),
+        ) {
+            if (!isDestroyed) open()
+        }
+        memoryLowDialog = Sheet(this)
+            .title(getString(R.string.memory_low_title))
+            .message(getString(R.string.memory_low_text, free))
+            .rows(rows)
+            .onDismiss { if (engine == null) finish() }
+            .show()
     }
 
     /**

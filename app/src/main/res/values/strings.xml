@@ -250,6 +250,12 @@
         <item quantity="other">%d agents already running</item>
     </plurals>
     <string name="chat_jobs_full">Each agent uses phone memory. Tap a job to put it to sleep (or close it) and open this one.</string>
+    <string name="memory_low_title">Low free memory</string>
+    <string name="memory_low_text">The phone has %1$s free. Opening another agent may make Android stop one.</string>
+    <string name="memory_low_sleep_open">Put idle agents to sleep and open</string>
+    <string name="memory_low_sleep_open_desc">Idle agents sleep (their conversations are kept), then this one opens.</string>
+    <string name="memory_low_open">Open anyway</string>
+    <string name="memory_low_open_desc">Opens without freeing anything: Android may stop another app or a command.</string>
     <string name="chat_asleep">💤 The agent was put to sleep to free memory. Send a message to pick up where it stopped.</string>
     <string name="chat_view_detailed">Detailed</string>
     <string name="chat_view_normal">Normal</string>
@@ -487,6 +493,9 @@
     <string name="notify_finished_text">Tap to see the answer.</string>
     <string name="notify_failed_title">%1$s: something went wrong</string>
     <string name="notify_failed_text">Open the chat to see what happened.</string>
+    <string name="notify_memory_title">Phone memory is low</string>
+    <string name="notify_memory_text">%1$s is using %2$s. If memory runs out, Linux stops the agents’ commands first (such as test browsers), not the agents.</string>
+    <string name="notify_memory_text_generic">Close apps or jobs you aren’t using. If memory runs out, Linux stops the agents’ commands first.</string>
     <string name="task_notify_installed">%1$s installed</string>
     <string name="task_notify_updated">%1$s updated</string>
     <string name="task_notify_uninstalled">%1$s uninstalled</string>

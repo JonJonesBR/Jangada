@@ -248,6 +248,12 @@
         <item quantity="other">Já há %d agentes rodando</item>
     </plurals>
     <string name="chat_jobs_full">Cada agente usa memória do celular. Toque em um trabalho para pô-lo para dormir (ou fechá-lo) e abrir este.</string>
+    <string name="memory_low_title">Pouca memória livre</string>
+    <string name="memory_low_text">O celular tem %1$s livres. Abrir mais um agente pode fazer o Android encerrar algum.</string>
+    <string name="memory_low_sleep_open">Pôr os parados para dormir e abrir</string>
+    <string name="memory_low_sleep_open_desc">Os agentes parados dormem (as conversas ficam guardadas) e este abre.</string>
+    <string name="memory_low_open">Abrir mesmo assim</string>
+    <string name="memory_low_open_desc">Abre sem liberar nada: o Android pode encerrar outro app ou um comando.</string>
     <string name="chat_asleep">💤 O agente foi posto para dormir para liberar memória. Envie uma mensagem para continuar de onde parou.</string>
     <string name="chat_view_detailed">Detalhado</string>
     <string name="chat_view_normal">Normal</string>
@@ -485,6 +491,9 @@
     <string name="notify_finished_text">Toque para ver a resposta.</string>
     <string name="notify_failed_title">%1$s: algo deu errado</string>
     <string name="notify_failed_text">Abra o chat para ver o que aconteceu.</string>
+    <string name="notify_memory_title">Pouca memória no celular</string>
+    <string name="notify_memory_text">%1$s está usando %2$s. Se faltar memória, o Linux encerra primeiro os comandos dos agentes (como navegadores de teste), não os agentes.</string>
+    <string name="notify_memory_text_generic">Feche apps ou trabalhos que não estiver usando. Se faltar memória, o Linux encerra primeiro os comandos dos agentes.</string>
     <string name="task_notify_installed">%1$s instalado</string>
     <string name="task_notify_updated">%1$s atualizado</string>
     <string name="task_notify_uninstalled">%1$s desinstalado</string>

@@ -19,6 +19,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
+import android.text.format.Formatter
 import android.util.Log
 import com.termux.terminal.TerminalEmulator
 import com.termux.terminal.TerminalSession
@@ -900,8 +901,7 @@ class TerminalService : Service() {
     private fun onChatAttention(agentId: String, folder: String, attention: ChatAttention) {
         val key = chatKey(agentId, folder)
         if (visibleChat == key) return
-        val agent = AgentCatalog.load(this).firstOrNull { it.id == agentId }?.name ?: "Claude Code"
-        val name = if (folder.isEmpty()) agent else "$agent · $folder"
+        val name = chatName(agentId, folder)
         val (title, text) = when (attention) {
             ChatAttention.PERMISSION -> R.string.notify_permission_title to R.string.notify_permission_text
             ChatAttention.LOGIN -> R.string.notify_login_title to R.string.notify_login_text
@@ -936,6 +936,42 @@ class TerminalService : Service() {
         // A lista da tela inicial mostra o estado de cada trabalho: redesenha.
         sessionsChanged()
     }
+
+    /** Nome de um trabalho nos avisos: o agente e, se não for a raiz, a pasta. */
+    private fun chatName(agentId: String, folder: String): String {
+        val agent = AgentCatalog.load(this).firstOrNull { it.id == agentId }?.name ?: "Claude Code"
+        return if (folder.isEmpty()) agent else "$agent · $folder"
+    }
+
+    /**
+     * Aviso de pouca memória com agente rodando (ver [MemoryWatch]). [heaviest] é o trabalho que mais usa
+     * (chave e bytes), se há relatório. Ao toque, abre esse chat; sem ele, a tela inicial.
+     */
+    internal fun notifyLowMemory(heaviest: Pair<String, Long>?) {
+        val slot = heaviest?.let { chats[it.first] }
+        val text = if (heaviest != null && slot != null) {
+            getString(
+                R.string.notify_memory_text,
+                chatName(slot.agentId, slot.folder),
+                Formatter.formatShortFileSize(this, heaviest.second),
+            )
+        } else {
+            getString(R.string.notify_memory_text_generic)
+        }
+        val open = if (slot != null) {
+            Intent(this, ChatActivity::class.java)
+                .putExtra(ChatActivity.EXTRA_AGENT_ID, slot.agentId)
+                .putExtra(ChatActivity.EXTRA_FOLDER, slot.folder)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        } else {
+            Intent(this, HomeActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        attentionNotification(REQUEST_MEMORY, NOTIFICATION_MEMORY, getString(R.string.notify_memory_title), text, open)
+    }
+
+    /** Some com o aviso de pouca memória (a memória voltou ao normal). */
+    internal fun cancelLowMemory() = notifications().cancel(NOTIFICATION_MEMORY)
 
     /**
      * Some com o aviso de permissão cujo trabalho não tem mais pedido pendente (o CLI cancelou, o agente
@@ -1146,8 +1182,12 @@ class TerminalService : Service() {
         private const val NOTIFICATION_TASK = 4
         /** Aviso de clone terminado (ou falhou): um por pasta, com o nome da pasta como tag. */
         private const val NOTIFICATION_CLONE = 5
+        /** Aviso de pouca memória com agente rodando (ver MemoryWatch): um só, sem tag. */
+        private const val NOTIFICATION_MEMORY = 6
         private const val REQUEST_HOME = 10
         private const val REQUEST_SETUP = 11
+        /** Toque no aviso de pouca memória (o trabalho que mais usa muda: o PendingIntent é atualizado). */
+        private const val REQUEST_MEMORY = 13
         /** Base do código do PendingIntent de cada aviso de clone (soma o hash da pasta). */
         private const val REQUEST_CLONE = 12
         /** Limites do texto do aviso de permissão (linha de baixo e texto expandido). */

@@ -176,4 +176,17 @@ class MemoryPolicyTest {
         assertNull(MemoryPolicy.toFreeSlot(candidates))
         assertNull(MemoryPolicy.toFreeSlot(emptyList()))
     }
+
+    // ---- Aviso ----
+
+    @Test
+    fun maiorUsoEscolheOQueMaisGasta() {
+        assertEquals("b", MemoryPolicy.heaviest(mapOf("a" to 10L, "b" to 500L, "c" to 0L)))
+    }
+
+    @Test
+    fun maiorUsoNuloSemRelatorioOuSemMemoria() {
+        assertNull(MemoryPolicy.heaviest(emptyMap()))
+        assertNull(MemoryPolicy.heaviest(mapOf("a" to 0L)))
+    }
 }
