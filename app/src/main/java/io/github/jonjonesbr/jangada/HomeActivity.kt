@@ -299,6 +299,8 @@ class HomeActivity : JangadaActivity() {
             if (!paused) svc.homeScreenVisible = true
             svc.addSessionsListener(sessionsListener)
             svc.onTasksChanged = { onTasksChanged() }
+            // Tarefas que terminaram com a tela fora (ex.: a fila do Atualizar todos) também contam.
+            if (acknowledgeFinished(svc)) refreshInstalled()
             renderSessions()
             renderAgents()
         }
@@ -414,6 +416,13 @@ class HomeActivity : JangadaActivity() {
     private fun onTasksChanged() {
         val svc = service ?: return
         // Tarefas que acabaram de dar certo: anota a data e confere de novo o que está instalado.
+        if (acknowledgeFinished(svc)) refreshInstalled()
+        // Mudou o estado de alguma tarefa: refaz os cartões. Senão, só a linha da saída.
+        if (taskStatesChanged(svc)) renderAgents() else updateRunningLines(svc)
+    }
+
+    /** Anota a data das tarefas que deram certo e ainda não foram registradas. true se havia alguma. */
+    private fun acknowledgeFinished(svc: TerminalService): Boolean {
         var finished = false
         for ((id, task) in svc.tasks) {
             if (task.state == AgentTask.State.OK && !task.acknowledged) {
@@ -422,9 +431,7 @@ class HomeActivity : JangadaActivity() {
                 finished = true
             }
         }
-        if (finished) refreshInstalled()
-        // Mudou o estado de alguma tarefa: refaz os cartões. Senão, só a linha da saída.
-        if (taskStatesChanged(svc)) renderAgents() else updateRunningLines(svc)
+        return finished
     }
 
     /** true se alguma tarefa começou, terminou ou foi cancelada desde o último desenho. */
