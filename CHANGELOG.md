@@ -1,5 +1,13 @@
 # Novidades
 
+## 1.11.0
+
+- Tela inicial: os agentes instalados aparecem primeiro na lista, e os outros vêm depois.
+- Tela inicial: Atualizar todos, ao lado do título Agentes, atualiza de uma vez os agentes que pedem atualização, um por vez.
+- Agentes: instalar, atualizar ou desinstalar com outra tarefa rodando entra na fila (instalações ao mesmo tempo disputam o apt e a memória). O cartão mostra "Na fila para instalar/atualizar/desinstalar" e Cancelar tira da fila; ao cancelar a tarefa em andamento, Cancelar todos para a fila inteira.
+- Avisos: com a fila, um aviso só quando ela termina, mostrando a falha se houve uma.
+- Correção: agentes sem versão no npm (Hermes, Antigravity) não voltam mais a pedir Atualizar quando a atualização termina com a tela inicial fechada.
+
 ## 1.10.0
 
 - Memória: os comandos que os agentes rodam (navegador de testes, builds, servidores) cedem primeiro quando a memória acaba. O Android encerra o comando, que falha com "Killed", e o agente continua.

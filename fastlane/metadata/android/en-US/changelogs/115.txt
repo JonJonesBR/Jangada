@@ -1,0 +1,1 @@
+Home screen: installed agents come first; Update all updates every agent with a new version, one at a time. Installing, updating or uninstalling while another task runs waits in a queue ("Waiting to…"), with Cancel and Cancel all; a single notice when the queue finishes, showing the failure if there was one.

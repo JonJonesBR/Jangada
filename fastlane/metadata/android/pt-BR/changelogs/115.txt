@@ -1,0 +1,1 @@
+Tela inicial: os agentes instalados aparecem primeiro; Atualizar todos atualiza de uma vez os que têm versão nova, um por vez. Instalar, atualizar ou desinstalar com outra tarefa rodando entra na fila ("Na fila para…"), com Cancelar e Cancelar todos; um aviso só quando a fila termina, mostrando a falha se houve.

@@ -17,8 +17,8 @@ android {
         // 28 de propósito, a mesma escolha do Termux: permite executar os programas
         // do ambiente Linux (Etapa 2) a partir da pasta do app. Ver README.
         targetSdk = 28
-        versionCode = 114
-        versionName = "1.10.0"
+        versionCode = 115
+        versionName = "1.11.0"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
