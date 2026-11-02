@@ -168,6 +168,8 @@ class ChatEngine(
         val next = queue.removeFirstOrNull()
         if (next == null) {
             busy = false
+            // Turno acabou: redesenha já (sem isso a tela ficava em "Trabalhando…" quando nada chegava depois, como no /compact).
+            changed()
             return
         }
         next.item.queued = false

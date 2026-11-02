@@ -289,6 +289,8 @@ class AcpChat(
         val next = queue.removeFirstOrNull()
         if (next == null) {
             busy = false
+            // Turno acabou: redesenha já (sem isso a tela ficava em "Trabalhando…" quando nada chegava depois).
+            changed()
             return
         }
         next.item.queued = false
