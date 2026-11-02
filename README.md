@@ -51,7 +51,8 @@ O Jangada coloca um Linux Debian completo dentro do app e transforma o celular n
 - Se você permitir, os agentes também leem e salvam nos arquivos do celular (`~/celular`: Downloads, Documentos…).
 
 ### ⚡ Vários agentes ao mesmo tempo
-- Até 3 trabalhos rodando juntos, cada um com o seu agente e a sua pasta, sem um parar o outro.
+- Vários trabalhos rodando juntos (até 4, conforme a memória do aparelho), cada um com o seu agente e a sua pasta, sem um parar o outro.
+- **Cuidado com a memória:** se ela apertar, o Linux encerra primeiro os comandos dos agentes (como navegadores de teste), não os agentes. Agentes parados "dormem" para liberar memória e continuam a conversa quando você escrever, e cada agente recebe orientações para não abrir vários navegadores ao mesmo tempo.
 - A tela inicial mostra quem está trabalhando, quem espera você e quem terminou, com quem espera você em destaque.
 - Os agentes continuam em segundo plano, com a tela apagada ou em outro app, e um aviso chega quando a resposta fica pronta (o gasto de bateria é maior; dá para desligar nas configurações).
 
@@ -149,7 +150,8 @@ Jangada puts a full Debian Linux inside the app and turns your phone into a plac
   - isolated jobs (git worktree) for the agent to experiment safely;
   - access to your phone files (`~/celular`), if you allow it.
 - **⚡ Several agents at once:**
-  - up to 3 jobs running side by side;
+  - several jobs running side by side (up to 4, depending on the device's memory);
+  - memory care: if memory runs low, Linux stops the agents' commands first (such as test browsers), not the agents; idle agents sleep to free memory and pick up the conversation when you write;
   - the home screen shows who is working, who is waiting for you and who is done;
   - agents keep going in the background and notify you when they are done (this uses more battery; you can turn it off in Settings).
 - **⌨️ Full terminal:**

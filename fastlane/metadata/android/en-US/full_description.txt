@@ -5,7 +5,7 @@ Jangada brings a full Debian Linux inside the app and lets you install, open and
 <li>Agent catalog: install, update and uninstall with one tap.</li>
 <li>Chat with live answers, permission buttons (also from the notification), attachments and history.</li>
 <li>Projects with git: create, clone, review changes, commit and push to GitHub or GitLab.</li>
-<li>Up to 3 agents working at the same time, each in its own folder.</li>
+<li>Several agents working at the same time, each in its own folder, with care for the phone's memory: idle agents sleep and heavy commands give way first.</li>
 <li>Full terminal with tabs, extra keys and a text box with autocorrect and voice typing.</li>
 <li>Agents keep working in the background.</li>
 <li>Access to your phone files, encrypted API keys and backup.</li>

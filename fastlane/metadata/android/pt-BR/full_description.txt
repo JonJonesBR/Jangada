@@ -5,7 +5,7 @@ O Jangada traz um Linux Debian completo para dentro do app e deixa você instala
 <li>Catálogo de agentes: instalar, atualizar e desinstalar com um toque.</li>
 <li>Chat com respostas em tempo real, permissões com botões (também pela notificação), anexos e histórico.</li>
 <li>Projetos com git: criar, clonar, ver as mudanças, fazer o commit e enviar ao GitHub ou ao GitLab.</li>
-<li>Até 3 agentes trabalhando ao mesmo tempo, cada um na sua pasta.</li>
+<li>Vários agentes trabalhando ao mesmo tempo, cada um na sua pasta, com cuidado com a memória do celular: agentes parados dormem e os comandos pesados cedem primeiro.</li>
 <li>Terminal completo com abas, teclas extras e caixa de texto com corretor e voz.</li>
 <li>Os agentes continuam trabalhando em segundo plano.</li>
 <li>Acesso aos arquivos do celular, chaves de API com criptografia e backup.</li>
