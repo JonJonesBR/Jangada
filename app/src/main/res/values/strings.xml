@@ -45,6 +45,7 @@
     <string name="chat_state_waiting">Needs you</string>
     <string name="chat_state_ready">Ready</string>
     <string name="chat_state_stopped">Stopped</string>
+    <string name="chat_state_asleep">Asleep</string>
     <string name="home_agents">Agents</string>
     <string name="home_welcome_title">Welcome to Jangada</string>
     <string name="home_welcome_body">Install an agent below. Each one uses its own account or API key. In Simple mode the agent opens in the chat; in Pro mode, in the terminal (change it in Settings).</string>
@@ -129,6 +130,11 @@
     <string name="settings_haptic">Vibrate when the answer is ready</string>
     <string name="settings_haptic_hint">Only while the chat is open; follows the system touch feedback setting.</string>
     <string name="settings_agent_tips">Guide agents about memory</string>
+    <string name="settings_sleep_after">Sleep idle agents</string>
+    <string name="settings_sleep_after_hint">An agent idle (no answer in progress) this long is closed to free memory; the conversation continues when you write. Agents with commands running in the background don’t sleep.</string>
+    <string name="settings_sleep_after_never">Never</string>
+    <string name="settings_sleep_after_minutes">%1$d min</string>
+    <string name="settings_sleep_after_hours">%1$d h</string>
     <string name="settings_agent_tips_hint">Adds to each agent\'s global instructions: one test browser at a time, close the browser when done and avoid heavy parallel tasks. Turn off to remove it.</string>
 
     <string name="chat_history">Conversations</string>
@@ -243,7 +249,8 @@
         <item quantity="one">%d agent already running</item>
         <item quantity="other">%d agents already running</item>
     </plurals>
-    <string name="chat_jobs_full">Each agent uses phone memory. Tap a job to close it and open this one.</string>
+    <string name="chat_jobs_full">Each agent uses phone memory. Tap a job to put it to sleep (or close it) and open this one.</string>
+    <string name="chat_asleep">💤 The agent was put to sleep to free memory. Send a message to pick up where it stopped.</string>
     <string name="chat_view_detailed">Detailed</string>
     <string name="chat_view_normal">Normal</string>
     <string name="chat_view_summary">Summary</string>
@@ -600,6 +607,7 @@
     <string name="sheet_desc_view">How much detail the conversation shows</string>
     <string name="sheet_desc_worktree">Its own working copy, on a new branch</string>
     <string name="sheet_desc_close_job">Close this job</string>
+    <string name="sheet_desc_sleep_job">Put to sleep (the conversation continues later)</string>
     <string name="chat_history_delete_row">Delete conversations…</string>
     <string name="chat_history_delete_title">Delete which conversation?</string>
 </resources>

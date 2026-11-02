@@ -97,6 +97,31 @@ class SettingsActivity : JangadaActivity() {
             Sheet(this).title(getString(R.string.settings_max_agents_title)).rows(rows).show()
         }
 
+        // Dormir agentes parados: a escolha abre num painel, como a visualização do chat (ver MemoryWatch).
+        val sleepButton = findViewById<Button>(R.id.settings_sleep_after)
+        fun sleepLabel(minutes: Int): String = when {
+            minutes == 0 -> getString(R.string.settings_sleep_after_never)
+            minutes % 60 == 0 -> getString(R.string.settings_sleep_after_hours, minutes / 60)
+            else -> getString(R.string.settings_sleep_after_minutes, minutes)
+        }
+        fun showSleepAfter() {
+            sleepButton.text = sleepLabel(settings.sleepAfterMinutes)
+        }
+        showSleepAfter()
+        sleepButton.setOnClickListener {
+            Sheet(this)
+                .title(getString(R.string.settings_sleep_after))
+                .rows(
+                    AppSettings.SLEEP_AFTER_MINUTES.map { minutes ->
+                        Sheet.Row(title = sleepLabel(minutes), checked = minutes == settings.sleepAfterMinutes) {
+                            settings.sleepAfterMinutes = minutes
+                            showSleepAfter()
+                        }
+                    },
+                )
+                .show()
+        }
+
         // Vibração ao fim da resposta (só com o chat aberto; ver ChatActivity).
         bindSwitch(R.id.settings_haptic, settings.hapticOnFinish) { settings.hapticOnFinish = it }
 

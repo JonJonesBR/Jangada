@@ -43,6 +43,7 @@
     <string name="chat_state_waiting">Esperando você</string>
     <string name="chat_state_ready">Pronto</string>
     <string name="chat_state_stopped">Parado</string>
+    <string name="chat_state_asleep">Dormindo</string>
     <string name="home_agents">Agentes</string>
     <string name="home_welcome_title">Bem-vindo ao Jangada</string>
     <string name="home_welcome_body">Instale um agente abaixo. Cada um usa a sua própria conta ou chave de API. No modo Simples o agente abre no chat; no Pro, no terminal (troque em Configurações).</string>
@@ -127,6 +128,11 @@
     <string name="settings_haptic">Vibrar quando a resposta ficar pronta</string>
     <string name="settings_haptic_hint">Só com o chat aberto; segue o retorno tátil do sistema.</string>
     <string name="settings_agent_tips">Orientar os agentes sobre a memória</string>
+    <string name="settings_sleep_after">Dormir agentes parados</string>
+    <string name="settings_sleep_after_hint">Um agente parado (sem resposta em andamento) há esse tempo é fechado para liberar memória; a conversa continua quando você escrever. Agentes com comandos rodando em segundo plano não dormem.</string>
+    <string name="settings_sleep_after_never">Nunca</string>
+    <string name="settings_sleep_after_minutes">%1$d min</string>
+    <string name="settings_sleep_after_hours">%1$d h</string>
     <string name="settings_agent_tips_hint">Acrescenta às instruções globais de cada agente: um navegador de teste por vez, fechar o navegador ao terminar e evitar tarefas pesadas em paralelo. Desligue para tirar o trecho.</string>
 
     <string name="chat_history">Conversas</string>
@@ -241,7 +247,8 @@
         <item quantity="one">Já há %d agente rodando</item>
         <item quantity="other">Já há %d agentes rodando</item>
     </plurals>
-    <string name="chat_jobs_full">Cada agente usa memória do celular. Toque em um trabalho para fechá-lo e abrir este.</string>
+    <string name="chat_jobs_full">Cada agente usa memória do celular. Toque em um trabalho para pô-lo para dormir (ou fechá-lo) e abrir este.</string>
+    <string name="chat_asleep">💤 O agente foi posto para dormir para liberar memória. Envie uma mensagem para continuar de onde parou.</string>
     <string name="chat_view_detailed">Detalhado</string>
     <string name="chat_view_normal">Normal</string>
     <string name="chat_view_summary">Resumo</string>
@@ -596,6 +603,7 @@
     <string name="sheet_desc_view">Quanto detalhe a conversa mostra</string>
     <string name="sheet_desc_worktree">Cópia de trabalho própria, numa branch nova</string>
     <string name="sheet_desc_close_job">Fechar este trabalho</string>
+    <string name="sheet_desc_sleep_job">Pôr para dormir (a conversa continua depois)</string>
     <string name="chat_history_delete_row">Apagar conversas…</string>
     <string name="chat_history_delete_title">Qual conversa apagar?</string>
 </resources>

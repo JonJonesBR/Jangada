@@ -63,15 +63,16 @@ sealed class ChatItem {
 enum class ChatAttention { PERMISSION, LOGIN, FINISHED, FAILED }
 
 /** Estado de um trabalho de chat, mostrado na lista da tela inicial. */
-enum class ChatState { WORKING, WAITING, READY, STOPPED }
+enum class ChatState { WORKING, WAITING, READY, ASLEEP, STOPPED }
 
 /**
  * Estado do chat: parado (agente fora, mesmo com um cartão de login antigo na conversa),
+ * dormindo (agente fechado de propósito para liberar memória; ver [AgentChat.sleep]),
  * espera você (permissão ou login sem resposta), trabalha (turno em andamento) ou está
  * pronto (agente rodando, sem turno).
  */
 fun chatState(chat: AgentChat): ChatState {
-    if (!chat.running) return ChatState.STOPPED
+    if (!chat.running) return if (chat.asleep) ChatState.ASLEEP else ChatState.STOPPED
     // Cópia da lista: ela muda na thread principal enquanto se percorre.
     val waiting = chat.items.toList().any { item ->
         (item is ChatItem.Permission && item.chosen == null) ||
@@ -158,6 +159,14 @@ interface AgentChat {
     val contextUsage: ContextUsage?
     /** O agente lista as conversas anteriores. */
     val supportsHistory: Boolean
+    /** Dormindo: o agente foi fechado de propósito para liberar memória, e a próxima mensagem o acorda. */
+    val asleep: Boolean get() = false
+    /** Enviar uma mensagem agora retoma a mesma conversa (e não abre outra). */
+    val canResume: Boolean get() = false
+    /** elapsedRealtime de quando o chat ficou parado (sem turno em andamento). */
+    val idleSinceMs: Long get() = 0L
+    /** Identificador do trabalho para o relatório de memória (ver JobMemory); null se não há. */
+    val jobId: String? get() = null
     var onChanged: (() -> Unit)?
     /**
      * Avisos para o usuário (chamado na thread principal): pedido de permissão,
@@ -169,4 +178,10 @@ interface AgentChat {
     fun interrupt()
     fun answer(item: ChatItem.Permission, option: PermissionOption)
     fun stop(then: (() -> Unit)? = null)
+    /**
+     * Fecha o agente de forma limpa para liberar memória, mantendo a conversa (a próxima mensagem a retoma).
+     * Só na thread principal. Devolve false (e não faz nada) se não é o caso: agente ocupado,
+     * sem como retomar a conversa, ou com pedido de permissão ou login sem resposta.
+     */
+    fun sleep(): Boolean = false
 }

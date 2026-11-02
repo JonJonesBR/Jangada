@@ -736,7 +736,8 @@ class HomeActivity : JangadaActivity() {
         ChatState.WAITING -> 0
         ChatState.WORKING -> 1
         ChatState.READY -> 2
-        ChatState.STOPPED -> 3
+        ChatState.ASLEEP -> 3
+        ChatState.STOPPED -> 4
     }
 
     /** Linha de um trabalho. "Esperando você" sai com o estado em negrito e na cor de destaque. */
@@ -1080,6 +1081,7 @@ internal fun stateText(context: Context, state: ChatState): String = context.get
         ChatState.WORKING -> R.string.chat_state_working
         ChatState.WAITING -> R.string.chat_state_waiting
         ChatState.READY -> R.string.chat_state_ready
+        ChatState.ASLEEP -> R.string.chat_state_asleep
         ChatState.STOPPED -> R.string.chat_state_stopped
     },
 )

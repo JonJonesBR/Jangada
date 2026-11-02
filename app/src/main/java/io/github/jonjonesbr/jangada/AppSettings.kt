@@ -96,6 +96,14 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_AGENT_MEMORY_TIPS, true)
         set(value) = prefs.edit().putBoolean(KEY_AGENT_MEMORY_TIPS, value).apply()
 
+    /**
+     * Minutos parados (sem turno) até o agente dormir para liberar memória; 0 = nunca.
+     * Um de [SLEEP_AFTER_MINUTES]; outro valor guardado volta ao padrão (30). Ver MemoryWatch.
+     */
+    var sleepAfterMinutes: Int
+        get() = prefs.getInt(KEY_SLEEP_AFTER, 30).takeIf { it in SLEEP_AFTER_MINUTES } ?: 30
+        set(value) = prefs.edit().putInt(KEY_SLEEP_AFTER, value).apply()
+
     /** Tamanho do texto do chat: um de [CHAT_TEXT_SCALES]; outro valor guardado volta a 1f. */
     var chatTextScale: Float
         get() = prefs.getFloat(KEY_CHAT_TEXT_SCALE, 1f).takeIf { it in CHAT_TEXT_SCALES } ?: 1f
@@ -104,6 +112,8 @@ class AppSettings(context: Context) {
     companion object {
         /** Escolhas do tamanho do texto do chat (multiplicam o tamanho padrão). */
         val CHAT_TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
+        /** Escolhas de [sleepAfterMinutes] (0 = nunca). */
+        val SLEEP_AFTER_MINUTES = listOf(0, 15, 30, 60, 120)
         const val THEME_SYSTEM = "system"
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
@@ -131,5 +141,6 @@ class AppSettings(context: Context) {
         private const val KEY_CHAT_TEXT_SCALE = "chat_text_scale"
         private const val KEY_AGENT_MEMORY_TIPS = "agent_memory_tips"
         private const val KEY_MAX_AGENTS = "max_agents"
+        private const val KEY_SLEEP_AFTER = "sleep_after_minutes"
     }
 }

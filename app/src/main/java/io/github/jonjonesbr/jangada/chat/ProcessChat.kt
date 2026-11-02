@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada.chat
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import io.github.jonjonesbr.jangada.R
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
@@ -33,7 +34,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * Identificador do trabalho para o relatório de memória do jangada-agent (ver
      * AgentRecipe.wrap). É o mesmo em todas as execuções deste chat.
      */
-    val jobId: String = java.util.UUID.randomUUID().toString()
+    override val jobId: String = java.util.UUID.randomUUID().toString()
 
     override val items = mutableListOf<ChatItem>()
 
@@ -50,9 +51,17 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         protected set(value) {
             val ended = field && !value
             field = value
+            // Quando o chat ficou parado (ou começou a trabalhar): base do "dormir depois de X minutos".
+            idleSinceMs = SystemClock.elapsedRealtime()
             if (value) silentTurn = false
             if (ended && !silentTurn) main.post { turnEnded() }
         }
+    /** elapsedRealtime da última atividade: o chat parou de trabalhar, o agente subiu ([launch]) ou mandou algo. */
+    @Volatile final override var idleSinceMs: Long = SystemClock.elapsedRealtime()
+        private set
+    /** Dormindo: o processo foi fechado por [sleep] para liberar memória. Some quando o agente volta ([launch]). */
+    @Volatile final override var asleep = false
+        private set
     @Volatile override var running = false
         protected set
     @Volatile override var interrupted = false
@@ -98,6 +107,8 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     protected fun launch(interactive: Boolean, prepare: () -> String) {
         val c = Connection()
         connection = c
+        asleep = false
+        idleSinceMs = SystemClock.elapsedRealtime()
         running = true
         synchronized(stderrTail) { stderrTail.clear() }
         changed()
@@ -222,7 +233,13 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                 for (line in lines) {
                     // Linha que não é JSON é ignorada (não vai para o logcat).
                     val json = runCatching { JSONObject(line) }.getOrNull() ?: continue
-                    main.post { if (connection === c) handle(json) }
+                    main.post {
+                        if (connection !== c) return@post
+                        // O agente falou (até sem turno nosso, como o fim de um comando em segundo plano):
+                        // o tempo parado recomeça, para não dormir no meio do que ele faz.
+                        idleSinceMs = SystemClock.elapsedRealtime()
+                        handle(json)
+                    }
                 }
             }
         } catch (e: java.io.IOException) {
@@ -299,7 +316,29 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * Enviar uma mensagem agora retoma a mesma conversa (o agente guarda a sessão e sabe recarregá-la).
      * Quem sabe fazer isso sobrescreve; sem isso, a dica sugere uma conversa nova.
      */
-    protected open val canResume: Boolean get() = false
+    override val canResume: Boolean get() = false
+
+    /**
+     * Põe o agente para dormir (thread principal): fecha o processo como o Parar, sem erro, e deixa
+     * uma linha na conversa. A próxima mensagem o acorda na mesma conversa ([sendMessage] reinicia).
+     * Recusa (false) com turno em andamento, sem como retomar, ou com pedido de permissão ou login
+     * sem resposta ou em andamento: nesses casos parar perderia o que o usuário precisa responder
+     * (no login em andamento, o agente espera a volta do navegador).
+     */
+    override fun sleep(): Boolean {
+        if (!running || busy || !canResume) return false
+        val waiting = items.any { item ->
+            (item is ChatItem.Permission && item.chosen == null) ||
+                (item is ChatItem.Login &&
+                    (item.state == ChatItem.Login.State.WAITING || item.state == ChatItem.Login.State.WORKING))
+        }
+        if (waiting) return false
+        asleep = true
+        // Info normal (não é erro): stop() não acrescenta mensagem de saída, pois connection já não é a execução.
+        add(ChatItem.Info(context.getString(R.string.chat_asleep)))
+        stop()
+        return true
+    }
 
     /** O que houve com o código de saída e o que fazer agora. O erro cru fica em [detailsOf]. */
     protected fun exitMessage(code: Int): String {

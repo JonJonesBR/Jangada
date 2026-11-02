@@ -60,6 +60,7 @@ import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.ChatView
 import io.github.jonjonesbr.jangada.chat.Markdown
 import io.github.jonjonesbr.jangada.chat.chatState
@@ -257,7 +258,7 @@ class ChatActivity : JangadaActivity() {
         findViewById<View>(R.id.chat_stop).setOnClickListener { engine?.interrupt() }
         findViewById<View>(R.id.chat_terminal).setOnClickListener { switchToTerminal() }
         findViewById<View>(R.id.chat_menu).setOnClickListener { showMenu() }
-        continueChip.setOnClickListener { engine?.sendMessage(getString(R.string.chat_continue_prompt)) }
+        continueChip.setOnClickListener { sendAwake(getString(R.string.chat_continue_prompt)) }
         // Agente e pasta formam um só alvo de toque: tocar abre os trabalhos (trocar de pasta ou de agente).
         titleBlock.setOnClickListener { showJobs() }
         chipFolder.setOnClickListener { showJobs() }
@@ -457,32 +458,43 @@ class ChatActivity : JangadaActivity() {
 
     /**
      * Roda [open] se este trabalho pode abrir. Um par que já tem chat sempre pode; um novo
-     * precisa de vaga. Sem vaga, mostra os trabalhos abertos para fechar um antes.
+     * precisa de vaga (um agente parado pode dormir para liberá-la). Sem vaga, mostra os
+     * trabalhos abertos para dormir ou fechar um antes.
      */
     private fun withRoom(svc: TerminalService, open: () -> Unit) {
         // A pasta do trabalho isolado está saindo: nenhum chat novo nela.
         if (removingWorktree) return
-        if (svc.canOpenChat(agentId, folder)) open() else showJobsFull(svc, open)
+        if (svc.makeRoomFor(agentId, folder)) open() else showJobsFull(svc, open)
     }
 
     /**
-     * Já há [TerminalService.maxChats] agentes rodando (ou mais). Tocar num deles o fecha e então
-     * [open] roda. Cancelar (ou voltar) sai desta tela se ela não tem conversa para mostrar.
+     * Já há [TerminalService.maxChats] agentes rodando (ou mais). Tocar num deles o põe para dormir (a conversa
+     * continua na lista) ou, se ele não pode dormir, o fecha; então [open] roda. Cancelar (ou voltar)
+     * sai desta tela se ela não tem conversa para mostrar.
      */
     private fun showJobsFull(svc: TerminalService, open: () -> Unit) {
         // A tela que para e volta pede de novo: um painel só.
         if (jobsFullDialog?.isShowing == true) return
         // Só os que rodam: um trabalho parado não ocupa vaga.
         val rows = svc.runningChats().map { slot ->
+            // Dormir só vale com como retomar a conversa e sem turno em andamento.
+            val canSleep = slot.chat.canResume && chatState(slot.chat) == ChatState.READY
             Sheet.Row(
                 title = jobName(agentNameOf(slot.agentId), slot.folder),
                 value = stateText(this, chatState(slot.chat)),
-                description = getString(R.string.sheet_desc_close_job),
-                destructive = true,
+                description = getString(if (canSleep) R.string.sheet_desc_sleep_job else R.string.sheet_desc_close_job),
+                destructive = !canSleep,
             ) {
-                svc.closeChat(slot.agentId, slot.folder) {
+                val slept = slot.chat.sleep()
+                if (slept) {
                     if (!isDestroyed) open()
+                } else if (!canSleep) {
+                    svc.closeChat(slot.agentId, slot.folder) {
+                        if (!isDestroyed) open()
+                    }
                 }
+                // Podia dormir e não dormiu (o agente ficou ocupado depois de a lista abrir): não fecha,
+                // para não perder o turno. A lista da tela inicial mostra o estado de novo.
             }
         }
         // Cancelar, voltar ou tocar fora (sem escolher trabalho) sai desta tela se ela não tem conversa.
@@ -986,7 +998,7 @@ class ChatActivity : JangadaActivity() {
         val percent = chat.contextUsage?.percent ?: return
         val canCompact = isClaude || (chat as? AcpChat)?.commands?.any { it.name == "compact" } == true
         val rows: List<Sheet.Row> = if (canCompact) {
-            listOf(Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { engine?.sendMessage("/compact") })
+            listOf(Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") })
         } else {
             emptyList()
         }
@@ -1069,15 +1081,34 @@ class ChatActivity : JangadaActivity() {
         // O texto fica no campo até lá; se a instalação falhar, nada se perde.
         ensureAdapter {
             if (isDestroyed) return@ensureAdapter
-            // Trabalho novo precisa de vaga; o que já existe (parado) é reaberto.
-            withRoom(svc) {
-                // A conversa parada só é retomada na pasta dela.
-                val resume = engine?.takeIf { it.cwd == Workspace.path(folder) }?.sessionId
-                val chat = engine?.takeIf { it.running }
-                    ?: svc.openChat(agentId, folder = folder, resume = resume, restart = true).also { attach(it) }
-                deliver(chat)
-            }
+            // Trabalho novo precisa de vaga; o que já existe (parado ou dormindo) é reaberto.
+            withRoom(svc) { deliver(wake(svc)) }
         }
+    }
+
+    /**
+     * O chat deste trabalho rodando: o atual, ou um novo que retoma a mesma conversa. Não confere
+     * vaga: quem chama confere (ver [withRoom]).
+     */
+    private fun wake(svc: TerminalService): AgentChat {
+        // A conversa parada só é retomada na pasta dela.
+        val resume = engine?.takeIf { it.cwd == Workspace.path(folder) }?.sessionId
+        return engine?.takeIf { it.running }
+            ?: svc.openChat(agentId, folder = folder, resume = resume, restart = true).also { attach(it) }
+    }
+
+    /**
+     * Manda um texto que não vem da caixa (chip de continuar, Compactar agora). Se o agente dorme
+     * ou parou, confere a vaga e o acorda como no envio, para não passar do limite de agentes.
+     */
+    private fun sendAwake(text: String) {
+        val svc = service ?: return
+        val chat = engine ?: return
+        if (chat.running) {
+            chat.sendMessage(text)
+            return
+        }
+        withRoom(svc) { wake(svc).sendMessage(text) }
     }
 
     /** Manda o texto e os anexos pendentes para o chat e limpa o campo. */

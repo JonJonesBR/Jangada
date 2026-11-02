@@ -197,6 +197,9 @@ class TerminalService : Service() {
     /** Trabalhos de chat abertos, por [chatKey] (um por par agente + pasta). Só a thread principal mexe. */
     val chats = LinkedHashMap<String, ChatSlot>()
 
+    /** Põe para dormir os agentes parados quando a memória aperta, ou quando ficam ociosos ou falta vaga. */
+    val memoryWatch = MemoryWatch(this)
+
     // Os mapas por sessão são usados só na thread principal (sem sincronização).
     /** Agente de cada sessão de terminal (id da receita), para a troca Chat ⇄ Terminal. */
     val sessionAgent = HashMap<String, String>()
@@ -234,6 +237,13 @@ class TerminalService : Service() {
      */
     fun canOpenChat(agentId: String, folder: String): Boolean =
         chat(agentId, folder)?.running == true || runningChats().size < maxChats()
+
+    /**
+     * Há vaga para o trabalho do par? Se não, põe para dormir um agente parado que libera uma
+     * (ver [MemoryWatch.freeSlotFor]). Quem chama já mostrou a lista de trabalhos quando não há como.
+     */
+    fun makeRoomFor(agentId: String, folder: String): Boolean =
+        canOpenChat(agentId, folder) || memoryWatch.freeSlotFor(chatKey(agentId, folder))
 
     /**
      * Abre (ou devolve) o chat do agente [agentId], na pasta [folder] ("" = a raiz).
@@ -353,6 +363,7 @@ class TerminalService : Service() {
     }
 
     override fun onDestroy() {
+        memoryWatch.stop()
         tearDownSessions().forEach { it.stop() }
         linkWatcher?.stopWatching()
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -666,9 +677,11 @@ class TerminalService : Service() {
         if (!hasWork()) leaveForeground()
     }
 
-    private fun sessionsChanged() {
+    /** Estado dos trabalhos mudou: atualiza o aviso e as telas. Também acorda o vigia de memória, se há chat rodando. */
+    internal fun sessionsChanged() {
         dropStalePermissionNotices()
         updateNotification()
+        memoryWatch.ensureRunning()
         sessionListeners.forEach { it() }
     }
 
