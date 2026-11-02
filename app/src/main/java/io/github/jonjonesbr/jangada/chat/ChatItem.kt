@@ -170,6 +170,8 @@ interface AgentChat {
     val commands: List<SlashCommand> get() = emptyList()
     /** Tarefas que o agente deixou rodando em segundo plano (subagentes, comandos). Vazia se não há ou se o agente não informa. */
     val background: List<BackgroundTask> get() = emptyList()
+    /** Para uma tarefa em segundo plano (ver [background]). Sem efeito se o agente não sabe parar tarefas. */
+    fun stopBackground(taskId: String) {}
     /** Dormindo: o agente foi fechado de propósito para liberar memória, e a próxima mensagem o acorda. */
     val asleep: Boolean get() = false
     /** Enviar uma mensagem agora retoma a mesma conversa (e não abre outra). */

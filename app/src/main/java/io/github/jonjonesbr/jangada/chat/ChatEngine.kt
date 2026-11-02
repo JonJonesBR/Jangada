@@ -204,6 +204,13 @@ class ChatEngine(
         changed()
     }
 
+    /** Para uma tarefa em segundo plano (subagente ou comando). O CLI avisa o agente e manda a lista nova. */
+    override fun stopBackground(taskId: String) {
+        if (!running || background.none { it.id == taskId }) return
+        send(JSONObject().put("type", "control_request").put("request_id", nextRequestId())
+            .put("request", JSONObject().put("subtype", "stop_task").put("task_id", taskId)))
+    }
+
     /**
      * Marca um pedido de permissão como recusado. Com [reply], responde "negado" ao CLI;
      * sem ele (o CLI mesmo cancelou o pedido), só mostra no cartão.

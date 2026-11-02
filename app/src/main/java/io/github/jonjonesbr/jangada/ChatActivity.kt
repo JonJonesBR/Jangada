@@ -273,6 +273,8 @@ class ChatActivity : JangadaActivity() {
         sendButton.setOnClickListener { send() }
         findViewById<View>(R.id.chat_attach).setOnClickListener { pickAttachment() }
         stopButton.setOnClickListener { engine?.interrupt() }
+        // Tocar na faixa com tarefas em segundo plano abre o painel para pará-las (isClickable em updateStatus).
+        status.setOnClickListener { engine?.let { showBackgroundSheet(it) } }
         findViewById<View>(R.id.chat_terminal).setOnClickListener { switchToTerminal() }
         findViewById<View>(R.id.chat_menu).setOnClickListener { showMenu() }
         continueChip.setOnClickListener { sendAwake(getString(R.string.chat_continue_prompt)) }
@@ -904,6 +906,7 @@ class ChatActivity : JangadaActivity() {
     private fun updateStatus(chat: AgentChat) {
         val background = chat.background
         status.visibility = if (chat.busy || background.isNotEmpty()) View.VISIBLE else View.GONE
+        status.isClickable = background.isNotEmpty()
         stopButton.visibility = if (chat.busy) View.VISIBLE else View.GONE
         val lines = mutableListOf<String>()
         if (chat.busy) lines += getString(R.string.chat_working)
@@ -914,7 +917,32 @@ class ChatActivity : JangadaActivity() {
         } else if (background.size > 1) {
             lines += getString(R.string.chat_background_many, background.size, background.joinToString(", ") { it.description })
         }
+        // Com turno em andamento a faixa já diz "Trabalhando…"; sem ele, avisa que dá para tocar e parar.
+        if (background.isNotEmpty() && !chat.busy) lines += getString(R.string.chat_background_tap)
         statusText.text = lines.joinToString("\n")
+    }
+
+    /** Painel das tarefas em segundo plano: parar uma (a descrição é o que ela faz agora) ou todas. */
+    private fun showBackgroundSheet(chat: AgentChat) {
+        val tasks = chat.background
+        if (tasks.isEmpty()) return
+        val rows = tasks.map { task ->
+            Sheet.Row(
+                title = getString(R.string.chat_background_stop_one, task.description.ifBlank { task.activity ?: task.id }),
+                description = task.activity,
+                destructive = true,
+            ) { chat.stopBackground(task.id) }
+        }.toMutableList()
+        if (tasks.size > 1) {
+            rows += Sheet.Row(title = getString(R.string.chat_background_stop_all), destructive = true) {
+                tasks.forEach { chat.stopBackground(it.id) }
+            }
+        }
+        Sheet(this)
+            .title(getString(R.string.chat_background_title))
+            .message(getString(R.string.chat_background_message))
+            .rows(rows)
+            .show()
     }
 
     /**

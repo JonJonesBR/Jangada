@@ -112,6 +112,11 @@
     <string name="chat_working">Working…</string>
     <string name="chat_background_one">In the background: %1$s</string>
     <string name="chat_background_many">In the background (%1$d): %2$s</string>
+    <string name="chat_background_title">In the background</string>
+    <string name="chat_background_message">Stopping a task lets the agent know; it may reply about it. You can keep sending messages.</string>
+    <string name="chat_background_stop_one">Stop: %1$s</string>
+    <string name="chat_background_stop_all">Stop all</string>
+    <string name="chat_background_tap">Tap to stop</string>
     <string name="chat_stop">Stop</string>
     <string name="chat_hint">Message Claude</string>
     <string name="chat_empty">Talk to %1$s here. It works in the ~/projetos folder.\n\nTap &gt;_ at the top to open the agent’s full screen.</string>
