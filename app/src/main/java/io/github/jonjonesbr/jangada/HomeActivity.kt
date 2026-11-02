@@ -72,6 +72,8 @@ class HomeActivity : JangadaActivity() {
     /** Botão "＋ Novo trabalho" e a frase de lista vazia, que fica acima dele. */
     private lateinit var newJobButton: Button
     private lateinit var jobsEmpty: TextView
+    /** "Atualizar todos (N)", no título da seção de agentes. */
+    private lateinit var updateAllButton: Button
     /** Filtro da lista de trabalhos; não é salvo. */
     private var jobFilter: JobFilter = JobFilter.All
     /** Cartão de boas-vindas; null depois de tirado da tela. */
@@ -93,6 +95,8 @@ class HomeActivity : JangadaActivity() {
     private val cards = HashMap<String, View>()
     /** Estado de cada tarefa na última vez que os cartões foram desenhados. */
     private val drawnTasks = HashMap<String, TaskMark>()
+    /** Ids na fila de atualização na última vez que os cartões foram desenhados. */
+    private var drawnQueue: Set<String> = emptySet()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var renderScheduled = false
     private val renderLater = Runnable {
@@ -136,6 +140,7 @@ class HomeActivity : JangadaActivity() {
         filterChips = findViewById(R.id.job_filter_chips)
         newJobButton = findViewById(R.id.home_new_job)
         jobsEmpty = findViewById(R.id.home_jobs_empty)
+        updateAllButton = findViewById(R.id.update_all)
         newJobButton.setOnClickListener { startNewJob() }
         recipes = AgentCatalog.load(this)
 
@@ -424,6 +429,8 @@ class HomeActivity : JangadaActivity() {
 
     /** true se alguma tarefa começou, terminou ou foi cancelada desde o último desenho. */
     private fun taskStatesChanged(svc: TerminalService): Boolean {
+        // Entrar ou sair da fila de atualização não muda as tarefas: confere à parte.
+        if (svc.queuedIds() != drawnQueue) return true
         if (svc.tasks.size != drawnTasks.size) return true
         for ((id, task) in svc.tasks) {
             val drawn = drawnTasks[id] ?: return true
@@ -457,6 +464,7 @@ class HomeActivity : JangadaActivity() {
         for ((id, task) in service?.tasks.orEmpty()) {
             drawnTasks[id] = TaskMark(task, task.state, task.cancelled)
         }
+        drawnQueue = service?.queuedIds().orEmpty()
         val inflater = LayoutInflater.from(this)
         // Instalados primeiro; dentro de cada grupo, a ordem do catálogo (sortedBy é estável). Antes da
         // primeira detecção, vale a lista gravada, para os cartões não trocarem de lugar ao abrir a tela.
@@ -467,8 +475,40 @@ class HomeActivity : JangadaActivity() {
             cards[recipe.id] = card
             agentsList.addView(card)
         }
+        renderUpdateAll()
         // O botão Novo trabalho depende do que está instalado, que muda junto com os cartões.
         renderJobsSection()
+    }
+
+    /** "Atualizar todos (N)": aparece com 2 ou mais agentes que pedem atualização e ainda não estão na fila. */
+    private fun renderUpdateAll() {
+        val pending = updatable().filter { service?.isQueued(it.id) != true }
+        if (pending.size < 2) {
+            updateAllButton.visibility = View.GONE
+            return
+        }
+        updateAllButton.text = getString(R.string.agent_update_all, pending.size)
+        updateAllButton.setOnClickListener {
+            val svc = service ?: return@setOnClickListener
+            startService(Intent(this, TerminalService::class.java))
+            svc.updateAll(pending)
+        }
+        updateAllButton.visibility = View.VISIBLE
+    }
+
+    /**
+     * Agentes cujo cartão mostra o botão Atualizar, na ordem do catálogo: instalados, sem tarefa
+     * rodando e com [updateLabel] (versão nova, ou sem fonte e não atualizados há uma semana).
+     */
+    private fun updatable(): List<AgentRecipe> {
+        val known = installed ?: return emptyList()
+        return recipes.filter { recipe ->
+            val running = service?.tasks?.get(recipe.id)?.state == AgentTask.State.RUNNING
+            recipe.command in known &&
+                linux.isDeviceSupported &&
+                !running &&
+                updateLabel(recipe, true, installedVersions[recipe.command], latestVersions[recipe.id]) != null
+        }
     }
 
     private fun buildCard(inflater: LayoutInflater, recipe: AgentRecipe): View {
@@ -495,6 +535,8 @@ class HomeActivity : JangadaActivity() {
         val latest = latestVersions[recipe.id]
         val task = service?.tasks?.get(recipe.id)
         val enabled = known != null && linux.isDeviceSupported
+        // Esperando a vez em Atualizar todos (ainda não começou): a etiqueta diz isso.
+        val queued = task?.state != AgentTask.State.RUNNING && service?.isQueued(recipe.id) == true
 
         // Situação mostrada na etiqueta do cartão.
         when {
@@ -506,13 +548,14 @@ class HomeActivity : JangadaActivity() {
                         else -> R.string.agent_installing
                     },
                 )
+            queued -> status.setText(R.string.agent_queued)
             known == null -> status.setText(R.string.agent_checking)
             !isInstalled -> status.setText(R.string.agent_not_installed)
             version != null -> status.text = getString(R.string.agent_version, version)
             else -> status.setText(R.string.agent_installed)
         }
         // Espaço ocupado, ao lado da versão (ajuda a decidir o que desinstalar).
-        installedSizes[recipe.command]?.takeIf { isInstalled && task?.state != AgentTask.State.RUNNING }?.let { kb ->
+        installedSizes[recipe.command]?.takeIf { isInstalled && task?.state != AgentTask.State.RUNNING && !queued }?.let { kb ->
             status.text = "${status.text} · ${formatSize(kb)}"
         }
         status.setTextColor(getColor(if (isInstalled) R.color.setup_done else R.color.setup_muted))
@@ -526,6 +569,13 @@ class HomeActivity : JangadaActivity() {
             update.visibility = View.GONE
             taskCancel.visibility = View.VISIBLE
             taskCancel.setOnClickListener { confirmCancel(recipe) }
+        } else if (queued) {
+            // Na fila: só dá para tirar da fila (sem confirmação, nada começou).
+            primary.visibility = View.GONE
+            update.visibility = View.GONE
+            card.findViewById<Button>(R.id.alternative).visibility = View.GONE
+            taskCancel.visibility = View.VISIBLE
+            taskCancel.setOnClickListener { service?.unqueue(recipe.id) }
         } else {
             // Agentes com chat: no Modo Simples o botão principal é "Conversar" (chat)
             // e o terminal fica como alternativa; no Modo Pro, o contrário.
@@ -562,7 +612,7 @@ class HomeActivity : JangadaActivity() {
         }
 
         // Tarefa que falhou: explica e oferece as saídas. Cancelada pelo usuário não mostra erro.
-        if (task?.state == AgentTask.State.FAILED && !task.cancelled && (task.uninstalling || task.updating || !isInstalled)) {
+        if (task?.state == AgentTask.State.FAILED && !task.cancelled && !queued && (task.uninstalling || task.updating || !isInstalled)) {
             taskError.visibility = View.VISIBLE
             taskError.setText(
                 when {
@@ -582,7 +632,7 @@ class HomeActivity : JangadaActivity() {
         }
 
         // ⋯ : site, reinstalar e desinstalar.
-        card.findViewById<TextView>(R.id.site).setOnClickListener { showAgentMenu(recipe, isInstalled) }
+        card.findViewById<TextView>(R.id.site).setOnClickListener { showAgentMenu(recipe, isInstalled && !queued) }
         return card
     }
 

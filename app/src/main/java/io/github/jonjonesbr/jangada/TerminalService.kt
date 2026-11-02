@@ -184,6 +184,12 @@ class TerminalService : Service() {
     /** Tarefas por id do agente (a mais recente de cada um). */
     val tasks = ConcurrentHashMap<String, AgentTask>()
 
+    /** Atualizações esperando a vez (Atualizar todos). Só mexida na thread principal. */
+    private val updateQueue = ArrayDeque<AgentRecipe>()
+
+    /** Primeira falha de uma rodada da fila: o aviso do fim mostra ela, não o último sucesso. */
+    private var batchFailure: AgentTask? = null
+
     /** Clones por pasta de destino (o último de cada pasta). */
     val clones = ConcurrentHashMap<String, CloneTask>()
 
@@ -469,6 +475,8 @@ class TerminalService : Service() {
      */
     fun runAgentTask(recipe: AgentRecipe, updating: Boolean, uninstalling: Boolean = false) {
         if (tasks[recipe.id]?.state == AgentTask.State.RUNNING) return
+        // Começou por fora da fila (reinstalar, desinstalar): a atualização que esperava perde o sentido.
+        updateQueue.removeAll { it.id == recipe.id }
         val chatsGone = if (uninstalling) closeAgent(recipe.id) else null
         val task = AgentTask(recipe, updating, uninstalling)
         tasks[recipe.id] = task
@@ -503,7 +511,15 @@ class TerminalService : Service() {
                 onTasksChanged?.invoke()
                 updateNotification()
                 // Com a tela inicial fechada, avisa que a tarefa terminou (cancelada não avisa).
-                if (!homeScreenVisible && !task.cancelled) notifyTaskDone(task)
+                // Com a fila andando, um aviso só no fim, mostrando a primeira falha se houve.
+                if (task.state == AgentTask.State.FAILED && !task.cancelled && batchFailure == null) batchFailure = task
+                if (updateQueue.isEmpty()) {
+                    val report = batchFailure ?: task.takeIf { !it.cancelled }
+                    batchFailure = null
+                    if (!homeScreenVisible && report != null) notifyTaskDone(report)
+                }
+                // Antes de sair do primeiro plano: a próxima da fila já o mantém.
+                runNextQueued()
                 leaveForegroundIfIdle()
             }
         }
@@ -532,8 +548,52 @@ class TerminalService : Service() {
 
     /** Cancela todas as tarefas em andamento (ao sair pela notificação ou fechar tudo). */
     private fun cancelRunningTasks() {
+        // A fila sai antes: o fim de uma tarefa cancelada não pode puxar a próxima.
+        updateQueue.clear()
+        batchFailure = null
         tasks.keys.toList().forEach { cancelTask(it) }
         clones.keys.toList().forEach { cancelClone(it) }
+    }
+
+    /**
+     * Atualiza, um de cada vez, os agentes [recipes] (Atualizar todos). Quem já está atualizando
+     * ou na fila fica de fora. Thread principal; quem chama deve ter dado startService antes.
+     */
+    fun updateAll(recipes: List<AgentRecipe>) {
+        var added = false
+        for (recipe in recipes) {
+            if (tasks[recipe.id]?.state == AgentTask.State.RUNNING || isQueued(recipe.id)) continue
+            updateQueue.addLast(recipe)
+            added = true
+        }
+        if (!added) return
+        goForeground()
+        updateNotification()
+        onTasksChanged?.invoke()
+        runNextQueued()
+    }
+
+    /** true se o agente [agentId] está esperando a vez na fila de atualização. */
+    fun isQueued(agentId: String): Boolean = updateQueue.any { it.id == agentId }
+
+    /** Ids dos agentes na fila; a tela compara com o que desenhou para saber se precisa redesenhar. */
+    fun queuedIds(): Set<String> = updateQueue.mapTo(HashSet()) { it.id }
+
+    /** Tira [agentId] da fila. Ainda não começou, então só some. */
+    fun unqueue(agentId: String) {
+        val index = updateQueue.indexOfFirst { it.id == agentId }
+        if (index < 0) return
+        updateQueue.removeAt(index)
+        onTasksChanged?.invoke()
+        updateNotification()
+        leaveForegroundIfIdle()
+    }
+
+    /** Começa a próxima atualização da fila, se nenhuma tarefa está rodando. */
+    private fun runNextQueued() {
+        if (tasks.values.any { it.state == AgentTask.State.RUNNING }) return
+        val recipe = updateQueue.removeFirstOrNull() ?: return
+        runAgentTask(recipe, updating = true)
     }
 
     /**
@@ -672,7 +732,8 @@ class TerminalService : Service() {
 
     /** Há algo que mantenha o serviço em primeiro plano (sessão, chat, instalação ou Linux)? */
     private fun hasWork() =
-        sessions.isNotEmpty() || chats.isNotEmpty() || hasRunningTasks() || Setup.state is Setup.State.Running
+        sessions.isNotEmpty() || chats.isNotEmpty() || hasRunningTasks() || updateQueue.isNotEmpty() ||
+            Setup.state is Setup.State.Running
 
     private fun leaveForegroundIfIdle() {
         if (!hasWork()) leaveForeground()

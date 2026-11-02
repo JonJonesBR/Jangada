@@ -204,9 +204,34 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <TextView
-            style="@style/HomeSection"
-            android:text="@string/home_agents" />
+        <!-- Título da seção de agentes, com Atualizar todos à direita (aparece com 2 ou mais para atualizar). -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/HomeSection"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:text="@string/home_agents" />
+
+            <Button
+                android:id="@+id/update_all"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_text"
+                android:visibility="gone" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/unsupported"
