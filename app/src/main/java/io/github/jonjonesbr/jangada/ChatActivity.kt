@@ -1128,6 +1128,19 @@ class ChatActivity : JangadaActivity() {
         if (preparing) return
         val text = input.text.toString().trim()
         if (text.isEmpty() && pendingAttachments.isEmpty()) return
+        // /new, /clear e /reset viram a Nova conversa do menu: o agente zeraria a conversa por dentro, mas a tela continuaria com as mensagens antigas. Vale para todos os agentes.
+        if (pendingAttachments.isEmpty() && text.lowercase() in NEW_CONVERSATION_COMMANDS) {
+            if (engine?.busy == true) {
+                Toast.makeText(this, R.string.chat_new_wait, Toast.LENGTH_LONG).show()
+                return
+            }
+            // Sem o serviço ligado, nada abriria: o texto fica na caixa.
+            if (service == null) return
+            input.setText("")
+            drafts.put(chatKey, "")
+            newConversation()
+            return
+        }
         val svc = service ?: return
         val running = engine?.takeIf { it.running }
         if (running != null) {
@@ -2646,6 +2659,8 @@ class ChatActivity : JangadaActivity() {
         const val TOOL_EXCERPT_LINES = 6
         /** A partir deste percentual do contexto usado, o chip de contexto fica em destaque (e o painel oferece compactar). */
         const val COMPACT_PERCENT = 80
+        /** Comandos digitados na caixa que começam uma conversa nova (ver [send]). */
+        private val NEW_CONVERSATION_COMMANDS = setOf("/new", "/clear", "/reset")
         /** Hash de commit (SHA-1 ou SHA-256) como o rev-parse devolve. */
         private val SHA = Regex("[0-9a-f]{40,64}")
         const val EXTRA_AGENT_ID = "agent_id"
