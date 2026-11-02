@@ -1,0 +1,1 @@
+Chat: subagentes e comandos que o Claude deixa em segundo plano aparecem acima da caixa de texto, e um toque ali permite parar um deles ou todos. Quando o Claude volta a trabalhar sozinho, mostra Trabalhando… e avisa no fim. Enviar uma mensagem leva a conversa até ela, e o botão ↓ volta à última mensagem.

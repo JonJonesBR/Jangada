@@ -1,5 +1,12 @@
 # Novidades
 
+## 1.12.0
+
+- Chat: subagentes e comandos que o Claude deixa rodando em segundo plano aparecem na faixa acima da caixa de texto, com o que cada um faz agora, mesmo depois do fim da resposta. Com eles, o trabalho conta como Trabalhando e não dorme para liberar memória.
+- Chat: tocar na faixa abre um painel para parar uma tarefa em segundo plano ou todas. O Parar de sempre continua parando só a resposta do agente principal, e as mensagens seguem indo para ele.
+- Chat: quando o Claude volta a trabalhar sozinho (um subagente terminou), aparece Trabalhando… e chega o aviso de resposta pronta.
+- Chat: enviar uma mensagem leva a conversa até ela, e a resposta aparece logo abaixo. Lendo mais para cima, o botão ↓ volta à última mensagem.
+
 ## 1.11.1
 
 - Correção: o toque na notificação "Linux rodando" volta para a tela em que você estava; com o app fechado, abre o chat mais recente (com a tela inicial embaixo) ou a tela inicial. Antes abria sempre o terminal e, só com chats abertos, criava um terminal novo.

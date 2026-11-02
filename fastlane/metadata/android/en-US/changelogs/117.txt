@@ -1,0 +1,1 @@
+Chat: subagents and commands Claude leaves running in the background show above the text box; tap there to stop one or all. When Claude resumes on its own, it shows Working… and notifies you at the end. Sending a message scrolls to it, and the ↓ button jumps to the latest message.
