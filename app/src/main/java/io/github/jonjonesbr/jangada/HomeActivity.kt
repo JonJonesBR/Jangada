@@ -689,7 +689,8 @@ class HomeActivity : JangadaActivity() {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.task_cancel_title, recipe.name))
             .setPositiveButton(R.string.task_cancel_confirm) { _, _ -> service?.cancelTask(recipe.id) }
-            .setNegativeButton(android.R.string.cancel, null)
+            // "Continuar" no lugar de "Cancelar": com Cancelar todos, seriam três botões "Cancelar".
+            .setNegativeButton(R.string.task_cancel_keep, null)
             .apply {
                 // Com fila, o botão do meio cancela a instalação em andamento e tudo que espera.
                 if (service?.hasQueue() == true) {
