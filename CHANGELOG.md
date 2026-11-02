@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.11.1
+
+- Correção: o toque na notificação "Linux rodando" volta para a tela em que você estava; com o app fechado, abre o chat mais recente (com a tela inicial embaixo) ou a tela inicial. Antes abria sempre o terminal e, só com chats abertos, criava um terminal novo.
+
 ## 1.11.0
 
 - Tela inicial: os agentes instalados aparecem primeiro na lista, e os outros vêm depois.

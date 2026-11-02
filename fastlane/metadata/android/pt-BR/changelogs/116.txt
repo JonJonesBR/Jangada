@@ -1,0 +1,1 @@
+Notificação: o toque em "Linux rodando" volta para a tela em que você estava; com o app fechado, abre o chat mais recente ou a tela inicial. Antes abria sempre o terminal e, só com chats abertos, criava um terminal novo.

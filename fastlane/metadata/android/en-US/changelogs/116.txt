@@ -1,0 +1,1 @@
+Notification: tapping "Linux running" returns to the screen you were on; with the app closed, it opens the most recent chat or the home screen. It used to always open the terminal and, with only chats open, start a new terminal.
