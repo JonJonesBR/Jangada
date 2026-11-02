@@ -1,5 +1,6 @@
 package io.github.jonjonesbr.jangada
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -69,6 +70,8 @@ class TerminalService : Service() {
     private var lastSetupNotify = 0L
     /** Trabalhos (chaves de [chatKey]) cujo aviso atual é de pedido de permissão com botões. Só a thread principal mexe. */
     private val permissionNotices = HashSet<String>()
+    /** Memória total do aparelho em bytes; -1 = ainda não lida (ver totalMem). */
+    private var totalMemBytes = -1L
 
     /**
      * Trabalho de chat aberto na tela de chat agora (chave de [chatKey]; null se nenhum).
@@ -210,12 +213,27 @@ class TerminalService : Service() {
     /** Chats com o agente rodando: só eles contam no limite (um trabalho parado não usa memória). */
     fun runningChats(): List<ChatSlot> = chats.values.filter { it.chat.running }
 
+    /** Agentes de chat rodando ao mesmo tempo: a escolha dos ajustes, ou o automático pela RAM (ver AgentLimit). */
+    fun maxChats(): Int = AgentLimit.effective(AppSettings(this).maxAgents, totalMem())
+
+    /** Memória total do aparelho em bytes (0 se o Android não informar). Lida uma vez e guardada. */
+    private fun totalMem(): Long {
+        if (totalMemBytes < 0L) {
+            totalMemBytes = runCatching {
+                val info = ActivityManager.MemoryInfo()
+                getSystemService(ActivityManager::class.java).getMemoryInfo(info)
+                info.totalMem
+            }.getOrDefault(0L)
+        }
+        return totalMemBytes
+    }
+
     /**
      * Pode abrir (ou reabrir) o trabalho do par? Sim se o agente dele já roda (é substituído,
      * sem somar) ou se há vaga. Um trabalho parado que volta a rodar também precisa de vaga.
      */
     fun canOpenChat(agentId: String, folder: String): Boolean =
-        chat(agentId, folder)?.running == true || runningChats().size < MAX_CHATS
+        chat(agentId, folder)?.running == true || runningChats().size < maxChats()
 
     /**
      * Abre (ou devolve) o chat do agente [agentId], na pasta [folder] ("" = a raiz).
@@ -1128,8 +1146,6 @@ class TerminalService : Service() {
         private const val DIRECT_LINK_WINDOW_MS = 30_000L
         const val DEFAULT_TITLE = "Terminal"
         const val CLAUDE = "claude-code"
-        /** Trabalhos de chat abertos ao mesmo tempo (cada agente usa memória do celular). */
-        const val MAX_CHATS = 3
 
         /** Chave do trabalho do par (agente, pasta): um chat por par. */
         fun chatKey(agentId: String, folder: String) = "$agentId|$folder"

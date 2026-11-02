@@ -1,5 +1,6 @@
 package io.github.jonjonesbr.jangada
 
+import android.app.ActivityManager
 import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Context
@@ -17,6 +18,7 @@ import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.terminal.TerminalThemes
+import io.github.jonjonesbr.jangada.ui.Sheet
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
@@ -63,6 +65,37 @@ class SettingsActivity : JangadaActivity() {
         val effort = findViewById<RadioGroup>(R.id.settings_effort_group)
         effort.check(efforts.entries.firstOrNull { it.value == settings.chatEffort }?.key ?: R.id.effort_default)
         effort.setOnCheckedChangeListener { _, id -> settings.chatEffort = efforts[id] ?: "" }
+
+        // Agentes de chat ao mesmo tempo: Automático (pela RAM do aparelho) ou de 1 a AgentLimit.MAX.
+        val maxAgents = findViewById<Button>(R.id.settings_max_agents)
+        val autoAgents = AgentLimit.auto(totalMemBytes())
+        fun showMaxAgents() {
+            val value = if (settings.maxAgents in 1..AgentLimit.MAX) {
+                settings.maxAgents.toString()
+            } else {
+                getString(R.string.settings_max_agents_auto, autoAgents)
+            }
+            maxAgents.text = getString(R.string.settings_max_agents, value)
+        }
+        showMaxAgents()
+        maxAgents.setOnClickListener {
+            val chosen = settings.maxAgents
+            val rows = listOf(
+                Sheet.Row(
+                    title = getString(R.string.settings_max_agents_auto_device, autoAgents),
+                    checked = chosen !in 1..AgentLimit.MAX,
+                ) {
+                    settings.maxAgents = 0
+                    showMaxAgents()
+                },
+            ) + (1..AgentLimit.MAX).map { n ->
+                Sheet.Row(title = n.toString(), checked = chosen == n) {
+                    settings.maxAgents = n
+                    showMaxAgents()
+                }
+            }
+            Sheet(this).title(getString(R.string.settings_max_agents_title)).rows(rows).show()
+        }
 
         // Vibração ao fim da resposta (só com o chat aberto; ver ChatActivity).
         bindSwitch(R.id.settings_haptic, settings.hapticOnFinish) { settings.hapticOnFinish = it }
@@ -156,6 +189,13 @@ class SettingsActivity : JangadaActivity() {
         switch.isChecked = value
         switch.setOnCheckedChangeListener { _, checked -> save(checked) }
     }
+
+    /** Memória total do aparelho em bytes para o automático (0 se o Android não informar). */
+    private fun totalMemBytes(): Long = runCatching {
+        val info = ActivityManager.MemoryInfo()
+        getSystemService(ActivityManager::class.java).getMemoryInfo(info)
+        info.totalMem
+    }.getOrDefault(0L)
 
     /** Tamanho do Linux (calculado em segundo plano, sem seguir links). */
     private fun showLinuxSize() {

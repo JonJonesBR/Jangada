@@ -61,6 +61,11 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_APP_THEME, THEME_SYSTEM) ?: THEME_SYSTEM
         set(value) = prefs.edit().putString(KEY_APP_THEME, value).apply()
 
+    /** Agentes de chat rodando ao mesmo tempo: 1..AgentLimit.MAX, ou 0 = automático (ver AgentLimit). */
+    var maxAgents: Int
+        get() = prefs.getInt(KEY_MAX_AGENTS, 0)
+        set(value) = prefs.edit().putInt(KEY_MAX_AGENTS, value).apply()
+
     /** Esquema de cores do terminal (ver TerminalThemes). */
     var terminalTheme: String
         get() = prefs.getString(KEY_TERMINAL_THEME, "default") ?: "default"
@@ -125,5 +130,6 @@ class AppSettings(context: Context) {
         private const val KEY_HAPTIC_FINISH = "haptic_on_finish"
         private const val KEY_CHAT_TEXT_SCALE = "chat_text_scale"
         private const val KEY_AGENT_MEMORY_TIPS = "agent_memory_tips"
+        private const val KEY_MAX_AGENTS = "max_agents"
     }
 }

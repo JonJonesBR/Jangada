@@ -118,6 +118,24 @@
                     android:text="@string/settings_permissions_auto" />
             </RadioGroup>
 
+            <Button
+                android:id="@+id/settings_max_agents"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:minHeight="48dp"
+                android:textColor="@color/accent_text" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_max_agents_desc"
+                android:textColor="@color/setup_muted"
+                android:textSize="13sp" />
+
             <TextView
                 style="@style/HomeSection"
                 android:text="@string/settings_chat_alerts" />

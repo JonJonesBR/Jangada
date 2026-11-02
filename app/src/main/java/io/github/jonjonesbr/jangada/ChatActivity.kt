@@ -466,7 +466,7 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Já há [TerminalService.MAX_CHATS] agentes rodando. Tocar num deles o fecha e então
+     * Já há [TerminalService.maxChats] agentes rodando (ou mais). Tocar num deles o fecha e então
      * [open] roda. Cancelar (ou voltar) sai desta tela se ela não tem conversa para mostrar.
      */
     private fun showJobsFull(svc: TerminalService, open: () -> Unit) {
@@ -486,8 +486,10 @@ class ChatActivity : JangadaActivity() {
             }
         }
         // Cancelar, voltar ou tocar fora (sem escolher trabalho) sai desta tela se ela não tem conversa.
+        // O título conta os que rodam, não o limite: se o limite baixou nos ajustes, podem ser mais.
+        val running = rows.size
         jobsFullDialog = Sheet(this)
-            .title(getString(R.string.chat_jobs_full_title, TerminalService.MAX_CHATS))
+            .title(resources.getQuantityString(R.plurals.chat_jobs_full_title, running, running))
             .message(getString(R.string.chat_jobs_full))
             .rows(rows)
             .onDismiss { if (engine == null) finish() }

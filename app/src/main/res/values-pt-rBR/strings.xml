@@ -237,7 +237,10 @@
     <string name="clone_hint_not_found">Repositório não encontrado. Confira o endereço; se ele for privado, entre antes.</string>
     <string name="chat_jobs">Trabalhos</string>
     <string name="chat_jobs_new">Novo trabalho…</string>
-    <string name="chat_jobs_full_title">Já há %1$d agentes rodando</string>
+    <plurals name="chat_jobs_full_title">
+        <item quantity="one">Já há %d agente rodando</item>
+        <item quantity="other">Já há %d agentes rodando</item>
+    </plurals>
     <string name="chat_jobs_full">Cada agente usa memória do celular. Toque em um trabalho para fechá-lo e abrir este.</string>
     <string name="chat_view_detailed">Detalhado</string>
     <string name="chat_view_normal">Normal</string>
@@ -339,6 +342,11 @@
     <string name="settings_chat_text_large">Grande</string>
     <string name="settings_chat_text_larger">Maior</string>
     <string name="settings_chat_text_huge">Enorme</string>
+    <string name="settings_max_agents">Agentes ao mesmo tempo: %1$s</string>
+    <string name="settings_max_agents_title">Agentes ao mesmo tempo</string>
+    <string name="settings_max_agents_desc">Cada agente rodando usa memória do celular. No automático, o limite depende da RAM do aparelho. Agentes dormindo não contam.</string>
+    <string name="settings_max_agents_auto">Automático (%1$d)</string>
+    <string name="settings_max_agents_auto_device">Automático (%1$d neste aparelho)</string>
     <string name="settings_nothing_to_clean">Não havia nada para limpar: os caches já estão vazios.</string>
     <string name="settings_backup">Backup</string>
     <string name="backup_intro">Guarde seus projetos (e, se quiser, as configurações e logins dos agentes) num arquivo no celular, para restaurar depois de reinstalar o Linux ou trocar de aparelho. Os agentes em si são reinstalados pelo catálogo.</string>
