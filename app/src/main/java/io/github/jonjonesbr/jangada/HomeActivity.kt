@@ -458,7 +458,11 @@ class HomeActivity : JangadaActivity() {
             drawnTasks[id] = TaskMark(task, task.state, task.cancelled)
         }
         val inflater = LayoutInflater.from(this)
-        for (recipe in recipes) {
+        // Instalados primeiro; dentro de cada grupo, a ordem do catálogo (sortedBy é estável). Antes da
+        // primeira detecção, vale a lista gravada, para os cartões não trocarem de lugar ao abrir a tela.
+        val known = installed ?: AgentPrefs.installedCommands(this)
+        val ordered = if (known == null) recipes else recipes.sortedBy { if (it.command in known) 0 else 1 }
+        for (recipe in ordered) {
             val card = buildCard(inflater, recipe)
             cards[recipe.id] = card
             agentsList.addView(card)
