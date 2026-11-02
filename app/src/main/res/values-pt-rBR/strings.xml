@@ -53,6 +53,8 @@
     <string name="agent_update">Atualizar</string>
     <string name="agent_update_all">Atualizar todos (%d)</string>
     <string name="agent_queued">Na fila para atualizar</string>
+    <string name="agent_queued_install">Na fila para instalar</string>
+    <string name="agent_queued_uninstall">Na fila para desinstalar</string>
     <string name="agent_installed">Instalado</string>
     <string name="agent_not_installed">Não instalado</string>
     <string name="agent_checking">Verificando…</string>

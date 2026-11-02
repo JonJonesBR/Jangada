@@ -151,6 +151,9 @@ class TerminalService : Service() {
         }
     }
 
+    /** Pedido de instalar, atualizar ou desinstalar que espera a vez (outra tarefa de agente rodando). */
+    class QueuedTask(val recipe: AgentRecipe, val updating: Boolean, val uninstalling: Boolean)
+
     /** Clone de um repositório para uma pasta nova de ~/projetos, em segundo plano. */
     class CloneTask(val agentId: String, val url: String, val folder: String) {
         enum class State { RUNNING, OK, EXISTS, FAILED }
@@ -184,10 +187,10 @@ class TerminalService : Service() {
     /** Tarefas por id do agente (a mais recente de cada um). */
     val tasks = ConcurrentHashMap<String, AgentTask>()
 
-    /** Atualizações esperando a vez (Atualizar todos). Só mexida na thread principal. */
-    private val updateQueue = ArrayDeque<AgentRecipe>()
+    /** Tarefas de agente esperando a vez, na ordem em que foram pedidas. Só mexida na thread principal. */
+    private val taskQueue = ArrayDeque<QueuedTask>()
 
-    /** Primeira falha de uma rodada da fila: o aviso do fim mostra ela, não o último sucesso. */
+    /** Primeira falha da rodada (até a fila esvaziar): o aviso do fim mostra ela, não o último sucesso. */
     private var batchFailure: AgentTask? = null
 
     /** Clones por pasta de destino (o último de cada pasta). */
@@ -469,14 +472,30 @@ class TerminalService : Service() {
     }
 
     /**
-     * Instala ou atualiza um agente sem abrir o terminal. A saída fica
+     * Instala, atualiza ou desinstala um agente sem abrir o terminal. A saída fica
      * guardada na tarefa (para "Ver detalhes") e a tela acompanha pelo
      * [onTasksChanged]. Quem chama deve ter dado startService antes.
+     *
+     * Fila: com outra tarefa de agente rodando, o pedido espera na [taskQueue] e
+     * começa na sua vez (instalações em paralelo disputam o lock do apt). Um pedido
+     * novo para o mesmo agente substitui o que esperava. Thread principal.
      */
     fun runAgentTask(recipe: AgentRecipe, updating: Boolean, uninstalling: Boolean = false) {
         if (tasks[recipe.id]?.state == AgentTask.State.RUNNING) return
-        // Começou por fora da fila (reinstalar, desinstalar): a atualização que esperava perde o sentido.
-        updateQueue.removeAll { it.id == recipe.id }
+        // Pedido novo substitui o que esperava na fila para este agente.
+        taskQueue.removeAll { it.recipe.id == recipe.id }
+        if (tasks.values.any { it.state == AgentTask.State.RUNNING }) {
+            taskQueue.addLast(QueuedTask(recipe, updating, uninstalling))
+            goForeground()
+            updateNotification()
+            onTasksChanged?.invoke()
+            return
+        }
+        startAgentTask(recipe, updating, uninstalling)
+    }
+
+    /** Começa a tarefa do agente agora, sem olhar a fila. Desinstalar fecha antes os chats do agente. */
+    private fun startAgentTask(recipe: AgentRecipe, updating: Boolean, uninstalling: Boolean) {
         val chatsGone = if (uninstalling) closeAgent(recipe.id) else null
         val task = AgentTask(recipe, updating, uninstalling)
         tasks[recipe.id] = task
@@ -513,7 +532,7 @@ class TerminalService : Service() {
                 // Com a tela inicial fechada, avisa que a tarefa terminou (cancelada não avisa).
                 // Com a fila andando, um aviso só no fim, mostrando a primeira falha se houve.
                 if (task.state == AgentTask.State.FAILED && !task.cancelled && batchFailure == null) batchFailure = task
-                if (updateQueue.isEmpty()) {
+                if (taskQueue.isEmpty()) {
                     val report = batchFailure ?: task.takeIf { !it.cancelled }
                     batchFailure = null
                     if (!homeScreenVisible && report != null) notifyTaskDone(report)
@@ -549,21 +568,22 @@ class TerminalService : Service() {
     /** Cancela todas as tarefas em andamento (ao sair pela notificação ou fechar tudo). */
     private fun cancelRunningTasks() {
         // A fila sai antes: o fim de uma tarefa cancelada não pode puxar a próxima.
-        updateQueue.clear()
+        taskQueue.clear()
         batchFailure = null
         tasks.keys.toList().forEach { cancelTask(it) }
         clones.keys.toList().forEach { cancelClone(it) }
     }
 
     /**
-     * Atualiza, um de cada vez, os agentes [recipes] (Atualizar todos). Quem já está atualizando
-     * ou na fila fica de fora. Thread principal; quem chama deve ter dado startService antes.
+     * Põe na fila a atualização dos agentes [recipes] (Atualizar todos): rodam um de cada
+     * vez, na ordem da lista. Quem já está atualizando ou na fila fica de fora. Thread
+     * principal; quem chama deve ter dado startService antes.
      */
     fun updateAll(recipes: List<AgentRecipe>) {
         var added = false
         for (recipe in recipes) {
-            if (tasks[recipe.id]?.state == AgentTask.State.RUNNING || isQueued(recipe.id)) continue
-            updateQueue.addLast(recipe)
+            if (tasks[recipe.id]?.state == AgentTask.State.RUNNING || queued(recipe.id) != null) continue
+            taskQueue.addLast(QueuedTask(recipe, updating = true, uninstalling = false))
             added = true
         }
         if (!added) return
@@ -573,27 +593,27 @@ class TerminalService : Service() {
         runNextQueued()
     }
 
-    /** true se o agente [agentId] está esperando a vez na fila de atualização. */
-    fun isQueued(agentId: String): Boolean = updateQueue.any { it.id == agentId }
+    /** O pedido que espera a vez para o agente [agentId] (instalar, atualizar ou desinstalar), ou null. */
+    fun queued(agentId: String): QueuedTask? = taskQueue.firstOrNull { it.recipe.id == agentId }
 
     /** Ids dos agentes na fila; a tela compara com o que desenhou para saber se precisa redesenhar. */
-    fun queuedIds(): Set<String> = updateQueue.mapTo(HashSet()) { it.id }
+    fun queuedIds(): Set<String> = taskQueue.mapTo(HashSet()) { it.recipe.id }
 
-    /** Tira [agentId] da fila. Ainda não começou, então só some. */
+    /** Tira o pedido de [agentId] da fila. Ainda não começou, então só some. */
     fun unqueue(agentId: String) {
-        val index = updateQueue.indexOfFirst { it.id == agentId }
+        val index = taskQueue.indexOfFirst { it.recipe.id == agentId }
         if (index < 0) return
-        updateQueue.removeAt(index)
+        taskQueue.removeAt(index)
         onTasksChanged?.invoke()
         updateNotification()
         leaveForegroundIfIdle()
     }
 
-    /** Começa a próxima atualização da fila, se nenhuma tarefa está rodando. */
+    /** Começa o próximo da fila, se nenhuma tarefa de agente está rodando. */
     private fun runNextQueued() {
         if (tasks.values.any { it.state == AgentTask.State.RUNNING }) return
-        val recipe = updateQueue.removeFirstOrNull() ?: return
-        runAgentTask(recipe, updating = true)
+        val next = taskQueue.removeFirstOrNull() ?: return
+        startAgentTask(next.recipe, next.updating, next.uninstalling)
     }
 
     /**
@@ -732,7 +752,7 @@ class TerminalService : Service() {
 
     /** Há algo que mantenha o serviço em primeiro plano (sessão, chat, instalação ou Linux)? */
     private fun hasWork() =
-        sessions.isNotEmpty() || chats.isNotEmpty() || hasRunningTasks() || updateQueue.isNotEmpty() ||
+        sessions.isNotEmpty() || chats.isNotEmpty() || hasRunningTasks() || taskQueue.isNotEmpty() ||
             Setup.state is Setup.State.Running
 
     private fun leaveForegroundIfIdle() {

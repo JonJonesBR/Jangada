@@ -489,7 +489,7 @@ class HomeActivity : JangadaActivity() {
 
     /** "Atualizar todos (N)": aparece com 2 ou mais agentes que pedem atualização e ainda não estão na fila. */
     private fun renderUpdateAll() {
-        val pending = updatable().filter { service?.isQueued(it.id) != true }
+        val pending = updatable().filter { service?.queued(it.id) == null }
         if (pending.size < 2) {
             updateAllButton.visibility = View.GONE
             return
@@ -542,8 +542,9 @@ class HomeActivity : JangadaActivity() {
         val latest = latestVersions[recipe.id]
         val task = service?.tasks?.get(recipe.id)
         val enabled = known != null && linux.isDeviceSupported
-        // Esperando a vez em Atualizar todos (ainda não começou): a etiqueta diz isso.
-        val queued = task?.state != AgentTask.State.RUNNING && service?.isQueued(recipe.id) == true
+        // Esperando a vez (outra tarefa rodando, ou Atualizar todos): a etiqueta diz o que é.
+        val queuedTask = if (task?.state != AgentTask.State.RUNNING) service?.queued(recipe.id) else null
+        val queued = queuedTask != null
 
         // Situação mostrada na etiqueta do cartão.
         when {
@@ -555,7 +556,13 @@ class HomeActivity : JangadaActivity() {
                         else -> R.string.agent_installing
                     },
                 )
-            queued -> status.setText(R.string.agent_queued)
+            queuedTask != null -> status.setText(
+                when {
+                    queuedTask.uninstalling -> R.string.agent_queued_uninstall
+                    queuedTask.updating -> R.string.agent_queued
+                    else -> R.string.agent_queued_install
+                },
+            )
             known == null -> status.setText(R.string.agent_checking)
             !isInstalled -> status.setText(R.string.agent_not_installed)
             version != null -> status.text = getString(R.string.agent_version, version)

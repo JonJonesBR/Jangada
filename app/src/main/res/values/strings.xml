@@ -55,6 +55,8 @@
     <string name="agent_update">Update</string>
     <string name="agent_update_all">Update all (%d)</string>
     <string name="agent_queued">Waiting to update</string>
+    <string name="agent_queued_install">Waiting to install</string>
+    <string name="agent_queued_uninstall">Waiting to uninstall</string>
     <string name="agent_installed">Installed</string>
     <string name="agent_not_installed">Not installed</string>
     <string name="agent_checking">Checking…</string>
