@@ -66,7 +66,7 @@ object AgentInstructions {
             var stop = end + END.length
             if (begin >= from) {
                 if (text.startsWith("\n", stop)) stop++
-                found += begin until stop
+                found.add(begin until stop)
             }
             from = end + END.length
         }
@@ -222,7 +222,7 @@ object AgentInstructions {
         var dir: Path = file.parent ?: return false
         while (!Files.isDirectory(dir, NOFOLLOW)) {
             if (dir == root || dir.parent == root || Files.exists(dir, NOFOLLOW)) return false
-            missing += dir
+            missing.add(dir)
             dir = dir.parent ?: return false
         }
         for (d in missing.asReversed()) Files.createDirectory(d)
