@@ -108,6 +108,7 @@
     <string name="chat_cmd_compact">Resumir a conversa para liberar espaço</string>
     <string name="chat_terminal">Terminal</string>
     <string name="chat_working">Trabalhando…</string>
+    <string name="chat_jump_end">Ir para a última mensagem</string>
     <string name="chat_background_one">Em segundo plano: %1$s</string>
     <string name="chat_background_many">Em segundo plano (%1$d): %2$s</string>
     <string name="chat_background_title">Em segundo plano</string>

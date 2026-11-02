@@ -67,19 +67,42 @@
             android:textSize="20sp" />
     </LinearLayout>
 
-    <ListView
-        android:id="@+id/chat_list"
+    <!-- A lista e o botão de ir ao fim ficam sobrepostos; o FrameLayout tem o peso que era da lista. -->
+    <FrameLayout
+        android:id="@+id/chat_list_frame"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:clipToPadding="false"
-        android:divider="@null"
-        android:paddingStart="12dp"
-        android:paddingTop="8dp"
-        android:paddingEnd="12dp"
-        android:paddingBottom="8dp"
-        android:stackFromBottom="true"
-        android:transcriptMode="normal" />
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/chat_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:divider="@null"
+            android:paddingStart="12dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp"
+            android:stackFromBottom="true"
+            android:transcriptMode="normal" />
+
+        <!-- Ir para o fim da conversa: aparece quando a lista não está no fim. -->
+        <TextView
+            android:id="@+id/chat_jump_end"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="12dp"
+            android:background="@drawable/jump_bg"
+            android:contentDescription="@string/chat_jump_end"
+            android:elevation="4dp"
+            android:gravity="center"
+            android:text="↓"
+            android:textColor="@color/setup_text"
+            android:textSize="20sp"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/chat_empty"

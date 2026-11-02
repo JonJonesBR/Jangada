@@ -35,6 +35,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AbsListView
 import android.widget.ArrayAdapter
 import android.widget.BaseAdapter
 import android.widget.Button
@@ -93,6 +94,8 @@ import kotlin.concurrent.thread
 class ChatActivity : JangadaActivity() {
 
     private lateinit var list: ListView
+    private lateinit var listFrame: View
+    private lateinit var jumpEnd: View
     private lateinit var empty: TextView
     private lateinit var status: View
     private lateinit var statusText: TextView
@@ -219,6 +222,8 @@ class ChatActivity : JangadaActivity() {
         recipe = AgentCatalog.load(this).firstOrNull { it.id == agentId }
 
         list = findViewById(R.id.chat_list)
+        listFrame = findViewById(R.id.chat_list_frame)
+        jumpEnd = findViewById(R.id.chat_jump_end)
         empty = findViewById(R.id.chat_empty)
         status = findViewById(R.id.chat_status)
         statusText = findViewById(R.id.chat_status_text)
@@ -273,6 +278,14 @@ class ChatActivity : JangadaActivity() {
         sendButton.setOnClickListener { send() }
         findViewById<View>(R.id.chat_attach).setOnClickListener { pickAttachment() }
         stopButton.setOnClickListener { engine?.interrupt() }
+        jumpEnd.setOnClickListener { scrollToEnd() }
+        // O botão de ir ao fim acompanha a rolagem.
+        list.setOnScrollListener(object : AbsListView.OnScrollListener {
+            override fun onScrollStateChanged(view: AbsListView, scrollState: Int) = Unit
+            override fun onScroll(view: AbsListView, firstVisibleItem: Int, visibleItemCount: Int, totalItemCount: Int) {
+                updateJumpButton()
+            }
+        })
         // Tocar na faixa com tarefas em segundo plano abre o painel para pará-las (isClickable em updateStatus).
         status.setOnClickListener { engine?.let { showBackgroundSheet(it) } }
         findViewById<View>(R.id.chat_terminal).setOnClickListener { switchToTerminal() }
@@ -640,7 +653,7 @@ class ChatActivity : JangadaActivity() {
     private fun showPreparing() {
         setPreparing(true)
         empty.visibility = View.VISIBLE
-        list.visibility = View.GONE
+        listFrame.visibility = View.GONE
         prepareActions.visibility = View.GONE
         empty.text = getString(R.string.chat_preparing, agentName)
     }
@@ -656,7 +669,7 @@ class ChatActivity : JangadaActivity() {
     private fun showPrepareFailure(log: String, then: () -> Unit) {
         setPreparing(true)
         empty.visibility = View.VISIBLE
-        list.visibility = View.GONE
+        listFrame.visibility = View.GONE
         empty.text = getString(R.string.chat_prepare_failed, agentName) + "\n\n" + log.lines().takeLast(6).joinToString("\n")
         prepareActions.visibility = View.VISIBLE
         findViewById<Button>(R.id.chat_prepare_retry).setOnClickListener { ensureAdapter(then) }
@@ -890,13 +903,40 @@ class ChatActivity : JangadaActivity() {
         // Vazia é o que a tela mostra (só raciocínio, no Normal, não deve deixar a lista em branco).
         val isEmpty = adapter.snapshot.isEmpty()
         empty.visibility = if (isEmpty) View.VISIBLE else View.GONE
-        list.visibility = if (isEmpty) View.GONE else View.VISIBLE
+        listFrame.visibility = if (isEmpty) View.GONE else View.VISIBLE
+        list.post { updateJumpButton() }
         updateStatus(chat)
         continueChip.visibility = if (chat.interrupted && !chat.busy) View.VISIBLE else View.GONE
         updatePermissionBar(chat)
         updateQuickbar()
         // Comandos que o agente acabou de anunciar também podem entrar na sugestão.
         updateCommandSuggestions()
+    }
+
+    /** A lista mostra o fim da conversa: o último item visível e inteiro até a borda de baixo. */
+    private fun atEnd(): Boolean {
+        val count = list.count
+        if (count == 0) return true
+        if (list.lastVisiblePosition < count - 1) return false
+        val last = list.getChildAt(list.childCount - 1) ?: return true
+        // Folga de alguns pixels para arredondamentos da rolagem.
+        return last.bottom <= list.height - list.paddingBottom + END_SLACK_PX
+    }
+
+    /** O botão de ir ao fim aparece só quando a lista está visível e longe do fim. */
+    private fun updateJumpButton() {
+        jumpEnd.visibility = if (listFrame.visibility == View.VISIBLE && !atEnd()) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Rola até o fim da conversa. Longe do fim, salta para perto antes, para a rolagem suave não demorar;
+     * a rolagem suave até o último item mostra também o fim dele (uma resposta longa aparece até embaixo).
+     */
+    private fun scrollToEnd() {
+        val last = list.count - 1
+        if (last < 0) return
+        if (list.lastVisiblePosition < last - JUMP_NEAR) list.setSelection(last - JUMP_NEAR)
+        list.post { list.smoothScrollToPosition(last) }
     }
 
     /**
@@ -1298,9 +1338,13 @@ class ChatActivity : JangadaActivity() {
         val chat = engine ?: return
         if (chat.running) {
             chat.sendMessage(text)
+            list.post { scrollToEnd() }
             return
         }
-        withRoom(svc) { wake(svc).sendMessage(text) }
+        withRoom(svc) {
+            wake(svc).sendMessage(text)
+            list.post { scrollToEnd() }
+        }
     }
 
     /** Manda o texto e os anexos pendentes para o chat e limpa o campo. */
@@ -1313,6 +1357,8 @@ class ChatActivity : JangadaActivity() {
         pendingAttachments.clear()
         renderAttachments()
         chat.sendMessage(text, files)
+        // Enviou: a lista vai até a mensagem, e a resposta aparece embaixo dela.
+        list.post { scrollToEnd() }
     }
 
     // ---- Anexos ----
@@ -2773,6 +2819,10 @@ class ChatActivity : JangadaActivity() {
         const val COMMAND_ROW_DP = 48
         /** Tamanho padrão da caixa de texto do chat (sp), antes da escala. */
         const val INPUT_TEXT_SP = 16f
+        /** Folga, em pixels, para dar a lista como no fim mesmo com arredondamento da rolagem. */
+        const val END_SLACK_PX = 4
+        /** Itens a menos do fim para onde a rolagem salta antes de descer suave. */
+        const val JUMP_NEAR = 3
         /** Tamanho dos atalhos acima da caixa (sp), antes da escala. */
         const val CHIP_TEXT_SP = 14f
         /** Abaixo desta altura da janela (teclado aberto, paisagem) os atalhos somem e a faixa de permissão encolhe. */
