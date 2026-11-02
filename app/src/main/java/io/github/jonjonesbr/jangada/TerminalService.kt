@@ -567,11 +567,27 @@ class TerminalService : Service() {
 
     /** Cancela todas as tarefas em andamento (ao sair pela notificação ou fechar tudo). */
     private fun cancelRunningTasks() {
+        cancelAgentTasks()
+        clones.keys.toList().forEach { cancelClone(it) }
+    }
+
+    /**
+     * Cancela tudo que é de agente, a fila inteira e as tarefas rodando (Cancelar todos, na
+     * tela inicial). Não cancela os clones. Thread principal.
+     */
+    fun cancelAllTasks() {
+        cancelAgentTasks()
+        onTasksChanged?.invoke()
+        updateNotification()
+        leaveForegroundIfIdle()
+    }
+
+    /** Esvazia a fila e cancela as tarefas de agente rodando. */
+    private fun cancelAgentTasks() {
         // A fila sai antes: o fim de uma tarefa cancelada não pode puxar a próxima.
         taskQueue.clear()
         batchFailure = null
         tasks.keys.toList().forEach { cancelTask(it) }
-        clones.keys.toList().forEach { cancelClone(it) }
     }
 
     /**
@@ -595,6 +611,9 @@ class TerminalService : Service() {
 
     /** O pedido que espera a vez para o agente [agentId] (instalar, atualizar ou desinstalar), ou null. */
     fun queued(agentId: String): QueuedTask? = taskQueue.firstOrNull { it.recipe.id == agentId }
+
+    /** true se há tarefas esperando a vez. */
+    fun hasQueue(): Boolean = taskQueue.isNotEmpty()
 
     /** Ids dos agentes na fila; a tela compara com o que desenhou para saber se precisa redesenhar. */
     fun queuedIds(): Set<String> = taskQueue.mapTo(HashSet()) { it.recipe.id }

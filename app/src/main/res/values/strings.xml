@@ -488,6 +488,7 @@
     <string name="task_cancel">Cancel</string>
     <string name="task_cancel_title">Cancel %1$s?</string>
     <string name="task_cancel_confirm">Yes, cancel</string>
+    <string name="task_cancel_all">Cancel all</string>
 
     <!-- Avisos, compartilhar e instalação do Linux (1.1.0) -->
     <string name="channel_attention">Alerts</string>

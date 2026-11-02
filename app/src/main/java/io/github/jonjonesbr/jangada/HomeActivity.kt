@@ -690,6 +690,12 @@ class HomeActivity : JangadaActivity() {
             .setTitle(getString(R.string.task_cancel_title, recipe.name))
             .setPositiveButton(R.string.task_cancel_confirm) { _, _ -> service?.cancelTask(recipe.id) }
             .setNegativeButton(android.R.string.cancel, null)
+            .apply {
+                // Com fila, o botão do meio cancela a instalação em andamento e tudo que espera.
+                if (service?.hasQueue() == true) {
+                    setNeutralButton(R.string.task_cancel_all) { _, _ -> service?.cancelAllTasks() }
+                }
+            }
             .show()
     }
 
