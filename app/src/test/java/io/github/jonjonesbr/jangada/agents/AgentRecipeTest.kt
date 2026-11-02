@@ -4,6 +4,7 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -131,6 +132,26 @@ class AgentRecipeTest {
                 recipe.launchScript(),
             )
         }
+    }
+
+    @Test
+    fun instrucoesDasReceitas() {
+        val byId = recipes.associateBy { it.id }
+        val codex = byId.getValue("codex").instructions
+        assertEquals(listOf("~/.codex/AGENTS.override.md", "~/.codex/AGENTS.md"), codex?.files)
+        assertEquals("~/.codex/AGENTS.md", codex?.create)
+        assertEquals(listOf("~/.claude/CLAUDE.md"), byId.getValue("opencode").instructions?.blockedBy)
+        assertNull(byId.getValue("openclaw").instructions?.create)
+        assertNull("o Hermes não tem arquivo global próprio", byId.getValue("hermes").instructions)
+    }
+
+    @Test
+    fun caminhoInvalidoTiraAsInstrucoes() {
+        val base = """{"id":"x","name":"X","command":"x","install":"true"""
+        assertNull(AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["../fora"]}}""")).instructions)
+        assertNull(AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["relativo/a"]}}""")).instructions)
+        assertNull(AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["~/a"],"create":"b/c"}}""")).instructions)
+        assertEquals(listOf("~/a"), AgentRecipe.parse(JSONObject("""$base,"instructions":{"files":["~/a"]}}""")).instructions?.files)
     }
 
     @Test

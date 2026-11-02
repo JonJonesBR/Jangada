@@ -6,6 +6,10 @@
   "command": "agy",
   "install": "curl -fsSL --connect-timeout 20 --retry 3 --speed-limit 1000 --speed-time 60 https://antigravity.google/cli/install.sh | bash",
   "homepage": "https://antigravity.google/docs/cli/overview",
+  "instructions": {
+    "files": ["~/.gemini/AGENTS.md"],
+    "create": "~/.gemini/AGENTS.md"
+  },
   "description": {
     "pt": "Agente do Google, sucessor do Gemini CLI.",
     "en": "Google's agent, successor to Gemini CLI."

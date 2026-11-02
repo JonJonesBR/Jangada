@@ -7,6 +7,10 @@
   "install": "curl -fsSL --connect-timeout 20 --retry 3 --speed-limit 1000 --speed-time 60 https://chatgpt.com/codex/install.sh | sh",
   "homepage": "https://github.com/openai/codex",
   "npm": "@openai/codex",
+  "instructions": {
+    "files": ["~/.codex/AGENTS.override.md", "~/.codex/AGENTS.md"],
+    "create": "~/.codex/AGENTS.md"
+  },
   "description": {
     "pt": "Agente de programação da OpenAI.",
     "en": "OpenAI's coding agent."

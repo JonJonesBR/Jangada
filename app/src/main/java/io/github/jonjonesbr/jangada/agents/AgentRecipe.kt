@@ -34,6 +34,8 @@ data class AgentRecipe(
     val acp: AcpSpec? = null,
     /** Passos extras para desinstalar (além de apagar o próprio comando). */
     val uninstall: String? = null,
+    /** Onde o agente lê as instruções globais (ver AgentInstructions). Null: o app não mexe nele. */
+    val instructions: Instructions? = null,
 ) {
     /** Tem chat no app (próprio ou via ACP). */
     val hasChat: Boolean get() = chat || acp != null
@@ -156,6 +158,22 @@ data class AgentRecipe(
             return "mkdir -p $attachments 2>/dev/null; ${enterDir(cwd)} && $claude --add-dir $attachments"
         }
 
+        /**
+         * Lê o campo "instructions". Um caminho que não começa com "~/" ou "/", ou que
+         * tem "..", derruba o campo inteiro (vira null): o app não grava fora de lugar.
+         */
+        private fun parseInstructions(spec: JSONObject): Instructions? {
+            fun list(key: String): List<String> =
+                spec.optJSONArray(key)?.let { arr -> (0 until arr.length()).map { arr.getString(it) } } ?: emptyList()
+            val files = list("files")
+            val create = spec.optString("create").ifEmpty { null }
+            val blockedBy = list("blockedBy")
+            val all = files + listOfNotNull(create) + blockedBy
+            val valid = all.all { (it.startsWith("~/") || it.startsWith("/")) && !it.contains("..") }
+            if (files.isEmpty() || !valid) return null
+            return Instructions(files, create, blockedBy)
+        }
+
         fun parse(json: JSONObject): AgentRecipe {
             fun strings(key: String): Map<String, String> {
                 val obj = json.optJSONObject(key) ?: return emptyMap()
@@ -176,6 +194,7 @@ data class AgentRecipe(
                 note = strings("note"),
                 npm = json.optString("npm").ifEmpty { null },
                 uninstall = json.optString("uninstall").ifEmpty { null },
+                instructions = json.optJSONObject("instructions")?.let { parseInstructions(it) },
                 chat = json.optBoolean("chat", false),
                 acp = json.optJSONObject("acp")?.let { spec ->
                     val requires = spec.optJSONArray("requires")
@@ -190,6 +209,17 @@ data class AgentRecipe(
         }
     }
 }
+
+/**
+ * Onde um agente lê as instruções globais dele. O app grava o bloco no primeiro
+ * arquivo de [files] com texto do usuário; sem nenhum, no que já existir ou cria
+ * [create] (se houver), a menos que algum de [blockedBy] exista (ver AgentInstructions.target).
+ */
+data class Instructions(
+    val files: List<String>,
+    val create: String?,
+    val blockedBy: List<String>,
+)
 
 /**
  * Modo ACP de um agente: [command] o inicia; quando ele depende de um

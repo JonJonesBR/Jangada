@@ -67,6 +67,14 @@ class SettingsActivity : JangadaActivity() {
         // Vibração ao fim da resposta (só com o chat aberto; ver ChatActivity).
         bindSwitch(R.id.settings_haptic, settings.hapticOnFinish) { settings.hapticOnFinish = it }
 
+        // Orientação sobre a memória nas instruções globais dos agentes (ver AgentInstructions).
+        // A integração é refeita já, em segundo plano, para o trecho entrar ou sair logo.
+        val linuxForTips = LinuxEnv(this)
+        bindSwitch(R.id.settings_agent_tips, settings.agentMemoryTips) {
+            settings.agentMemoryTips = it
+            thread(name = "agent-tips") { runCatching { linuxForTips.refreshIntegration() } }
+        }
+
         // ---- Aparência ----
         val themes = mapOf(
             R.id.theme_system to AppSettings.THEME_SYSTEM, R.id.theme_light to AppSettings.THEME_LIGHT,

@@ -8,6 +8,10 @@
   "update": "pi update",
   "homepage": "https://pi.dev",
   "npm": "@earendil-works/pi-coding-agent",
+  "instructions": {
+    "files": ["~/.pi/agent/AGENTS.override.md", "~/.pi/agent/AGENTS.md", "~/.pi/agent/AGENTS.MD", "~/.pi/agent/CLAUDE.md", "~/.pi/agent/CLAUDE.MD"],
+    "create": "~/.pi/agent/AGENTS.md"
+  },
   "description": {
     "pt": "Agente minimalista que você adapta com extensões.",
     "en": "Minimal agent you adapt with extensions."

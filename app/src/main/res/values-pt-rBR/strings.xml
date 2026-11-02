@@ -126,6 +126,8 @@
     <string name="settings_chat_alerts">Avisos do chat</string>
     <string name="settings_haptic">Vibrar quando a resposta ficar pronta</string>
     <string name="settings_haptic_hint">Só com o chat aberto; segue o retorno tátil do sistema.</string>
+    <string name="settings_agent_tips">Orientar os agentes sobre a memória</string>
+    <string name="settings_agent_tips_hint">Acrescenta às instruções globais de cada agente: um navegador de teste por vez, fechar o navegador ao terminar e evitar tarefas pesadas em paralelo. Desligue para tirar o trecho.</string>
 
     <string name="chat_history">Conversas</string>
     <string name="chat_history_empty">Ainda não há conversas anteriores</string>

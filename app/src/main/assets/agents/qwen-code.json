@@ -8,6 +8,10 @@
   "uninstall": "rm -rf ~/.local/lib/qwen-code; npm uninstall -g @qwen-code/qwen-code || true",
   "homepage": "https://github.com/QwenLM/qwen-code",
   "npm": "@qwen-code/qwen-code",
+  "instructions": {
+    "files": ["~/.qwen/QWEN.md"],
+    "create": "~/.qwen/QWEN.md"
+  },
   "description": {
     "pt": "Agente de programação da equipe Qwen.",
     "en": "The Qwen team's coding agent."

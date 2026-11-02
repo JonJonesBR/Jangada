@@ -128,6 +128,8 @@
     <string name="settings_chat_alerts">Chat alerts</string>
     <string name="settings_haptic">Vibrate when the answer is ready</string>
     <string name="settings_haptic_hint">Only while the chat is open; follows the system touch feedback setting.</string>
+    <string name="settings_agent_tips">Guide agents about memory</string>
+    <string name="settings_agent_tips_hint">Adds to each agent\'s global instructions: one test browser at a time, close the browser when done and avoid heavy parallel tasks. Turn off to remove it.</string>
 
     <string name="chat_history">Conversations</string>
     <string name="chat_history_empty">No previous conversations yet</string>

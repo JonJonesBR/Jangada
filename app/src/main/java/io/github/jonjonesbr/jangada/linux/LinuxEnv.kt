@@ -3,8 +3,13 @@ package io.github.jonjonesbr.jangada.linux
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
+import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
+import io.github.jonjonesbr.jangada.AppSettings
+import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * O Linux (Debian) guardado dentro do app: onde ficam as peças e como
@@ -258,7 +263,39 @@ class LinuxEnv(context: Context) {
      */
     fun refreshIntegration(trustClaude: Boolean = true, trustFolder: String? = null) {
         writeIntegration()
+        applyAgentInstructions()
         if (trustClaude) trustWorkspaceInClaude(trustFolder)
+    }
+
+    /**
+     * Grava ou tira o bloco de instruções dos agentes (ver AgentInstructions), conforme o ajuste.
+     * Só refaz o trabalho quando o ajuste mudou ou quando passou [INSTRUCTIONS_INTERVAL_MS].
+     */
+    private fun applyAgentInstructions() {
+        // O terminal abre sessões na thread principal: lá, a leitura e gravação dos arquivos
+        // (e a espera pelo lock) vão para outra thread.
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            thread(name = "agent-instructions") { applyAgentInstructionsNow() }
+        } else {
+            applyAgentInstructionsNow()
+        }
+    }
+
+    private fun applyAgentInstructionsNow() {
+        runCatching { applyAgentInstructionsLocked() }.onFailure { Log.w(TAG, "instruções dos agentes", it) }
+    }
+
+    private fun applyAgentInstructionsLocked() {
+        synchronized(INSTRUCTIONS_LOCK) {
+            // Lido dentro do lock: com o ajuste trocado duas vezes seguidas, vale o último.
+            val enabled = AppSettings(app).agentMemoryTips
+            val now = SystemClock.elapsedRealtime()
+            val last = instructionsApplied
+            if (last != null && last.first == enabled && now - last.second < INSTRUCTIONS_INTERVAL_MS) return
+            // AgentCatalog já guarda as receitas em cache: os assets não mudam com o app aberto.
+            AgentInstructions.apply(this, AgentCatalog.load(app), enabled)
+            instructionsApplied = enabled to now
+        }
     }
 
     /** Parte rápida de [refreshIntegration]: só gravações pequenas, sob o [LOCK]. */
@@ -441,6 +478,15 @@ class LinuxEnv(context: Context) {
 
         /** Serializa a leitura e gravação do ~/.claude.json (fora do [LOCK]). */
         private val TRUST_LOCK = Any()
+
+        /** Serializa [applyAgentInstructions] (chamado de várias threads). */
+        private val INSTRUCTIONS_LOCK = Any()
+
+        /** Última combinação aplicada (ajuste ligado?) e o momento (elapsedRealtime), só com [INSTRUCTIONS_LOCK]. */
+        @Volatile private var instructionsApplied: Pair<Boolean, Long>? = null
+
+        /** Intervalo mínimo para reaplicar as instruções com o mesmo ajuste. */
+        private const val INSTRUCTIONS_INTERVAL_MS = 60_000L
 
         /** Tamanho e data do ~/.claude.json na última conferência da confiança (só com [TRUST_LOCK]). */
         @Volatile private var claudeJsonChecked: String? = null

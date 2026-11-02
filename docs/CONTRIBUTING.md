@@ -32,6 +32,8 @@ Cada agente é um arquivo JSON em [`app/src/main/assets/agents/`](../app/src/mai
 - `update` e `uninstall` são opcionais (sem `update`, atualizar repete a instalação; o app sempre apaga o comando do agente ao desinstalar). `uninstall` remove o programa (pastas de versões, ambiente Python, pacote npm), nunca as configurações e os logins: quem reinstala volta como estava.
 - `npm` é opcional: o pacote no npm, usado só para descobrir a versão mais nova.
 - `acp` é opcional: como abrir o agente no modo [ACP](https://agentclientprotocol.com) para ter chat no app. Com adaptador separado: `{ "command": "pi-acp", "bin": "pi-acp", "install": "npm i -g pi-acp", "requires": ["nodejs", "npm"] }`.
+- `instructions` é opcional: onde o agente lê as instruções globais dele. O app grava nele o bloco de orientação sobre a memória do celular (ajuste "Orientar os agentes sobre a memória", ligado por padrão). `files` são os candidatos na ordem de precedência do agente: o bloco vai no primeiro com texto do usuário (um arquivo só com o bloco não conta, para não esconder o do usuário) e sai dos outros candidatos. `create` é o arquivo a criar quando nenhum existe (sem ele, o app só mantém o bloco nos arquivos que já existem). `blockedBy` são arquivos que, se existirem, impedem a criação (ex.: o OpenCode lê o `~/.claude/CLAUDE.md` quando não há `AGENTS.md` próprio). Caminhos começam com `~/` ou `/` (a raiz do Debian) e não podem ter `..`. Um campo inválido vira ausente. Ver `AgentInstructions` no código. Agente sem arquivo global próprio (como o Hermes, cuja persona é o `SOUL.md`) não tem o campo.
+  Exemplo: `"instructions": { "files": ["~/.codex/AGENTS.override.md", "~/.codex/AGENTS.md"], "create": "~/.codex/AGENTS.md" }`.
 
 ## Compilar
 
@@ -86,6 +88,8 @@ Each agent is a JSON file in [`app/src/main/assets/agents/`](../app/src/main/ass
 - `update` and `uninstall` are optional (without `update`, updating reruns the install; the app always deletes the agent command when uninstalling). `uninstall` removes the program (version folders, Python environment, npm package), never settings and logins, so a reinstall picks up where it left off.
 - `npm` is optional: the npm package, used only to find the latest version.
 - `acp` is optional: how to open the agent in [ACP](https://agentclientprotocol.com) mode to get chat in the app. With a separate adapter: `{ "command": "pi-acp", "bin": "pi-acp", "install": "npm i -g pi-acp", "requires": ["nodejs", "npm"] }`.
+- `instructions` is optional: where the agent reads its global instructions. The app writes the phone memory guidance block there (setting "Guide agents about memory", on by default). `files` are the candidates in the agent's precedence order: the block goes into the first one with user text (a file holding only the block does not count, so it never hides the user's) and is removed from the other candidates. `create` is the file to create when none exists (without it, the app only keeps the block in files that already exist). `blockedBy` are files that, if they exist, stop the creation (e.g. OpenCode reads `~/.claude/CLAUDE.md` when there is no own `AGENTS.md`). Paths start with `~/` or `/` (the Debian root) and cannot contain `..`. An invalid field is treated as absent. See `AgentInstructions` in the code. An agent without its own global file (like Hermes, whose persona is `SOUL.md`) has no field.
+  Example: `"instructions": { "files": ["~/.codex/AGENTS.override.md", "~/.codex/AGENTS.md"], "create": "~/.codex/AGENTS.md" }`.
 
 ## Building
 

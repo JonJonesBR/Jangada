@@ -199,6 +199,20 @@
                 android:textColor="@color/setup_muted"
                 android:textSize="13sp" />
 
+            <Switch
+                android:id="@+id/settings_agent_tips"
+                style="@style/SettingsOption"
+                android:text="@string/settings_agent_tips" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_agent_tips_hint"
+                android:textColor="@color/setup_muted"
+                android:textSize="13sp" />
+
             <TextView
                 style="@style/HomeSection"
                 android:text="@string/settings_advanced" />

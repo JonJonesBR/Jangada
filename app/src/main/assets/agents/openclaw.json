@@ -8,6 +8,9 @@
   "uninstall": "npm uninstall -g openclaw || true; rm -rf ~/.openclaw/tools",
   "homepage": "https://openclaw.ai",
   "npm": "openclaw",
+  "instructions": {
+    "files": ["~/.openclaw/workspace/AGENTS.md"]
+  },
   "description": {
     "pt": "Assistente pessoal de IA de código aberto.",
     "en": "Open-source personal AI assistant."

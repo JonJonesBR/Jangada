@@ -7,6 +7,11 @@
   "install": "curl -fsSL --connect-timeout 20 --retry 3 --speed-limit 1000 --speed-time 60 https://opencode.ai/v2/install | bash",
   "homepage": "https://opencode.ai",
   "npm": "@opencode/cli",
+  "instructions": {
+    "files": ["~/.config/opencode/AGENTS.md"],
+    "create": "~/.config/opencode/AGENTS.md",
+    "blockedBy": ["~/.claude/CLAUDE.md"]
+  },
   "description": {
     "pt": "Agente de código aberto que funciona com vários provedores de IA.",
     "en": "Open-source agent that works with many AI providers."

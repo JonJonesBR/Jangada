@@ -12,6 +12,10 @@
   "update": "npm i -g command-code@latest",
   "homepage": "https://commandcode.ai",
   "npm": "command-code",
+  "instructions": {
+    "files": ["~/.commandcode/AGENTS.md"],
+    "create": "~/.commandcode/AGENTS.md"
+  },
   "description": {
     "pt": "Agente que aprende o seu jeito de programar.",
     "en": "An agent that learns how you write code."

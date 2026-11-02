@@ -9,6 +9,10 @@
   "update": "claude update",
   "homepage": "https://code.claude.com/docs",
   "npm": "@anthropic-ai/claude-code",
+  "instructions": {
+    "files": ["/etc/claude-code/CLAUDE.md"],
+    "create": "/etc/claude-code/CLAUDE.md"
+  },
   "description": {
     "pt": "Agente de programação da Anthropic.",
     "en": "Anthropic's coding agent."

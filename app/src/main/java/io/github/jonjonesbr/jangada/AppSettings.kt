@@ -86,6 +86,11 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_HAPTIC_FINISH, false)
         set(value) = prefs.edit().putBoolean(KEY_HAPTIC_FINISH, value).apply()
 
+    /** Orienta os agentes sobre a memória do celular: um bloco nas instruções globais de cada um (ver AgentInstructions). */
+    var agentMemoryTips: Boolean
+        get() = prefs.getBoolean(KEY_AGENT_MEMORY_TIPS, true)
+        set(value) = prefs.edit().putBoolean(KEY_AGENT_MEMORY_TIPS, value).apply()
+
     /** Tamanho do texto do chat: um de [CHAT_TEXT_SCALES]; outro valor guardado volta a 1f. */
     var chatTextScale: Float
         get() = prefs.getFloat(KEY_CHAT_TEXT_SCALE, 1f).takeIf { it in CHAT_TEXT_SCALES } ?: 1f
@@ -119,5 +124,6 @@ class AppSettings(context: Context) {
         private const val KEY_COMPOSE_VISIBLE = "compose_visible"
         private const val KEY_HAPTIC_FINISH = "haptic_on_finish"
         private const val KEY_CHAT_TEXT_SCALE = "chat_text_scale"
+        private const val KEY_AGENT_MEMORY_TIPS = "agent_memory_tips"
     }
 }
