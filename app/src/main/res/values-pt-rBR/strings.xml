@@ -193,6 +193,7 @@
     <string name="chat_context_title">Contexto da conversa</string>
     <string name="chat_context_explain">%1$d%% da memória da conversa já está em uso. Compactar resume a conversa para ela continuar com mais espaço.</string>
     <string name="chat_compact_now">Compactar agora</string>
+    <string name="chat_compacted">🗜️ Conversa compactada: as mensagens antigas viraram um resumo, e o agente continua a partir dele.</string>
     <string name="chat_permission_bar_title">%1$s quer:</string>
     <string name="chat_permission_details">Detalhes</string>
     <plurals name="chat_permission_more">

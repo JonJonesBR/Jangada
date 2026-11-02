@@ -250,6 +250,7 @@ class ChatEngine(
                 // A conversa foi compactada: o uso volta a ser medido no próximo turno.
                 "compact_boundary" -> {
                     contextUsage = null
+                    add(ChatItem.Info(context.getString(R.string.chat_compacted)))
                     changed()
                 }
             }
