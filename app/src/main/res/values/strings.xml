@@ -368,6 +368,7 @@
     <string name="chat_exit_not_found">The agent couldn’t start: the program (or something it needs) wasn’t found (code 127).</string>
     <string name="chat_exit_no_permission">The agent couldn’t start: no permission to run it (code 126).</string>
     <string name="chat_exit_code">The agent closed (code %1$d).</string>
+    <string name="chat_exit_killed">Android stopped the agent, probably to free memory (code 137). Closing other jobs and apps helps.</string>
 
     <!-- Chat: mensagens e nomes das ferramentas -->
     <string name="chat_denied_message">The user denied this action.</string>
@@ -450,6 +451,7 @@
     <string name="task_cancelled">Cancelled.</string>
     <string name="chat_terminal_busy_new">Claude Code is open in a terminal tab, so this is a new conversation. Close that tab to continue it here.</string>
     <string name="chat_error_hint">Tap ＋ for a new conversation, or &gt;_ to see it in the terminal.</string>
+    <string name="chat_exit_resume_hint">The conversation is not lost: send a message to pick up where it stopped, or tap ＋ for a new one.</string>
     <string name="chat_error_details">Details</string>
     <string name="task_cancel">Cancel</string>
     <string name="task_cancel_title">Cancel %1$s?</string>

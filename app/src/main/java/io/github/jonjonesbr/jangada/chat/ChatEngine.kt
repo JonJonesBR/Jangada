@@ -30,6 +30,8 @@ class ChatEngine(
 
     @Volatile override var sessionId: String? = null
         private set
+    /** Com a sessão guardada, a próxima mensagem usa `--resume` e continua a conversa. */
+    override val canResume: Boolean get() = sessionId != null
     @Volatile override var model: String? = null
         private set
     override val supportsHistory = true

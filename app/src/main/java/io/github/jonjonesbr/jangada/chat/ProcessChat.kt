@@ -289,15 +289,25 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         }
     }
 
+    /**
+     * Enviar uma mensagem agora retoma a mesma conversa (o agente guarda a sessão e sabe recarregá-la).
+     * Quem sabe fazer isso sobrescreve; sem isso, a dica sugere uma conversa nova.
+     */
+    protected open val canResume: Boolean get() = false
+
     /** O que houve com o código de saída e o que fazer agora. O erro cru fica em [detailsOf]. */
     protected fun exitMessage(code: Int): String {
         val reason = when (code) {
             0 -> context.getString(R.string.chat_exit_normal)
             127 -> context.getString(R.string.chat_exit_not_found)
             126 -> context.getString(R.string.chat_exit_no_permission)
+            // 137 = SIGKILL: quase sempre o Android encerrou o processo para liberar memória.
+            137 -> context.getString(R.string.chat_exit_killed)
             else -> context.getString(R.string.chat_exit_code, code)
         }
-        return if (code == 0) reason else reason + "\n" + context.getString(R.string.chat_error_hint)
+        if (code == 0) return reason
+        val hint = if (canResume) R.string.chat_exit_resume_hint else R.string.chat_error_hint
+        return reason + "\n" + context.getString(hint)
     }
 
     /** Últimas linhas de erro do agente, para o link "Detalhes" (null se não houver nenhuma). */

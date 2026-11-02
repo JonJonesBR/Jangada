@@ -366,6 +366,7 @@
     <string name="chat_exit_not_found">O agente não pôde ser iniciado: o programa (ou o que ele precisa para rodar) não foi encontrado (código 127).</string>
     <string name="chat_exit_no_permission">O agente não pôde ser iniciado: sem permissão para executar (código 126).</string>
     <string name="chat_exit_code">O agente fechou (código %1$d).</string>
+    <string name="chat_exit_killed">O Android encerrou o agente, provavelmente para liberar memória (código 137). Fechar outros trabalhos e apps ajuda.</string>
 
     <!-- Chat: mensagens e nomes das ferramentas -->
     <string name="chat_denied_message">O usuário recusou esta ação.</string>
@@ -448,6 +449,7 @@
     <string name="task_cancelled">Cancelado.</string>
     <string name="chat_terminal_busy_new">O Claude Code está aberto numa aba do terminal, então esta é uma conversa nova. Feche essa aba para continuar a conversa aqui.</string>
     <string name="chat_error_hint">Toque em ＋ para uma conversa nova, ou em &gt;_ para ver no terminal.</string>
+    <string name="chat_exit_resume_hint">A conversa não se perdeu: envie uma mensagem para continuar de onde parou, ou toque em ＋ para uma conversa nova.</string>
     <string name="chat_error_details">Detalhes</string>
     <string name="task_cancel">Cancelar</string>
     <string name="task_cancel_title">Cancelar %1$s?</string>

@@ -27,6 +27,8 @@ class AcpChat(
 
     @Volatile override var sessionId: String? = null
         private set
+    /** Só retoma se o agente sabe recarregar a sessão (loadSession); senão, a mensagem abre outra conversa. */
+    override val canResume: Boolean get() = canLoad && sessionId != null
     /** Nome do modelo atual (quando o agente informa); senão, o nome do agente. */
     override val model: String?
         get() = configOptions.firstOrNull { it.category == "model" }?.currentName ?: agentTitle
