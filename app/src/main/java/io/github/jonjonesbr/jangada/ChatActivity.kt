@@ -1141,6 +1141,14 @@ class ChatActivity : JangadaActivity() {
             newConversation()
             return
         }
+        // /resume vira o Histórico do menu: o agente trocaria de conversa por dentro (ou abriria uma lista
+        // que o chat não mostra), e a tela continuaria com a conversa atual.
+        if (pendingAttachments.isEmpty() && text.lowercase() == "/resume") {
+            input.setText("")
+            drafts.put(chatKey, "")
+            showHistory()
+            return
+        }
         val svc = service ?: return
         val running = engine?.takeIf { it.running }
         if (running != null) {
