@@ -194,3 +194,37 @@ jobs:
             Jangada.apk
             Jangada.apk.sha256
           body_path: ${{ env.RELEASE_NOTES }}
+      # No máximo 3 releases e 3 tags contando a nightly: ficam a versão deste build e a mais
+      # nova entre as outras (pelo número da versão); as demais versões e tags v* são apagadas.
+      # Só entram tags de versão vX.Y.Z; outras tags (nightly, vnext...) nunca são tocadas.
+      - name: Apagar versões antigas
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEEP: 2
+          VERSION: '^v[0-9]+(\.[0-9]+)*$'
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          releases="$RUNNER_TEMP/versoes.txt"
+          keep="$RUNNER_TEMP/manter.txt"
+          gh release list -R "$repo" --limit 200 --json tagName -q '.[].tagName' \
+            | { grep -E "$VERSION" || true; } | sort -V -r > "$releases"
+          {
+            echo "$GITHUB_REF_NAME"
+            { grep -vxF "$GITHUB_REF_NAME" "$releases" || true; } | head -n "$((KEEP - 1))"
+          } > "$keep"
+          echo "Versões mantidas: $(tr '\n' ' ' < "$keep")"
+          while read -r tag; do
+            grep -qxF "$tag" "$keep" && continue
+            echo "Apagando a versão $tag"
+            gh release delete "$tag" -R "$repo" --cleanup-tag -y < /dev/null
+          done < "$releases"
+          # Tags v* que sobraram sem versão publicada (ou que o --cleanup-tag não levou).
+          gh api --paginate "repos/$repo/git/matching-refs/tags/v" -q '.[].ref' \
+            | sed 's|^refs/tags/||' | { grep -E "$VERSION" || true; } > "$RUNNER_TEMP/tags.txt"
+          while read -r tag; do
+            grep -qxF "$tag" "$keep" && continue
+            echo "Apagando a tag $tag"
+            gh api -X DELETE "repos/$repo/git/refs/tags/$tag" < /dev/null
+          done < "$RUNNER_TEMP/tags.txt"
