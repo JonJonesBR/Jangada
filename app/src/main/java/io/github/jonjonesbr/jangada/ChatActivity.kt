@@ -50,6 +50,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.chat.AcpChat
@@ -101,6 +103,8 @@ class ChatActivity : JangadaActivity() {
     private lateinit var statusText: TextView
     private lateinit var stopButton: View
     private lateinit var input: EditText
+    /** Nome do agente acima do subtítulo; some no modo compacto (ver [applyCompact]). */
+    private lateinit var titleView: TextView
     private lateinit var subtitle: TextView
     private lateinit var titleBlock: View
     private lateinit var continueChip: TextView
@@ -229,6 +233,7 @@ class ChatActivity : JangadaActivity() {
         statusText = findViewById(R.id.chat_status_text)
         stopButton = findViewById(R.id.chat_stop)
         input = findViewById(R.id.chat_input)
+        titleView = findViewById(R.id.chat_title)
         subtitle = findViewById(R.id.chat_subtitle)
         titleBlock = findViewById(R.id.chat_title_block)
         continueChip = findViewById(R.id.chat_continue)
@@ -301,17 +306,18 @@ class ChatActivity : JangadaActivity() {
         permissionAllow.setOnClickListener { answerBarPermission(PermissionOption.Kind.ALLOW_ONCE) }
         permissionDeny.setOnClickListener { answerBarPermission(PermissionOption.Kind.REJECT_ONCE) }
         permissionDetails.setOnClickListener { showBarPermission() }
-        // Com o teclado aberto (adjustResize) ou em paisagem sobra pouca altura: a conversa tem prioridade.
-        // Usa a altura da janela (não depende do que está dentro dela), então não há vai e volta.
+        // Teclado aberto (adjustResize) ou janela baixa (paisagem): a conversa tem prioridade.
+        // Só a altura não bastava: com o teclado aberto a janela ainda passa de 420dp em muitos celulares,
+        // e com fonte grande a caixa come a tela. Não depende do que está dentro da janela, então não há vai e volta.
         findViewById<View>(android.R.id.content).addOnLayoutChangeListener { v, _, top, _, bottom, _, _, _, _ ->
-            val compact = (bottom - top) < dp(COMPACT_HEIGHT_DP)
+            val ime = ViewCompat.getRootWindowInsets(v)?.isVisible(WindowInsetsCompat.Type.ime()) == true
+            val compact = ime || (bottom - top) < dp(COMPACT_HEIGHT_DP)
             if (compact != compactLayout) {
                 compactLayout = compact
                 // Mexer na visibilidade dentro do próprio layout não vale: adia para depois dele.
                 v.post {
                     if (isDestroyed) return@post
-                    engine?.let { updatePermissionBar(it) }
-                    updateQuickbar()
+                    applyCompact()
                 }
             }
         }
@@ -795,7 +801,7 @@ class ChatActivity : JangadaActivity() {
      * raiz, senão a pasta e o branch do git) e a seta que indica o toque para trocar de trabalho.
      */
     private fun updateTitle() {
-        findViewById<TextView>(R.id.chat_title).text = agentName
+        titleView.text = agentName
         val branch = folderBranch
         val place = when {
             folder.isEmpty() -> displayPath(Workspace.ROOT)
@@ -940,8 +946,25 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
+     * Aplica o modo compacto (teclado aberto ou tela baixa): faixas de status e de permissão em uma
+     * linha, atalhos escondidos, caixa de texto de até 3 linhas e sem o nome do agente no título
+     * (fica o subtítulo com a pasta). Fora dele, tudo volta ao normal.
+     */
+    private fun applyCompact() {
+        engine?.let {
+            updatePermissionBar(it)
+            updateStatus(it)
+        }
+        updateQuickbar()
+        input.maxLines = if (compactLayout) 3 else 6
+        titleView.visibility = if (compactLayout) View.GONE else View.VISIBLE
+    }
+
+    /**
      * Faixa de status: "Trabalhando…" no turno e, com tarefas em segundo plano (subagentes, comandos),
      * o que elas são, mesmo depois que o turno acabou. Parar só aparece com turno: ele interrompe o turno.
+     * No modo compacto (ver [applyCompact]) a faixa tem uma linha só: as partes vão separadas por " · "
+     * e a dica de toque some.
      */
     private fun updateStatus(chat: AgentChat) {
         val background = chat.background
@@ -958,8 +981,10 @@ class ChatActivity : JangadaActivity() {
             lines += getString(R.string.chat_background_many, background.size, background.joinToString(", ") { it.description })
         }
         // Com turno em andamento a faixa já diz "Trabalhando…"; sem ele, avisa que dá para tocar e parar.
-        if (background.isNotEmpty() && !chat.busy) lines += getString(R.string.chat_background_tap)
-        statusText.text = lines.joinToString("\n")
+        // No compacto não cabe a dica: a faixa é uma linha só.
+        if (background.isNotEmpty() && !chat.busy && !compactLayout) lines += getString(R.string.chat_background_tap)
+        statusText.maxLines = if (compactLayout) 1 else 3
+        statusText.text = lines.joinToString(if (compactLayout) " · " else "\n")
     }
 
     /** Painel das tarefas em segundo plano: parar uma (a descrição é o que ela faz agora) ou todas. */

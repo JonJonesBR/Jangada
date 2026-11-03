@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="oval">
-    <solid android:color="@color/card_bg" />
-    <stroke android:width="1dp" android:color="@color/card_stroke" />
-</shape>
+<!-- Círculo de 40dp dentro do toque de 48dp: o alvo continua grande, a bolinha aparece menor. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="4dp">
+    <shape android:shape="oval">
+        <solid android:color="@color/card_bg" />
+        <stroke android:width="1dp" android:color="@color/card_stroke" />
+    </shape>
+</inset>

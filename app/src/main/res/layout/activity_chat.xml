@@ -87,20 +87,22 @@
             android:stackFromBottom="true"
             android:transcriptMode="normal" />
 
-        <!-- Ir para o fim da conversa: aparece quando a lista não está no fim. -->
+        <!-- Ir para o fim da conversa: aparece quando a lista não está no fim. Círculo de 40dp (jump_bg) dentro
+             do toque de 48dp, que segue sendo o alvo para acessibilidade; semitransparente para não tapar a conversa. -->
         <TextView
             android:id="@+id/chat_jump_end"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="bottom|end"
-            android:layout_margin="12dp"
+            android:layout_margin="8dp"
+            android:alpha="0.85"
             android:background="@drawable/jump_bg"
             android:contentDescription="@string/chat_jump_end"
             android:elevation="4dp"
             android:gravity="center"
             android:text="↓"
             android:textColor="@color/setup_text"
-            android:textSize="20sp"
+            android:textSize="18sp"
             android:visibility="gone" />
     </FrameLayout>
 
