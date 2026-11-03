@@ -1,5 +1,11 @@
 # Novidades
 
+## 1.12.1
+
+- Chat: com o teclado aberto, a conversa ganha espaço. Os atalhos acima da caixa somem, a faixa de segundo plano fica em uma linha (tocar nela continua abrindo o painel para parar), a caixa de texto vai até 3 linhas (o resto rola dentro dela) e o título mostra só a pasta e o branch. Ao fechar o teclado, tudo volta.
+- Chat: o botão ↓ ficou menor e semitransparente, para tapar menos a conversa; a área de toque continua do mesmo tamanho.
+- Correção: o botão ↓ vai sempre até o fim da conversa. Antes, com respostas mais altas que a tela, parava em pontos do meio, e tocar de novo subia ou descia a lista.
+
 ## 1.12.0
 
 - Chat: subagentes e comandos que o Claude deixa rodando em segundo plano aparecem na faixa acima da caixa de texto, com o que cada um faz agora, mesmo depois do fim da resposta. Com eles, o trabalho conta como Trabalhando e não dorme para liberar memória.

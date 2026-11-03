@@ -1,0 +1,1 @@
+Chat: with the keyboard open, the conversation gets more room: the shortcuts hide, the background strip fits in one line, the text box grows up to 3 lines and the title shows only the folder. Fix: the ↓ button now always reaches the end of the conversation, even with long replies, and is smaller.

@@ -1,0 +1,1 @@
+Chat: com o teclado aberto, a conversa ganha espaço: os atalhos somem, a faixa de segundo plano fica em uma linha, a caixa de texto vai até 3 linhas e o título mostra só a pasta. Correção: o botão ↓ agora vai sempre até o fim da conversa, mesmo com respostas longas, e ficou menor.
