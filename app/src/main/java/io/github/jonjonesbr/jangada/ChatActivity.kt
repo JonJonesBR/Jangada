@@ -937,19 +937,17 @@ class ChatActivity : JangadaActivity() {
     /**
      * Rola até o fim da conversa: a borda de baixo do último item encostada na de baixo da lista.
      * Mede em vez de estimar (o smoothScrollToPosition erra com itens mais altos que a tela, e com o
-     * último item já à vista alinhava o topo dele, subindo a lista). Com o último item na tela, rola
-     * suave só o que falta; longe, salta até ele e depois acerta o fim.
+     * último item já à vista alinhava o topo dele, subindo a lista). Com o último item na tela e pouco
+     * a rolar, rola suave; senão salta até ele e acerta o fim (ver [showEndOfLast]).
      */
     private fun scrollToEnd() {
         val last = list.count - 1
         if (last < 0) return
         // Para uma rolagem em andamento (fling), que brigaria com a nova.
         list.smoothScrollBy(0, 0)
-        val child = if (list.lastVisiblePosition == last) list.getChildAt(list.childCount - 1) else null
-        if (child != null) {
-            val delta = child.bottom - (list.height - list.paddingBottom)
-            // A rolagem suave limita cada quadro à altura da lista e perde o excesso: distância grande vai direto.
-            if (delta > list.height) list.scrollListBy(delta) else if (delta > 0) list.smoothScrollBy(delta, JUMP_SCROLL_MS)
+        if (list.lastVisiblePosition == last) {
+            val delta = endDelta()
+            if (delta in 1 until list.height) list.smoothScrollBy(delta, JUMP_SCROLL_MS) else showEndOfLast()
             return
         }
         list.setSelection(last)
@@ -957,14 +955,31 @@ class ChatActivity : JangadaActivity() {
         list.post { showEndOfLast() }
     }
 
-    /** Se o último item está na tela mas passa da borda de baixo, rola o que falta (sem animação). */
+    /**
+     * Rola, sem animação, até o fim do último item. O scrollListBy anda no máximo quase uma altura da
+     * lista por chamada (o AbsListView descarta o resto), então vai em passos até não faltar nada.
+     */
     private fun showEndOfLast() {
         if (isDestroyed) return
+        val step = list.height - list.paddingTop - list.paddingBottom - 1
+        if (step <= 0) return
+        var previous = Int.MAX_VALUE
+        // Limite só por segurança; cada passo anda quase uma tela.
+        repeat(END_MAX_STEPS) {
+            val delta = endDelta()
+            // Sem nada a rolar, ou sem avanço desde o passo anterior: terminou.
+            if (delta <= 0 || delta >= previous) return
+            previous = delta
+            list.scrollListBy(minOf(delta, step))
+        }
+    }
+
+    /** Quanto o último item passa da borda de baixo da lista; 0 se ele não está na tela ou já cabe. */
+    private fun endDelta(): Int {
         val last = list.count - 1
-        if (last < 0 || list.lastVisiblePosition != last) return
-        val child = list.getChildAt(list.childCount - 1) ?: return
-        val delta = child.bottom - (list.height - list.paddingBottom)
-        if (delta > 0) list.scrollListBy(delta)
+        if (last < 0 || list.lastVisiblePosition != last) return 0
+        val child = list.getChildAt(list.childCount - 1) ?: return 0
+        return child.bottom - (list.height - list.paddingBottom)
     }
 
     /**
@@ -2870,6 +2885,8 @@ class ChatActivity : JangadaActivity() {
         const val END_SLACK_PX = 4
         /** Duração, em ms, da rolagem suave até o fim do último item. */
         const val JUMP_SCROLL_MS = 250
+        /** Passos no máximo para chegar ao fim do último item (cada um anda quase uma tela). */
+        const val END_MAX_STEPS = 100
         /** Tamanho dos atalhos acima da caixa (sp), antes da escala. */
         const val CHIP_TEXT_SP = 14f
         /** Abaixo desta altura da janela (teclado aberto, paisagem) os atalhos somem e a faixa de permissão encolhe. */
