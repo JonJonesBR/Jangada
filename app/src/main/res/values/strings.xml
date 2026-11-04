@@ -79,6 +79,13 @@
     <string name="home_job_worktree_desc">Its own branch; the repository stays as it is until you merge</string>
     <string name="home_job_creating">Creating the working copy…</string>
     <string name="home_job_description">%1$s, folder %2$s, %3$s. Tap to open.</string>
+    <string name="home_memory_summary">Agents ≈ %1$s · other apps %2$s · free %3$s of %4$s</string>
+    <string name="home_memory_usable">About %1$s can be used before Android starts closing apps.</string>
+    <string name="home_job_asleep_memory">Asleep, not using memory</string>
+    <plurals name="home_job_memory">
+        <item quantity="one">≈ %1$s · %2$d process</item>
+        <item quantity="other">≈ %1$s · %2$d processes</item>
+    </plurals>
 
     <string name="agent_installing">Installing…</string>
     <string name="agent_updating">Updating…</string>

@@ -19,6 +19,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.format.Formatter
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
 import android.util.Log
@@ -39,8 +40,10 @@ import io.github.jonjonesbr.jangada.TerminalService.AgentTask
 import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.agents.Versions
+import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.chatState
+import io.github.jonjonesbr.jangada.linux.JobMemory
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
@@ -74,6 +77,18 @@ class HomeActivity : JangadaActivity() {
     private lateinit var jobsEmpty: TextView
     /** "Atualizar todos (N)", no título da seção de agentes. */
     private lateinit var updateAllButton: Button
+    /** Bloco de memória (acima dos filtros): as três partes da barra e o texto. */
+    private lateinit var memoryBlock: View
+    private lateinit var memoryAgents: View
+    private lateinit var memoryOther: View
+    private lateinit var memoryFree: View
+    private lateinit var memoryText: TextView
+    /**
+     * Linha de cada trabalho com chat (chave de [TerminalService.chatKey]), da última vez que a lista
+     * foi desenhada: o texto de detalhe de memória e a descrição base da linha.
+     */
+    private class JobDetail(val detail: TextView, val row: View, val baseDescription: String)
+    private val jobDetails = HashMap<String, JobDetail>()
     /** Filtro da lista de trabalhos; não é salvo. */
     private var jobFilter: JobFilter = JobFilter.All
     /** Cartão de boas-vindas; null depois de tirado da tela. */
@@ -114,7 +129,12 @@ class HomeActivity : JangadaActivity() {
      * redesenha se algum estado mudou: refazer as linhas no meio de um toque o perderia.
      */
     private val jobsTicker = Runnable {
-        if (jobStates() != drawnJobStates) renderSessions() else scheduleJobsTick()
+        if (jobStates() != drawnJobStates) {
+            renderSessions()
+        } else {
+            renderMemory()
+            scheduleJobsTick()
+        }
     }
     /** Estados dos trabalhos na última vez que a lista foi desenhada. */
     private var drawnJobStates: List<Pair<String, ChatState>> = emptyList()
@@ -141,6 +161,11 @@ class HomeActivity : JangadaActivity() {
         newJobButton = findViewById(R.id.home_new_job)
         jobsEmpty = findViewById(R.id.home_jobs_empty)
         updateAllButton = findViewById(R.id.update_all)
+        memoryBlock = findViewById(R.id.home_memory)
+        memoryAgents = findViewById(R.id.home_memory_agents)
+        memoryOther = findViewById(R.id.home_memory_other)
+        memoryFree = findViewById(R.id.home_memory_free)
+        memoryText = findViewById(R.id.home_memory_text)
         newJobButton.setOnClickListener { startNewJob() }
         recipes = AgentCatalog.load(this)
 
@@ -748,6 +773,7 @@ class HomeActivity : JangadaActivity() {
      */
     private fun renderSessions() {
         sessionsList.removeAllViews()
+        jobDetails.clear()
         val jobs = orderedJobs()
         val sessions = service?.sessions.orEmpty()
         val folders = (jobs.map { it.first.folder } + sessions.map { folderOf(it.mHandle) }).distinct()
@@ -765,12 +791,15 @@ class HomeActivity : JangadaActivity() {
             val row = inflater.inflate(R.layout.item_session, sessionsList, false)
             val name = recipes.firstOrNull { it.id == slot.agentId }?.name ?: getString(R.string.chat_title)
             row.findViewById<TextView>(R.id.session_title).text = jobLabel(name, slot.folder, state)
-            row.contentDescription = getString(
+            val baseDescription = getString(
                 R.string.home_job_description,
                 name,
                 Workspace.label(slot.folder, getString(R.string.home_filter_root)),
                 stateText(this, state),
             )
+            row.contentDescription = baseDescription
+            jobDetails[TerminalService.chatKey(slot.agentId, slot.folder)] =
+                JobDetail(row.findViewById<TextView>(R.id.session_detail), row, baseDescription)
             row.setOnClickListener { openChat(slot.agentId, slot.folder) }
             row.findViewById<Button>(R.id.session_close).setOnClickListener {
                 // Trabalho rodando ou esperando você para na hora: pergunta antes. Parado ou pronto fecha direto.
@@ -795,6 +824,59 @@ class HomeActivity : JangadaActivity() {
         drawnJobStates = jobs.map { (slot, state) -> TerminalService.chatKey(slot.agentId, slot.folder) to state }
         renderJobsSection()
         scheduleJobsTick()
+        renderMemory()
+    }
+
+    /**
+     * Bloco de memória (acima da lista): quanto os agentes usam, o resto dos apps e o livre, com o
+     * que dá para usar antes de o Android fechar apps. Também põe o detalhe de memória em cada linha
+     * de trabalho. Some sem agente aberto ou sem o Linux pronto. Chamado a cada atualização da lista
+     * e pelo [jobsTicker] (leitura de arquivos pequenos e do ActivityManager, sem timer próprio).
+     */
+    private fun renderMemory() {
+        val svc = service
+        if (svc == null || svc.chats.isEmpty() || !linux.isReady) {
+            memoryBlock.visibility = View.GONE
+            return
+        }
+        val info = svc.memoryWatch.memoryInfo()
+        val usage = svc.memoryWatch.usageByKey()
+        renderJobDetails(svc, usage)
+        val ov = MemoryReport.overview(info.totalMem, info.availMem, info.threshold, usage.values)
+        if (ov.agentsBytes + ov.otherBytes + ov.availBytes <= 0L) {
+            memoryBlock.visibility = View.GONE
+            return
+        }
+        setBarWeight(memoryAgents, ov.agentsBytes)
+        setBarWeight(memoryOther, ov.otherBytes)
+        setBarWeight(memoryFree, ov.availBytes)
+        val size = { bytes: Long -> Formatter.formatShortFileSize(this, bytes) }
+        val text = getString(R.string.home_memory_summary, size(ov.agentsBytes), size(ov.otherBytes), size(ov.availBytes), size(ov.totalBytes)) +
+            "\n" + getString(R.string.home_memory_usable, size(ov.usableBytes))
+        // O TalkBack lê o próprio texto; descrição no bloco faria ler duas vezes.
+        if (memoryText.text.toString() != text) memoryText.text = text
+        memoryBlock.visibility = View.VISIBLE
+    }
+
+    /** Peso de uma parte da barra, em MiB; só troca (e pede layout) quando muda. */
+    private fun setBarWeight(part: View, bytes: Long) {
+        val params = part.layoutParams as LinearLayout.LayoutParams
+        val weight = (bytes / (1024L * 1024L)).toFloat()
+        if (params.weight == weight) return
+        params.weight = weight
+        part.layoutParams = params
+    }
+
+    /** Texto de detalhe de cada linha de trabalho e a descrição da linha (só troca o que mudou). */
+    private fun renderJobDetails(svc: TerminalService, usage: Map<String, JobMemory.Usage?>) {
+        val back = getString(R.string.session_back)
+        for ((key, job) in jobDetails) {
+            val slot = svc.chats[key] ?: continue
+            val text = jobMemoryText(this, slot.chat, usage[key]) ?: back
+            if (job.detail.text.toString() != text) job.detail.text = text
+            val description = if (text == back) job.baseDescription else job.baseDescription + " " + text
+            if (job.row.contentDescription?.toString() != description) job.row.contentDescription = description
+        }
     }
 
     /**
@@ -1160,6 +1242,21 @@ internal fun stateText(context: Context, state: ChatState): String = context.get
         ChatState.STOPPED -> R.string.chat_state_stopped
     },
 )
+
+/**
+ * Detalhe de memória de um trabalho, na tela inicial e no painel ⇄: "Dormindo", "≈ 80 MB · 3 processos"
+ * ou null quando não há relatório (o chamador põe o texto que quiser no lugar).
+ */
+internal fun jobMemoryText(context: Context, chat: AgentChat, usage: JobMemory.Usage?): String? = when {
+    chatState(chat) == ChatState.ASLEEP -> context.getString(R.string.home_job_asleep_memory)
+    usage == null -> null
+    else -> context.resources.getQuantityString(
+        R.plurals.home_job_memory,
+        usage.processes,
+        Formatter.formatShortFileSize(context, usage.rssKb * 1024L),
+        usage.processes,
+    )
+}
 
 /** Linha de um trabalho: agente, pasta (se não for a raiz) e estado. */
 internal fun jobTitle(context: Context, agentName: String, folder: String, state: ChatState): String =

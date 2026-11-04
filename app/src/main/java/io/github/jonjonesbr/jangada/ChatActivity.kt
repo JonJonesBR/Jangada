@@ -1651,10 +1651,12 @@ class ChatActivity : JangadaActivity() {
     private fun showJobs() {
         val svc = service ?: return
         val slots = svc.chats.values.toList()
+        val usage = svc.memoryWatch.usageByKey()
         val rows = slots.map { slot ->
             Sheet.Row(
                 title = jobName(agentNameOf(slot.agentId), slot.folder),
                 value = stateText(this, chatState(slot.chat)),
+                description = jobMemoryText(this, slot.chat, usage[TerminalService.chatKey(slot.agentId, slot.folder)]),
                 checked = slot.agentId == agentId && slot.folder == folder,
             ) {
                 if (slot.agentId != agentId || slot.folder != folder) openJobScreen(slot.agentId, slot.folder)

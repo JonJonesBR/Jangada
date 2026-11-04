@@ -168,6 +168,21 @@ class MemoryWatch(private val service: TerminalService) {
         return info
     }
 
+    /**
+     * Memória de cada trabalho aberto (chave de [TerminalService.chatKey]), para a tela: o relatório
+     * de quem roda; null para os parados e os dormindo, e para quem não tem relatório. Só na thread
+     * principal; lê só os arquivos pequenos dos trabalhos que rodam.
+     */
+    fun usageByKey(): Map<String, JobMemory.Usage?> {
+        val linux = LinuxEnv(service)
+        val result = LinkedHashMap<String, JobMemory.Usage?>()
+        for ((key, slot) in service.chats) {
+            val chat = slot.chat
+            result[key] = if (chat.running && chatState(chat) != ChatState.ASLEEP) usageOf(linux, chat) else null
+        }
+        return result
+    }
+
     private fun onTick() {
         scheduled = false
         if (!anyRunning()) {

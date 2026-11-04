@@ -143,6 +143,50 @@
             android:textStyle="bold"
             android:visibility="gone" />
 
+        <!-- Memória: quanto os agentes usam, o resto dos apps e o livre (ver HomeActivity.renderMemory). -->
+        <LinearLayout
+            android:id="@+id/home_memory"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/home_memory_bar"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:background="@color/bar_bg"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/home_memory_agents"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@color/accent_text" />
+
+                <View
+                    android:id="@+id/home_memory_other"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@color/setup_muted" />
+
+                <View
+                    android:id="@+id/home_memory_free"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:background="@color/setup_done" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/home_memory_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/setup_muted"
+                android:textSize="13sp" />
+        </LinearLayout>
+
         <!-- Filtros da lista de trabalhos (com 4 ou mais linhas): Todos, Esperando você e as pastas. -->
         <HorizontalScrollView
             android:id="@+id/job_filter"
