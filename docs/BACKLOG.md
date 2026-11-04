@@ -19,7 +19,11 @@ Próximos trabalhos do Jangada, na ordem em que serão feitos. Ao concluir um it
 
 - O Claude Code manda `rate_limit_event` no stream-json (`rate_limit_info`: `status`, `rateLimitType` como `five_hour`/`seven_day`, `utilization`, `resetsAt`). Mostrar no chat, junto do uso do contexto (que já existe): quanto foi usado e quando renova.
 - Conferir com conversas reais se `utilization` vem sempre ou só perto do limite. Se vier só perto, considerar o mesmo dado do `/usage` do Claude Code (`/api/oauth/usage`, não documentado: pode mudar).
-- Depois, o Codex (manda `rate_limits` no uso de tokens). Outros agentes ACP não informam.
+- Vale para todos os agentes que informarem os limites, não só o Claude. Investigar um por um:
+  - Codex: o CLI conhece os limites (`rate_limits` no uso de tokens, janela de 5 h e semanal); ver se o adaptador ACP repassa ou se dá para ler de outro jeito (arquivo de sessão do Codex).
+  - Qwen Code, OpenCode, Pi, Hermes, Command Code: conferir se o ACP ou os arquivos deles trazem cota ou uso.
+  - Quem não informar nada: mostrar só o contexto e não inventar número.
+- A tela deve ser a mesma para todos (um modelo comum de "limite: usado %, renova em"), cada agente preenche o que tiver.
 
 ## 4. Armazenamento
 
