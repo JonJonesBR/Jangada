@@ -121,6 +121,9 @@ class MemoryWatch(private val service: TerminalService) {
 
     private val tick = Runnable { onTick() }
 
+    /** Picos de memória por agente (ver [MemoryPeakStore]); as telas leem daqui. */
+    val peaks: MemoryPeakStore by lazy { MemoryPeakStore(service) }
+
     /** Agenda uma conferência, se há agente rodando e nenhuma está agendada ou em andamento. */
     fun ensureRunning() {
         // Sem agente rodando, o aviso de pouca memória não aponta mais nada: some.
@@ -169,6 +172,19 @@ class MemoryWatch(private val service: TerminalService) {
     }
 
     /**
+     * Memória de cada agente que [sleepIdleNow] poria para dormir agora (rssKb * 1024 do relatório
+     * atual), menos [exceptKey]: quem tem comando em segundo plano não dorme, então não conta. Sem
+     * relatório conta 0. Para a previsão da tela inicial; só na thread principal.
+     */
+    fun idleUsageBytes(exceptKey: String?): List<Long> {
+        val targets = sleepable().filterKeys { it != exceptKey }
+        val linux = LinuxEnv(service)
+        val usage = targets.mapValues { (_, chat) -> usageOf(linux, chat) }
+        val keys = MemoryPolicy.toSleepForPressure(candidatesOf(targets, usage), MemoryPolicy.Level.CRITICAL)
+        return keys.map { (usage[it]?.rssKb ?: 0L) * 1024L }
+    }
+
+    /**
      * Memória de cada trabalho aberto (chave de [TerminalService.chatKey]), para a tela: o relatório
      * de quem roda; null para os parados e os dormindo, e para quem não tem relatório. Só na thread
      * principal; lê só os arquivos pequenos dos trabalhos que rodam.
@@ -193,12 +209,8 @@ class MemoryWatch(private val service: TerminalService) {
         val level = MemoryPolicy.level(info.availMem, info.threshold, info.lowMemory)
         if (level == MemoryPolicy.Level.OK) clearNotice()
         val targets = sleepable()
-        // Sem quem dorme, só se lê quando a memória está crítica (o aviso aponta quem mais usa).
-        if (targets.isEmpty() && level != MemoryPolicy.Level.CRITICAL) {
-            ensureRunning()
-            return
-        }
-        // Os relatórios são arquivos pequenos, mas ficam fora da thread principal mesmo assim.
+        // Com agente rodando, os relatórios são sempre lidos: é deles que sai o pico de cada agente.
+        // Os arquivos são pequenos, mas ficam fora da thread principal mesmo assim.
         val running = service.chats.filterValues { it.chat.running }.mapValues { it.value.chat }
         val gen = generation
         reading = true
@@ -208,9 +220,25 @@ class MemoryWatch(private val service: TerminalService) {
             main.post {
                 if (gen != generation) return@post
                 reading = false
-                decide(level, targets, usage)
+                recordPeaks(running, usage)
+                // Quem dorme só é escolhido quando há quem possa dormir, ou a memória está crítica.
+                if (targets.isNotEmpty() || level == MemoryPolicy.Level.CRITICAL) decide(level, targets, usage)
                 ensureRunning()
             }
+        }
+    }
+
+    /**
+     * Guarda o pico de cada trabalho que tem relatório (thread principal). Só se o chat da chave ainda é
+     * o que foi lido ([read]): um chat novo no mesmo par, aberto durante a leitura, tem outro jobId.
+     */
+    private fun recordPeaks(read: Map<String, AgentChat>, usage: Map<String, JobMemory.Usage?>) {
+        for ((key, job) in usage) {
+            if (job == null) continue
+            val slot = service.chats[key] ?: continue
+            if (slot.chat !== read[key]) continue
+            val jobId = slot.chat.jobId ?: continue
+            peaks.record(slot.agentId, jobId, job.rssKb)
         }
     }
 

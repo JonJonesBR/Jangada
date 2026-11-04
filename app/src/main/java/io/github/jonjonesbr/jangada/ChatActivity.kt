@@ -517,23 +517,34 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Confere a memória antes de subir um agente novo. Com folga, abre direto; apertada (TIGHT ou
-     * CRITICAL), mostra o painel de [showMemoryLow] e o usuário decide.
+     * Confere a memória antes de subir um agente novo. Com folga e memória de sobra para o pico que o
+     * agente costuma usar (ou sem histórico dele), abre direto; senão mostra o painel de [showMemoryLow]
+     * e o usuário decide.
      */
     private fun checkMemory(svc: TerminalService, open: () -> Unit) {
         val info = svc.memoryWatch.memoryInfo()
-        if (MemoryPolicy.level(info.availMem, info.threshold, info.lowMemory) == MemoryPolicy.Level.OK) {
+        val usable = (info.availMem - info.threshold).coerceAtLeast(0L)
+        val peak = svc.memoryWatch.peaks.typicalBytes(agentId)
+        val level = MemoryPolicy.level(info.availMem, info.threshold, info.lowMemory)
+        if (level == MemoryPolicy.Level.OK && (peak == null || usable >= peak)) {
             open()
             return
         }
-        showMemoryLow(svc, Formatter.formatShortFileSize(this, info.availMem), open)
+        val size = { bytes: Long -> Formatter.formatShortFileSize(this, bytes) }
+        // O texto do pico só quando é ele que não cabe; com o pico cabendo e o nível apertado, o aviso geral.
+        val message = if (peak != null && usable < peak) {
+            getString(R.string.memory_low_text_peak, size(usable), agentNameOf(agentId), size(peak))
+        } else {
+            getString(R.string.memory_low_text, size(info.availMem))
+        }
+        showMemoryLow(svc, message, open)
     }
 
     /**
      * Painel de pouca memória: pôr os parados para dormir e abrir (só aparece se há quem dorme), ou
      * abrir mesmo assim. Cancelar sai desta tela se ela não tem conversa para mostrar.
      */
-    private fun showMemoryLow(svc: TerminalService, free: String, open: () -> Unit) {
+    private fun showMemoryLow(svc: TerminalService, message: String, open: () -> Unit) {
         if (memoryLowDialog?.isShowing == true) return
         val rows = mutableListOf<Sheet.Row>()
         if (svc.memoryWatch.idleCandidates(chatKey) > 0) {
@@ -553,7 +564,7 @@ class ChatActivity : JangadaActivity() {
         }
         memoryLowDialog = Sheet(this)
             .title(getString(R.string.memory_low_title))
-            .message(getString(R.string.memory_low_text, free))
+            .message(message)
             .rows(rows)
             .onDismiss { if (engine == null) finish() }
             .show()

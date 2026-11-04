@@ -77,8 +77,21 @@
     <string name="home_job_worktree_desc">Branch própria; o repositório fica como está até você juntar</string>
     <string name="home_job_creating">Criando a cópia de trabalho…</string>
     <string name="home_job_description">%1$s, pasta %2$s, %3$s. Toque para abrir.</string>
-    <string name="home_memory_summary">Agentes ≈ %1$s · outros apps %2$s · livres %3$s de %4$s</string>
     <string name="home_memory_usable">Dá para usar ≈ %1$s antes de o Android começar a fechar apps.</string>
+    <string name="home_memory_legend_agents">Agentes</string>
+    <string name="home_memory_legend_other">Outros</string>
+    <string name="home_memory_legend_free">Livre</string>
+    <string name="home_memory_legend_description">Memória: agentes %1$s, outros apps %2$s, livre %3$s, de %4$s</string>
+    <string name="home_fit_yes">Cabe mais um %1$s (costuma chegar a ≈ %2$s).</string>
+    <plurals name="home_fit_after_sleep">
+        <item quantity="one">Para mais um %1$s (≈ %2$s), pôr %3$d parado para dormir libera ≈ %4$s.</item>
+        <item quantity="other">Para mais um %1$s (≈ %2$s), pôr %3$d parados para dormir libera ≈ %4$s.</item>
+    </plurals>
+    <string name="home_fit_no">Mais um %1$s (costuma chegar a ≈ %2$s) não cabe agora sem o Android fechar apps.</string>
+    <plurals name="home_fit_slots">
+        <item quantity="one">Limite de %1$d agente ao mesmo tempo: para abrir outro, um precisa dormir ou fechar.</item>
+        <item quantity="other">Limite de %1$d agentes ao mesmo tempo: para abrir outro, um precisa dormir ou fechar.</item>
+    </plurals>
     <string name="home_job_asleep_memory">Dormindo, sem usar memória</string>
     <plurals name="home_job_memory">
         <item quantity="one">≈ %1$s · %2$d processo</item>
@@ -274,6 +287,7 @@
     <string name="chat_jobs_full">Cada agente usa memória do celular. Toque em um trabalho para pô-lo para dormir (ou fechá-lo) e abrir este.</string>
     <string name="memory_low_title">Pouca memória livre</string>
     <string name="memory_low_text">O celular tem %1$s livres. Abrir mais um agente pode fazer o Android encerrar algum.</string>
+    <string name="memory_low_text_peak">Dá para usar ≈ %1$s antes de o Android fechar apps, e o %2$s costuma chegar a ≈ %3$s. Abrir mesmo assim pode fazer o Android encerrar algum.</string>
     <string name="memory_low_sleep_open">Pôr os parados para dormir e abrir</string>
     <string name="memory_low_sleep_open_desc">Os agentes parados dormem (as conversas ficam guardadas) e este abre.</string>
     <string name="memory_low_open">Abrir mesmo assim</string>

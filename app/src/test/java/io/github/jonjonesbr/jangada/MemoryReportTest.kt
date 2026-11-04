@@ -70,4 +70,55 @@ class MemoryReportTest {
         assertEquals(0L, ov.agentsBytes)
         assertEquals(total - 1000 * mib, ov.otherBytes)
     }
+
+    // ---- Previsão (fit) ----
+
+    private val gib = 1024L * mib
+
+    @Test
+    fun fitSlotsCheioTemPrioridadeSobreMemoria() {
+        // Vaga cheia: mesmo com memória de sobra, a saída é SlotsFull.
+        val r = MemoryReport.fit(10 * gib, 100 * mib, emptyList(), running = 2, maxChats = 2)
+        assertEquals(MemoryReport.Fit.SlotsFull(2), r)
+    }
+
+    @Test
+    fun fitCabeQuandoOLivreComportaOPico() {
+        assertEquals(MemoryReport.Fit.Fits(500 * mib), MemoryReport.fit(gib, 500 * mib, emptyList(), running = 1, maxChats = 3))
+        // Exatamente o pico também cabe.
+        assertEquals(MemoryReport.Fit.Fits(gib), MemoryReport.fit(gib, gib, emptyList(), running = 0, maxChats = 3))
+    }
+
+    @Test
+    fun fitDepoisDeDormirUsaOsMaioresPrimeiro() {
+        // Livre 200 MiB, pico 900 MiB. Parados: 100, 500, 300 e 50. Os maiores primeiro: 200 + 500 = 700
+        // (não chega), 200 + 500 + 300 = 1000 (cobre). Dois agentes, 800 MiB liberados.
+        val r = MemoryReport.fit(200 * mib, 900 * mib, listOf(100 * mib, 500 * mib, 300 * mib, 50 * mib), running = 1, maxChats = 4)
+        assertEquals(MemoryReport.Fit.AfterSleep(900 * mib, count = 2, freedBytes = 800 * mib), r)
+    }
+
+    @Test
+    fun fitDepoisDeDormirIgnoraZerosENegativos() {
+        val r = MemoryReport.fit(0L, 300 * mib, listOf(0L, -10L, 400 * mib), running = 0, maxChats = 4)
+        assertEquals(MemoryReport.Fit.AfterSleep(300 * mib, count = 1, freedBytes = 400 * mib), r)
+    }
+
+    @Test
+    fun fitNaoCabeNemDepoisDeDormir() {
+        val r = MemoryReport.fit(100 * mib, gib, listOf(200 * mib, 300 * mib), running = 1, maxChats = 4)
+        assertEquals(MemoryReport.Fit.NoRoom(gib), r)
+        // Sem nenhum parado.
+        assertEquals(MemoryReport.Fit.NoRoom(gib), MemoryReport.fit(100 * mib, gib, emptyList(), running = 0, maxChats = 4))
+    }
+
+    @Test
+    fun fitNegativosViramZero() {
+        // Usável negativo vira 0 e pico negativo vira 0: cabe.
+        assertEquals(MemoryReport.Fit.Fits(0L), MemoryReport.fit(-5L, -7L, emptyList(), running = 0, maxChats = 1))
+        // Usável 0 com pico 10 MiB e um parado de 20 MiB: depois de dormir, cabe.
+        assertEquals(
+            MemoryReport.Fit.AfterSleep(10 * mib, count = 1, freedBytes = 20 * mib),
+            MemoryReport.fit(-1L, 10 * mib, listOf(20 * mib), running = 0, maxChats = 1),
+        )
+    }
 }

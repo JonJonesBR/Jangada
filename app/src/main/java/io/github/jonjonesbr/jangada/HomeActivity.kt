@@ -83,6 +83,11 @@ class HomeActivity : JangadaActivity() {
     private lateinit var memoryOther: View
     private lateinit var memoryFree: View
     private lateinit var memoryText: TextView
+    private lateinit var memoryFit: TextView
+    private lateinit var memoryLegend: View
+    private lateinit var legendAgents: TextView
+    private lateinit var legendOther: TextView
+    private lateinit var legendFree: TextView
     /**
      * Linha de cada trabalho com chat (chave de [TerminalService.chatKey]), da última vez que a lista
      * foi desenhada: o texto de detalhe de memória e a descrição base da linha.
@@ -166,6 +171,11 @@ class HomeActivity : JangadaActivity() {
         memoryOther = findViewById(R.id.home_memory_other)
         memoryFree = findViewById(R.id.home_memory_free)
         memoryText = findViewById(R.id.home_memory_text)
+        memoryFit = findViewById(R.id.home_memory_fit)
+        memoryLegend = findViewById(R.id.home_memory_legend)
+        legendAgents = findViewById(R.id.home_memory_legend_agents)
+        legendOther = findViewById(R.id.home_memory_legend_other)
+        legendFree = findViewById(R.id.home_memory_legend_free)
         newJobButton.setOnClickListener { startNewJob() }
         recipes = AgentCatalog.load(this)
 
@@ -829,9 +839,10 @@ class HomeActivity : JangadaActivity() {
 
     /**
      * Bloco de memória (acima da lista): quanto os agentes usam, o resto dos apps e o livre, com o
-     * que dá para usar antes de o Android fechar apps. Também põe o detalhe de memória em cada linha
-     * de trabalho. Some sem agente aberto ou sem o Linux pronto. Chamado a cada atualização da lista
-     * e pelo [jobsTicker] (leitura de arquivos pequenos e do ActivityManager, sem timer próprio).
+     * que dá para usar antes de o Android fechar apps, e a previsão para mais um agente. Também põe o
+     * detalhe de memória em cada linha de trabalho. Some sem agente aberto ou sem o Linux pronto.
+     * Chamado a cada atualização da lista e pelo [jobsTicker] (leitura de arquivos pequenos e do
+     * ActivityManager, sem timer próprio).
      */
     private fun renderMemory() {
         val svc = service
@@ -851,11 +862,82 @@ class HomeActivity : JangadaActivity() {
         setBarWeight(memoryOther, ov.otherBytes)
         setBarWeight(memoryFree, ov.availBytes)
         val size = { bytes: Long -> Formatter.formatShortFileSize(this, bytes) }
-        val text = getString(R.string.home_memory_summary, size(ov.agentsBytes), size(ov.otherBytes), size(ov.availBytes), size(ov.totalBytes)) +
-            "\n" + getString(R.string.home_memory_usable, size(ov.usableBytes))
-        // O TalkBack lê o próprio texto; descrição no bloco faria ler duas vezes.
-        if (memoryText.text.toString() != text) memoryText.text = text
+        val agents = "≈ " + size(ov.agentsBytes)
+        val other = size(ov.otherBytes)
+        val free = size(ov.availBytes)
+        val total = size(ov.totalBytes)
+        renderLegend(agents, other, free)
+        val legendDescription = getString(R.string.home_memory_legend_description, agents, other, free, total)
+        if (memoryLegend.contentDescription?.toString() != legendDescription) memoryLegend.contentDescription = legendDescription
+        val usableText = getString(R.string.home_memory_usable, size(ov.usableBytes))
+        if (memoryText.text.toString() != usableText) memoryText.text = usableText
+        renderFit(fitMessage(svc, ov.usableBytes))
         memoryBlock.visibility = View.VISIBLE
+    }
+
+    /**
+     * Legenda da barra: "● Agentes" com o valor embaixo, cada ● na cor da parte. Só troca o texto
+     * quando muda (o SpannableString não compara igual).
+     */
+    private fun renderLegend(agents: String, other: String, free: String) {
+        setLegend(legendAgents, getString(R.string.home_memory_legend_agents), agents, R.color.accent_text)
+        setLegend(legendOther, getString(R.string.home_memory_legend_other), other, R.color.setup_muted)
+        setLegend(legendFree, getString(R.string.home_memory_legend_free), free, R.color.setup_done)
+    }
+
+    private fun setLegend(view: TextView, label: String, value: String, dotColor: Int) {
+        val plain = "● $label\n$value"
+        if (view.text.toString() == plain) return
+        val text = SpannableString(plain)
+        text.setSpan(ForegroundColorSpan(getColor(dotColor)), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        view.text = text
+    }
+
+    /**
+     * Previsão de [fitMessage] na própria linha ([memoryFit]); some sem previsão. Em vermelho
+     * (setup_error) só quando não cabe. Só troca texto, cor e visibilidade quando mudam.
+     */
+    private fun renderFit(fit: Pair<String, Boolean>?) {
+        if (fit == null) {
+            if (memoryFit.visibility != View.GONE) memoryFit.visibility = View.GONE
+            return
+        }
+        if (memoryFit.visibility != View.VISIBLE) memoryFit.visibility = View.VISIBLE
+        if (memoryFit.text.toString() != fit.first) memoryFit.text = fit.first
+        val color = getColor(if (fit.second) R.color.setup_error else R.color.setup_muted)
+        if (memoryFit.currentTextColor != color) memoryFit.setTextColor(color)
+    }
+
+    /**
+     * Previsão "cabe mais um?" para o agente do último trabalho aberto: o texto e se não cabe (true =
+     * em vermelho). Null sem histórico de pico desse agente ou sem nome dele.
+     */
+    private fun fitMessage(svc: TerminalService, usableBytes: Long): Pair<String, Boolean>? {
+        val agentId = svc.chats.values.lastOrNull()?.agentId ?: return null
+        val name = recipes.firstOrNull { it.id == agentId }?.name ?: return null
+        val peak = svc.memoryWatch.peaks.typicalBytes(agentId) ?: return null
+        val running = svc.chats.values.count { it.chat.running && chatState(it.chat) != ChatState.ASLEEP }
+        val fit = MemoryReport.fit(
+            usableBytes,
+            peak,
+            svc.memoryWatch.idleUsageBytes(null),
+            running,
+            svc.maxChats(),
+        )
+        val size = { bytes: Long -> Formatter.formatShortFileSize(this, bytes) }
+        return when (fit) {
+            is MemoryReport.Fit.Fits -> getString(R.string.home_fit_yes, name, size(fit.peakBytes)) to false
+            is MemoryReport.Fit.AfterSleep -> resources.getQuantityString(
+                R.plurals.home_fit_after_sleep,
+                fit.count,
+                name,
+                size(peak),
+                fit.count,
+                size(fit.freedBytes),
+            ) to false
+            is MemoryReport.Fit.NoRoom -> getString(R.string.home_fit_no, name, size(peak)) to true
+            is MemoryReport.Fit.SlotsFull -> resources.getQuantityString(R.plurals.home_fit_slots, fit.max, fit.max) to false
+        }
     }
 
     /** Peso de uma parte da barra, em MiB; só troca (e pede layout) quando muda. */

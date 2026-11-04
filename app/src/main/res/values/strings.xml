@@ -79,8 +79,21 @@
     <string name="home_job_worktree_desc">Its own branch; the repository stays as it is until you merge</string>
     <string name="home_job_creating">Creating the working copy…</string>
     <string name="home_job_description">%1$s, folder %2$s, %3$s. Tap to open.</string>
-    <string name="home_memory_summary">Agents ≈ %1$s · other apps %2$s · free %3$s of %4$s</string>
     <string name="home_memory_usable">About %1$s can be used before Android starts closing apps.</string>
+    <string name="home_memory_legend_agents">Agents</string>
+    <string name="home_memory_legend_other">Other</string>
+    <string name="home_memory_legend_free">Free</string>
+    <string name="home_memory_legend_description">Memory: agents %1$s, other apps %2$s, free %3$s, of %4$s</string>
+    <string name="home_fit_yes">There is room for another %1$s (it usually reaches ≈ %2$s).</string>
+    <plurals name="home_fit_after_sleep">
+        <item quantity="one">For another %1$s (≈ %2$s), putting %3$d idle agent to sleep frees ≈ %4$s.</item>
+        <item quantity="other">For another %1$s (≈ %2$s), putting %3$d idle agents to sleep frees ≈ %4$s.</item>
+    </plurals>
+    <string name="home_fit_no">Another %1$s (usually ≈ %2$s) doesn\'t fit now without Android closing apps.</string>
+    <plurals name="home_fit_slots">
+        <item quantity="one">Limit of %1$d agent at a time: to open another, one has to sleep or close.</item>
+        <item quantity="other">Limit of %1$d agents at a time: to open another, one has to sleep or close.</item>
+    </plurals>
     <string name="home_job_asleep_memory">Asleep, not using memory</string>
     <plurals name="home_job_memory">
         <item quantity="one">≈ %1$s · %2$d process</item>
@@ -276,6 +289,7 @@
     <string name="chat_jobs_full">Each agent uses phone memory. Tap a job to put it to sleep (or close it) and open this one.</string>
     <string name="memory_low_title">Low free memory</string>
     <string name="memory_low_text">The phone has %1$s free. Opening another agent may make Android stop one.</string>
+    <string name="memory_low_text_peak">About %1$s can be used before Android closes apps, and %2$s usually reaches ≈ %3$s. Opening it anyway may make Android close something.</string>
     <string name="memory_low_sleep_open">Put idle agents to sleep and open</string>
     <string name="memory_low_sleep_open_desc">Idle agents sleep (their conversations are kept), then this one opens.</string>
     <string name="memory_low_open">Open anyway</string>
