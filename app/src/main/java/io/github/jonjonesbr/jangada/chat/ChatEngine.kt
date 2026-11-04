@@ -309,9 +309,12 @@ class ChatEngine(
                 val cancelled = cancelling
                 cancelling = false
                 val failed = json.optBoolean("is_error")
-                if (failed) {
+                val subtype = json.optString("subtype")
+                // Turno parado pela própria pessoa: o CLI manda error_during_execution, que não é erro para mostrar.
+                // Outro erro que chegue durante o Parar (API, rede, login) continua aparecendo.
+                val stoppedByUser = cancelled && subtype == "error_during_execution"
+                if (failed && !stoppedByUser) {
                     val result = json.optString("result")
-                    val subtype = json.optString("subtype")
                     val text = result.ifEmpty { subtype }
                     if (Regex("login|log in|auth|api key|credential", RegexOption.IGNORE_CASE).containsMatchIn(text)) {
                         // Sem login: o cartão leva à tela do Claude, onde o login acontece.
