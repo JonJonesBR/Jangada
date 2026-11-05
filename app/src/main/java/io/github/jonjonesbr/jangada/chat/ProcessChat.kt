@@ -322,10 +322,13 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     @Volatile private var limitWindow: LimitWindow? = null
     override val limitCrossed: LimitWindow? get() = limitWindow
 
-    /** Avisa que um limite do plano passou de 90%: a primeira janela da lista (ver [crossedWindows]). Na thread principal. */
+    /**
+     * Avisa que um limite do plano passou de 90% (ver [crossedWindows]). Com duas janelas na mesma leitura,
+     * o aviso mostra a mais usada. Na thread principal.
+     */
     protected fun warnLimits(windows: List<LimitWindow>) {
-        val first = windows.firstOrNull() ?: return
-        limitWindow = first
+        val worst = windows.maxByOrNull { it.usedPercent } ?: return
+        limitWindow = worst
         attention(ChatAttention.LIMIT)
     }
 

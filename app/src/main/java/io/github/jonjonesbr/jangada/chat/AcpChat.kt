@@ -319,26 +319,26 @@ class AcpChat(
         val sessions = File(linux.rootfs, "root/.codex/sessions")
         val started = runCatching {
             thread(name = "jangada-limites") {
-                var found = false
-                var crossed: List<LimitWindow> = emptyList()
+                var limits: PlanLimits? = null
                 try {
                     if (delayMs > 0) Thread.sleep(delayMs)
-                    val now = System.currentTimeMillis()
-                    val limits = CodexLimits.read(sessions, now)
-                    if (limits != null) {
-                        val old = limitsStore.load(agentId)
-                        limitsStore.save(agentId, limits)
-                        // Sessão antiga pode trazer uma janela já renovada: essa não é um aviso.
-                        crossed = crossedWindows(old, limits).filter { it.resetsAtMs == null || it.resetsAtMs > now }
-                        found = true
-                    }
+                    limits = CodexLimits.read(sessions, System.currentTimeMillis())
                 } catch (e: Exception) {
                     Log.w(TAG, "limites do Codex", e)
                 } finally {
+                    val found = limits
                     main.post {
                         limitsReading = false
-                        if (found) changed()
-                        warnLimits(crossed)
+                        if (found != null) {
+                            // Ler, comparar e gravar na thread principal: dois chats do Codex lendo ao mesmo
+                            // tempo não avisam os dois (o segundo já compara com o que o primeiro gravou).
+                            val now = System.currentTimeMillis()
+                            val old = limitsStore.load(agentId)
+                            limitsStore.save(agentId, found)
+                            // Sessão antiga pode trazer uma janela já renovada: essa não é um aviso.
+                            warnLimits(crossedWindows(old, found).filter { it.resetsAtMs == null || it.resetsAtMs > now })
+                            changed()
+                        }
                         // Outro fim de turno chegou durante a leitura: lê de novo (só se o chat segue aberto).
                         if (limitsAgain) {
                             limitsAgain = false

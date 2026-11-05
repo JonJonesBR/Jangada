@@ -29,8 +29,19 @@ fun crossedWindows(old: PlanLimits?, new: PlanLimits, threshold: Int = 90): List
     new.windows.filter { w ->
         if (w.usedPercent < threshold) return@filter false
         val before = old?.windows?.firstOrNull { it.kind == w.kind && it.label == w.label }
-        before == null || before.usedPercent < threshold || before.resetsAtMs != w.resetsAtMs
+        before == null || before.usedPercent < threshold || otherPeriod(before.resetsAtMs, w.resetsAtMs)
     }
+
+/**
+ * Até esta diferença, o horário de renovação é o do mesmo período: o Codex calcula o horário a cada
+ * linha (resets_in_seconds somado ao horário da linha) e ele varia alguns segundos. Uma renovação de
+ * verdade empurra o horário por uma janela inteira (horas ou dias).
+ */
+private const val SAME_PERIOD_MS = 30L * 60 * 1000
+
+/** Outro período só quando os dois horários são conhecidos e se afastam mais que [SAME_PERIOD_MS]. */
+private fun otherPeriod(before: Long?, now: Long?): Boolean =
+    before != null && now != null && Math.abs(now - before) > SAME_PERIOD_MS
 
 /**
  * Lê os limites do plano que cada agente informa (Claude pelo stream-json, Codex pelas sessões

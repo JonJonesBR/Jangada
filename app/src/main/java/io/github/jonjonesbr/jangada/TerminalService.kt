@@ -1107,6 +1107,16 @@ class TerminalService : Service() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         // Request code próprio do trabalho: com o mesmo, o PendingIntent de um aviso trocaria os extras do outro.
         val requestCode = key.hashCode()
+        if (attention == ChatAttention.LIMIT) {
+            // Aviso próprio, um por agente (o limite é da conta): não apaga o pedido de permissão do trabalho
+            // nem some quando o aviso de fim de resposta chega logo depois.
+            val limit = chats[key]?.chat?.limitCrossed ?: return
+            attentionNotification(
+                requestCode, NOTIFICATION_LIMIT, getString(title), limitText(chatName(agentId, ""), limit), open,
+                tag = agentId,
+            )
+            return
+        }
         val pending = if (attention == ChatAttention.PERMISSION) chats[key]?.let { pendingPermission(it.chat) } else null
         if (pending != null) {
             // Pedido de permissão: mostra o que o agente quer e deixa responder daqui.
@@ -1122,12 +1132,7 @@ class TerminalService : Service() {
             )
             permissionNotices += key
         } else {
-            val limit = if (attention == ChatAttention.LIMIT) chats[key]?.chat?.limitCrossed else null
-            if (limit != null) {
-                attentionNotification(requestCode, NOTIFICATION_CHAT, getString(title), limitText(name, limit), open, tag = key)
-            } else {
-                attentionNotification(requestCode, NOTIFICATION_CHAT, getString(title, name), getString(text), open, tag = key)
-            }
+            attentionNotification(requestCode, NOTIFICATION_CHAT, getString(title, name), getString(text), open, tag = key)
             permissionNotices -= key
         }
         // A lista da tela inicial mostra o estado de cada trabalho: redesenha.
@@ -1388,6 +1393,8 @@ class TerminalService : Service() {
         private const val NOTIFICATION_CLONE = 5
         /** Aviso de pouca memória com agente rodando (ver MemoryWatch): um só, sem tag. */
         private const val NOTIFICATION_MEMORY = 6
+        /** Aviso de limite do plano acima de 90%: um por agente, com o id do agente como tag. */
+        private const val NOTIFICATION_LIMIT = 7
         private const val REQUEST_HOME = 10
         private const val REQUEST_SETUP = 11
         /** Toque no aviso de pouca memória (o trabalho que mais usa muda: o PendingIntent é atualizado). */

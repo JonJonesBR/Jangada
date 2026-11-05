@@ -291,6 +291,17 @@ class PlanLimitsTest {
     }
 
     @Test
+    fun naoAvisaDeNovoComHorarioQueVariaUnsSegundos() {
+        // O Codex calcula a renovação a cada linha: o mesmo período chega com segundos de diferença.
+        assertEquals(emptyList<LimitWindow>(), crossedWindows(limite(92, 1793862000000L), limite(93, 1793862001500L)))
+    }
+
+    @Test
+    fun naoAvisaDeNovoSemHorarioDeRenovacao() {
+        assertEquals(emptyList<LimitWindow>(), crossedWindows(limite(92, null), limite(95, 1793862000000L)))
+    }
+
+    @Test
     fun naoAvisaAbaixoDe90() {
         assertEquals(emptyList<LimitWindow>(), crossedWindows(limite(10), limite(89)))
     }
