@@ -17,7 +17,7 @@ Próximos trabalhos do Jangada, na ordem em que serão feitos. Ao concluir um it
 - Agentes: desinstalar nunca apaga arquivos de projeto.
 - Worktrees: nomes que o git recusa são recusados antes.
 - Painéis: toque sem arrasto informa o clique ao leitor de tela.
-- Interno: lint barra erros no CI; 70 testes novos (scripts de projeto, worktrees, Docker Hub, protocolo ACP, memória dos trabalhos, /proc, lista de tarefas); `docs/CONTRIBUTING.md` e `docs/TESTE-MANUAL.md`.
+- Interno: lint barra erros no CI; 70 testes novos (scripts de projeto, worktrees, Docker Hub, protocolo ACP, memória dos trabalhos, /proc, lista de tarefas); `docs/CONTRIBUTING.md` atualizado.
 
 ## Pendentes (precisam do aparelho)
 
