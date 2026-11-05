@@ -28,18 +28,22 @@ object JobMemory {
         return Usage(rssKb, processes)
     }
 
-    /** Arquivo do relatório do trabalho [job] (pode não existir). */
-    fun file(linux: LinuxEnv, job: String): java.io.File =
-        java.io.File(linux.rootfs, "var/lib/jangada/jobs/$job")
+    /** Arquivo do relatório do trabalho [job] dentro de [rootfs] (pode não existir). */
+    fun file(rootfs: java.io.File, job: String): java.io.File =
+        java.io.File(rootfs, "var/lib/jangada/jobs/$job")
 
     /**
      * Lê o relatório: só arquivo comum (sem seguir link), com até 64 bytes e modificado há menos de
      * [MAX_AGE_MS]. Qualquer erro: null. [job] fora de [JOB_ID] também é null, sem tocar no disco.
      */
-    fun read(linux: LinuxEnv, job: String, now: Long = System.currentTimeMillis()): Usage? {
+    fun read(linux: LinuxEnv, job: String, now: Long = System.currentTimeMillis()): Usage? =
+        read(linux.rootfs, job, now)
+
+    /** Mesma leitura, a partir da pasta do rootfs (para testes com pasta temporária). */
+    internal fun read(rootfs: java.io.File, job: String, now: Long): Usage? {
         if (!JOB_ID.matches(job)) return null
         return runCatching {
-            val path = file(linux, job).toPath()
+            val path = file(rootfs, job).toPath()
             if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) return null
             if (Files.size(path) > MAX_BYTES) return null
             // Data no futuro (relógio mudou) também não serve: só vale o que foi gravado há pouco.
