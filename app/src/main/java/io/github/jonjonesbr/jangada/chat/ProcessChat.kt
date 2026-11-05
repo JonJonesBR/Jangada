@@ -248,10 +248,17 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
             val code = runCatching { proc.waitFor() }.getOrDefault(-1)
             main.post {
                 if (connection !== c) return@post
+                // Havia turno e o usuário não parou: o agente saiu no meio da resposta. Antes de finish, que zera busy.
+                val midTurn = busy && !silentTurn
                 finish(c)
                 onExited(code, synchronized(stderrTail) { stderrTail.joinToString("\n") })
-                // Saiu com erro sem ser parado pelo usuário: um aviso só (se o cartão de login já avisou, não repete).
-                if (code != 0 && items.lastOrNull() !is ChatItem.Login) attention(ChatAttention.FAILED)
+                // Saiu no meio da resposta: código 0 ganha um aviso (com erro, o da saída já diz); Continuar aparece.
+                if (midTurn) {
+                    if (code == 0) add(ChatItem.Info(context.getString(R.string.chat_exit_midturn)))
+                    interrupted = true
+                }
+                // Saiu com erro (ou no meio da resposta) sem ser parado pelo usuário: um aviso só (se o cartão de login já avisou, não repete).
+                if ((code != 0 || midTurn) && items.lastOrNull() !is ChatItem.Login) attention(ChatAttention.FAILED)
                 settleItems()
                 onStopped()
                 changed()

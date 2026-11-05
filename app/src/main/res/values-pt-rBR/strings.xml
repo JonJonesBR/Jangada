@@ -459,6 +459,7 @@
     <string name="chat_exit_no_permission">O agente não pôde ser iniciado: sem permissão para executar (código 126).</string>
     <string name="chat_exit_code">O agente fechou (código %1$d).</string>
     <string name="chat_exit_killed">O Android encerrou o agente, provavelmente para liberar memória (código 137). Fechar outros trabalhos e apps ajuda.</string>
+    <string name="chat_exit_midturn">O agente fechou antes de terminar a resposta. Envie uma mensagem para continuar.</string>
 
     <!-- Chat: mensagens e nomes das ferramentas -->
     <string name="chat_denied_message">O usuário recusou esta ação.</string>
