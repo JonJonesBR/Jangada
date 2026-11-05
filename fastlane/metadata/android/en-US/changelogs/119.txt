@@ -1,0 +1,1 @@
+Home: memory used by agents and by each job, and whether another agent fits. Phone space and what uses space in Linux, with Clear caches. Chat: 5-hour and weekly plan limits for Claude and Codex. Fix: Stop no longer shows an error card.

@@ -1,0 +1,1 @@
+Tela inicial: memória usada pelos agentes, por trabalho, e se cabe mais um agente. Espaço do celular e o que ocupa espaço no Linux, com Limpar caches. Chat: limites de 5 horas e semanal do plano no Claude e no Codex. Correção: Parar não mostra mais um cartão de erro.

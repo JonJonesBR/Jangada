@@ -1,5 +1,13 @@
 # Novidades
 
+## 1.13.0
+
+- Tela inicial: com chats abertos, uma barra mostra a memória do celular dividida entre agentes, outros apps e livre, e quanto dá para usar antes de o Android começar a fechar apps. Cada trabalho mostra quanto usa (≈ 420 MB · 6 processos) ou que está dormindo; o painel ⇄ do chat também.
+- Tela inicial: o app guarda até onde cada agente costuma chegar de memória e diz se cabe mais um, quanto pôr os parados para dormir libera ou que não cabe. O painel ao abrir mais um agente também usa essa conta.
+- Chat: no Claude e no Codex, um chip mostra quanto dos limites de 5 horas e semanal do plano já foi usado; tocar nele mostra quando cada um renova. Os outros agentes não informam limites.
+- Tela inicial: o cartão de armazenamento mostra o espaço livre do celular e, em "Ver o que ocupa espaço", o Linux dividido em projetos, conversas dos agentes, caches e o resto, com Limpar caches (não apaga conversas, logins nem projetos).
+- Correção: tocar em Parar não mostra mais o cartão "O agente encontrou um erro" (no Claude e nos outros agentes).
+
 ## 1.12.1
 
 - Chat: com o teclado aberto, a conversa ganha espaço. Os atalhos acima da caixa somem, a faixa de segundo plano fica em uma linha (tocar nela continua abrindo o painel para parar), a caixa de texto vai até 3 linhas (o resto rola dentro dela) e o título mostra só a pasta e o branch. Ao fechar o teclado, tudo volta.
