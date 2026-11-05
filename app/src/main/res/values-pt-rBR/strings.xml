@@ -500,6 +500,7 @@
     <string name="backup_error_tar_exit">tar terminou com código %1$d</string>
     <string name="chat_permission_agent_stopped">O agente parou; envie uma mensagem para retomar.</string>
     <string name="chat_acp_agent_stopped">O agente parou antes de responder.</string>
+    <string name="chat_acp_init_timeout">O agente não respondeu ao iniciar. Feche o trabalho e abra de novo; se continuar, reinstale o agente na tela inicial.</string>
     <string name="chat_login_timeout">O login demorou demais. Tente de novo.</string>
     <string name="chat_prepare_retry">Tentar de novo</string>
     <string name="chat_prepare_details">Detalhes</string>

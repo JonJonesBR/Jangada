@@ -502,6 +502,7 @@
     <string name="backup_error_tar_exit">tar finished with code %1$d</string>
     <string name="chat_permission_agent_stopped">The agent stopped. Send a message to resume.</string>
     <string name="chat_acp_agent_stopped">The agent stopped before it could answer.</string>
+    <string name="chat_acp_init_timeout">The agent didn’t respond when starting. Close the job and open it again; if it keeps happening, reinstall the agent on the home screen.</string>
     <string name="chat_login_timeout">The login timed out. Try again.</string>
     <string name="chat_prepare_retry">Try again</string>
     <string name="chat_prepare_details">Details</string>

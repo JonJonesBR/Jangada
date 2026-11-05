@@ -94,6 +94,8 @@ class AcpChat(
     private var loginCard: ChatItem.Login? = null
     /** Tempo limite do login em andamento (para tirar da fila se ele terminar antes). */
     private var loginTimeout: Runnable? = null
+    /** Tempo limite da resposta ao initialize (ver INIT_TIMEOUT_MS). */
+    private var initTimeout: Runnable? = null
 
     /** Inicia o agente; com [resume], recarrega essa conversa (se o agente suportar). */
     fun start(resume: String? = null) {
@@ -109,11 +111,21 @@ class AcpChat(
             .put("terminal", false)
             // O app sabe abrir o agente num terminal para o login (tela de terminal do Jangada).
             .put("auth", JSONObject().put("terminal", true))
+        // Agente que não responde ao início: sem isso, a fila ficaria presa para sempre. Cancelado na resposta e no stop.
+        val timeout = Runnable {
+            initTimeout = null
+            if (ready) return@Runnable
+            add(ChatItem.Info(context.getString(R.string.chat_acp_init_timeout), isError = true))
+            stop()
+        }
+        initTimeout = timeout
+        main.postDelayed(timeout, INIT_TIMEOUT_MS)
         request(
             "initialize",
             JSONObject().put("protocolVersion", 1).put("clientCapabilities", capabilities)
                 .put("clientInfo", JSONObject().put("name", "jangada").put("title", "Jangada").put("version", appVersion)),
         ) { result, error ->
+            clearInitTimeout()
             if (result == null) {
                 // Parou durante o início: o motivo já aparece pela saída do agente.
                 if (isStopped(error)) return@request
@@ -208,6 +220,11 @@ class AcpChat(
     private fun clearLoginTimeout() {
         loginTimeout?.let { main.removeCallbacks(it) }
         loginTimeout = null
+    }
+
+    private fun clearInitTimeout() {
+        initTimeout?.let { main.removeCallbacks(it) }
+        initTimeout = null
     }
 
     /** Comando para entrar pela tela de terminal (método "terminal" do agente). */
@@ -588,6 +605,7 @@ class AcpChat(
         userDraft = null
         thoughtDraft = null
         clearLoginTimeout()
+        clearInitTimeout()
         for (callback in waiting) callback(null, stoppedError())
         loginCard?.takeIf { it.state == ChatItem.Login.State.WORKING }?.let {
             it.state = ChatItem.Login.State.FAILED
@@ -803,6 +821,8 @@ class AcpChat(
         const val LIMITS_DELAY_MS = 1_000L
         /** Quanto o cartão de login espera o navegador antes de dar o login como não terminado. */
         const val LOGIN_TIMEOUT_MS = 120_000L
+        /** Quanto o início espera a resposta ao initialize antes de dar o agente como preso e parar. */
+        const val INIT_TIMEOUT_MS = 90_000L
         /** Campo interno que marca a falha "o agente parou" (não vem do agente). */
         const val STOPPED = "jangadaStopped"
     }
