@@ -349,11 +349,7 @@ class LinuxEnv(context: Context) {
         // Pasta de trabalho dos agentes. Fora da home de propósito: o Claude Code
         // não guarda a confiança na pasta home e perguntaria toda vez.
         File(rootfs, "root/$WORKSPACE").mkdirs()
-        val phone = File(rootfs, "root/celular").toPath()
-        if (hasStorageAccess && !java.nio.file.Files.isSymbolicLink(phone)) {
-            Fs.deleteTree(phone)
-            java.nio.file.Files.createSymbolicLink(phone, java.nio.file.Paths.get("/sdcard"))
-        }
+        if (hasStorageAccess) linkPhoneDir(File(rootfs, "root/celular").toPath())
 
         // DNS da rede ativa (Wi-Fi, dados ou VPN). Sem rede conhecida, fica o que já estava gravado.
         val servers = runCatching {
@@ -385,6 +381,35 @@ class LinuxEnv(context: Context) {
      */
     fun cleanupLegacy() {
         File(rootfs, "root/.local/share/agy-acp").takeIf { it.exists() }?.let { Fs.deleteTree(it.toPath()) }
+    }
+
+    /**
+     * Põe ~/celular apontando para /sdcard. Pasta vazia é trocada pelo link; pasta com
+     * conteúdo ou arquivo comum é guardada ao lado (celular.antigo-...), nunca apagada.
+     */
+    private fun linkPhoneDir(phone: java.nio.file.Path) {
+        val exists = Fs.exists(phone)
+        val isLink = exists && java.nio.file.Files.isSymbolicLink(phone)
+        val isDir = exists && !isLink && Fs.isDir(phone)
+        val isEmpty = isDir && runCatching {
+            java.nio.file.Files.list(phone).use { !it.findAny().isPresent }
+        }.getOrDefault(false)
+        val action = phoneDirAction(exists, isLink, isDir, isEmpty)
+        if (action == PhoneDirAction.KEEP_LINK) return
+        try {
+            when (action) {
+                PhoneDirAction.REPLACE_EMPTY -> Fs.deleteTree(phone)
+                PhoneDirAction.MOVE_ASIDE -> {
+                    val stamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"))
+                    val moved = moveAsideEntry(phone, stamp)
+                    Log.i(TAG, "~/celular tinha conteúdo; guardada em $moved")
+                }
+                else -> Unit
+            }
+            java.nio.file.Files.createSymbolicLink(phone, java.nio.file.Paths.get("/sdcard"))
+        } catch (e: java.io.IOException) {
+            Log.w(TAG, "não consegui preparar ~/celular; deixei como está", e)
+        }
     }
 
     /** Texto do asset linux/[name]; null (com aviso no log) se a leitura falhar. */
@@ -571,4 +596,32 @@ class LinuxEnv(context: Context) {
                 "printf '%s' \"\$url\" > \"\$tmp\"\n" +
                 "mv \"\$tmp\" \"\$dir/link-\$\$-\$(date +%s%N)\"\n"
     }
+}
+
+/** O que fazer com a entrada ~/celular antes de criar o link para /sdcard. */
+internal enum class PhoneDirAction { CREATE_LINK, KEEP_LINK, REPLACE_EMPTY, MOVE_ASIDE }
+
+/** Decisão pura: não existe → cria; já é link → mantém; pasta vazia → troca; o resto (pasta com conteúdo, arquivo) → guarda ao lado. */
+internal fun phoneDirAction(exists: Boolean, isLink: Boolean, isDir: Boolean, isEmpty: Boolean): PhoneDirAction = when {
+    !exists -> PhoneDirAction.CREATE_LINK
+    isLink -> PhoneDirAction.KEEP_LINK
+    isDir && isEmpty -> PhoneDirAction.REPLACE_EMPTY
+    else -> PhoneDirAction.MOVE_ASIDE
+}
+
+/**
+ * Renomeia [entry] para "celular.antigo-[stamp]" na mesma pasta (com -2, -3... se o nome já existir)
+ * e devolve o destino. Move o próprio link ou arquivo, sem seguir links. Falha se não der para renomear.
+ */
+internal fun moveAsideEntry(entry: java.nio.file.Path, stamp: String): java.nio.file.Path {
+    val parent = entry.parent ?: throw java.io.IOException("sem pasta-pai: $entry")
+    val base = "${entry.fileName}.antigo-$stamp"
+    var target = parent.resolve(base)
+    var n = 2
+    while (Fs.exists(target)) {
+        target = parent.resolve("$base-$n")
+        n++
+    }
+    java.nio.file.Files.move(entry, target)
+    return target
 }
