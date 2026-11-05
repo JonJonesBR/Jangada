@@ -144,6 +144,8 @@ class Sheet(private val activity: Activity) {
                 }
                 MotionEvent.ACTION_UP -> {
                     tracker?.let { track(it, ev) }
+                    // Toque sem arrasto: é um clique no painel (o leitor de tela também precisa saber disso).
+                    if (!dragging) root.performClick()
                     if (dragging) {
                         val offset = max(0f, ev.rawY - downRawY)
                         tracker?.computeCurrentVelocity(1000)
