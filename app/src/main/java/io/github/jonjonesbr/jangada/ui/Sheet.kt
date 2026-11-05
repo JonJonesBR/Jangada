@@ -12,9 +12,13 @@ import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.Window
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -26,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.LifecycleOwner
 import io.github.jonjonesbr.jangada.R
+import kotlin.math.max
 import kotlin.math.min
 
 /**
@@ -105,21 +110,84 @@ class Sheet(private val activity: Activity) {
             insets
         }
 
-        // Alça decorativa: só enfeite, fora da leitura de tela.
-        root.addView(
-            View(activity).apply {
-                background = GradientDrawable().apply {
-                    cornerRadius = dp(2).toFloat()
-                    setColor(activity.getColor(R.color.setup_muted))
+        // Arrastar para baixo fecha o painel. O root recebe só os toques que nenhum filho consumiu
+        // (alça, título, mensagem); as linhas clicáveis e a lista com rolagem continuam como estão.
+        val config = ViewConfiguration.get(activity)
+        val slop = config.scaledTouchSlop
+        val minFling = config.scaledMinimumFlingVelocity
+        var downRawY = 0f
+        var dragging = false
+        var tracker: VelocityTracker? = null
+        // O painel anda junto com o dedo: a velocidade usa a posição na tela (raw), não a do painel.
+        fun track(t: VelocityTracker, ev: MotionEvent) {
+            val copy = MotionEvent.obtain(ev)
+            copy.setLocation(ev.rawX, ev.rawY)
+            t.addMovement(copy)
+            copy.recycle()
+        }
+        root.setOnTouchListener { _, ev ->
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawY = ev.rawY
+                    dragging = false
+                    tracker?.recycle()
+                    tracker = VelocityTracker.obtain().also { track(it, ev) }
+                    true
                 }
-                alpha = 0.4f
+                MotionEvent.ACTION_MOVE -> {
+                    tracker?.let { track(it, ev) }
+                    // Só para baixo: puxar para cima não move o painel.
+                    val offset = max(0f, ev.rawY - downRawY)
+                    if (!dragging && offset > slop) dragging = true
+                    if (dragging) root.translationY = offset
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    tracker?.let { track(it, ev) }
+                    if (dragging) {
+                        val offset = max(0f, ev.rawY - downRawY)
+                        tracker?.computeCurrentVelocity(1000)
+                        val velocityY = tracker?.yVelocity ?: 0f
+                        // Fecha se passou de 1/3 da altura ou se foi um arrasto rápido para baixo.
+                        if (offset > root.height / 3f || velocityY > minFling * 4) {
+                            root.animate().translationY(root.height.toFloat()).setDuration(150)
+                                .withEndAction { dialog.cancel() } // roda o onDismiss (não é uma linha escolhida)
+                        } else {
+                            root.animate().translationY(0f).setDuration(150)
+                        }
+                    }
+                    tracker?.recycle()
+                    tracker = null
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    if (dragging) root.animate().translationY(0f).setDuration(150)
+                    tracker?.recycle()
+                    tracker = null
+                    true
+                }
+                else -> true
+            }
+        }
+
+        // Alça: a área de toque tem 24 dp de altura para o dedo; a barrinha fica no centro.
+        // Decorativa, fora da leitura de tela.
+        root.addView(
+            FrameLayout(activity).apply {
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                addView(
+                    View(activity).apply {
+                        background = GradientDrawable().apply {
+                            cornerRadius = dp(2).toFloat()
+                            setColor(activity.getColor(R.color.setup_muted))
+                        }
+                        alpha = 0.4f
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    },
+                    FrameLayout.LayoutParams(dp(36), dp(4), Gravity.CENTER),
+                )
             },
-            LinearLayout.LayoutParams(dp(36), dp(4)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-                topMargin = dp(10)
-                bottomMargin = dp(10)
-            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)),
         )
 
         titleText?.let { t ->
