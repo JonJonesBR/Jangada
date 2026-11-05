@@ -26,6 +26,21 @@ class StorageUsageTest {
     }
 
     @Test
+    fun conversasDoHermesEDoOhMyPi() {
+        assertEquals(Category.CONVERSATIONS, categoryOf("root/.hermes/sessions/sessao.json"))
+        assertEquals(Category.CONVERSATIONS, categoryOf("root/.hermes/state.db"))
+        assertEquals(Category.CONVERSATIONS, categoryOf("root/.hermes/state.db-wal"))
+        assertEquals(Category.CONVERSATIONS, categoryOf("root/.hermes/state.db-shm"))
+        assertEquals(Category.CONVERSATIONS, categoryOf("root/.omp/agent/sessions/x.jsonl"))
+    }
+
+    @Test
+    fun configuracoesDoHermesEDoOhMyPiNaoSaoConversas() {
+        assertNull(categoryOf("root/.hermes/config.yaml"))
+        assertNull(categoryOf("root/.omp/agent/settings.json"))
+    }
+
+    @Test
     fun prefixoParecidoNaoEhDaCategoria() {
         assertNull(categoryOf("root/projetos-velhos/a.txt"))
         assertNull(categoryOf("root/.npmrc"))

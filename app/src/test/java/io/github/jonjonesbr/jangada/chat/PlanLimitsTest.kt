@@ -113,6 +113,70 @@ class PlanLimitsTest {
         assertEquals("2880 min", limits.windows[0].label)
     }
 
+    /*
+     * Formato real que o Codex grava nos rollouts (~/.codex/sessions/AAAA/MM/DD/rollout-*.jsonl),
+     * conferido no código-fonte do openai/codex:
+     * - codex-rs/protocol/src/protocol.rs: TokenCountEvent, RateLimitSnapshot, RateLimitWindow, CreditsSnapshot;
+     * - codex-rs/history/src/rollout_payload.rs: a linha é {"timestamp", "type": "event_msg", "payload": EventMsg};
+     * - codex-rs/rollout/src/policy.rs: EventMsg::TokenCount é gravado.
+     * "normal_model_slug" fica de fora porque é omitido quando None (como o próprio Codex faz).
+     */
+    @Test
+    fun codexFormatoRealComDuasJanelas() {
+        val line = linhaCodexReal(
+            primary = """{"used_percent":37.5,"window_minutes":300,"resets_at":1793841000}""",
+            secondary = """{"used_percent":12.0,"window_minutes":10080,"resets_at":1793862000}""",
+        )
+        val limits = PlanLimitsParser.fromCodexLine(line, agora)!!
+        assertEquals(Instant.parse("2026-11-04T21:10:00.000Z").toEpochMilli(), limits.updatedAtMs)
+        assertEquals(listOf(LimitWindow.Kind.FIVE_HOUR, LimitWindow.Kind.WEEKLY), limits.windows.map { it.kind })
+        assertEquals(38, limits.windows[0].usedPercent)
+        assertEquals(1793841000000L, limits.windows[0].resetsAtMs)
+        assertEquals(12, limits.windows[1].usedPercent)
+        assertEquals(1793862000000L, limits.windows[1].resetsAtMs)
+    }
+
+    @Test
+    fun codexFormatoRealSemResetsAtFicaSemHorario() {
+        val line = linhaCodexReal(
+            primary = """{"used_percent":37.5,"window_minutes":300,"resets_at":null}""",
+            secondary = "null",
+        )
+        val limits = PlanLimitsParser.fromCodexLine(line, agora)!!
+        assertEquals(1, limits.windows.size)
+        assertEquals(LimitWindow.Kind.FIVE_HOUR, limits.windows[0].kind)
+        assertEquals(38, limits.windows[0].usedPercent)
+        assertNull(limits.windows[0].resetsAtMs)
+    }
+
+    @Test
+    fun codexFormatoRealJanelaSemMinutosEIgnorada() {
+        val line = linhaCodexReal(
+            primary = """{"used_percent":37.5,"window_minutes":null,"resets_at":1793841000}""",
+            secondary = """{"used_percent":12.0,"window_minutes":10080,"resets_at":1793862000}""",
+        )
+        val limits = PlanLimitsParser.fromCodexLine(line, agora)!!
+        assertEquals(listOf(LimitWindow.Kind.WEEKLY), limits.windows.map { it.kind })
+        assertEquals(12, limits.windows[0].usedPercent)
+    }
+
+    @Test
+    fun codexFormatoRealSemJanelasViraNull() {
+        assertNull(PlanLimitsParser.fromCodexLine(linhaCodexReal(primary = "null", secondary = "null"), agora))
+    }
+
+    @Test
+    fun codexFormatoRealLimiteAtingidoDa100Porcento() {
+        val line = linhaCodexReal(
+            primary = """{"used_percent":100.0,"window_minutes":300,"resets_at":1793841000}""",
+            secondary = "null",
+            reached = "\"rate_limit_reached\"",
+        )
+        val limits = PlanLimitsParser.fromCodexLine(line, agora)!!
+        assertEquals(LimitWindow.Kind.FIVE_HOUR, limits.windows[0].kind)
+        assertEquals(100, limits.windows[0].usedPercent)
+    }
+
     @Test
     fun currentZeraJanelaVencida() {
         val limits = PlanLimits(
@@ -205,6 +269,17 @@ class PlanLimitsTest {
             Files.isRegularFile(File(sessions, "2026/11/04/rollout-ok.jsonl").toPath(), LinkOption.NOFOLLOW_LINKS),
         )
     }
+
+    /** Linha de token_count do Codex com todos os campos (ver o comentário acima dos testes "codexFormatoReal"). */
+    private fun linhaCodexReal(primary: String, secondary: String, reached: String = "null"): String =
+        """{"timestamp":"2026-11-04T21:10:00.000Z","type":"event_msg","payload":{"type":"token_count",""" +
+            """"info":{"total_token_usage":{"input_tokens":1200,"cached_input_tokens":300,"output_tokens":450,""" +
+            """"reasoning_output_tokens":0,"total_tokens":1650},"last_token_usage":{"input_tokens":400,""" +
+            """"cached_input_tokens":100,"output_tokens":150,"reasoning_output_tokens":0,"total_tokens":550},""" +
+            """"model_context_window":258400},""" +
+            """"rate_limits":{"limit_id":"codex","limit_name":null,"primary":$primary,"secondary":$secondary,""" +
+            """"credits":{"has_credits":true,"unlimited":false,"balance":"10"},"individual_limit":null,""" +
+            """"spend_control_reached":null,"plan_type":"plus","rate_limit_reached_type":$reached}}}"""
 
     private fun linhaCodex(usado: Double): String =
         """{"timestamp":"2026-11-04T21:10:00.000Z","payload":{"rate_limits":{"primary":{"used_percent":$usado,"window_minutes":300,"resets_at":1793841000}}}}"""

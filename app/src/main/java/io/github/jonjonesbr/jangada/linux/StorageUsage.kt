@@ -19,7 +19,12 @@ import java.nio.file.attribute.BasicFileAttributes
 /** Pastas dos projetos do usuário (~/projetos). */
 private val PROJECT_DIRS = listOf("root/projetos")
 
-/** Conversas que os agentes guardam (cada um numa pasta própria). */
+/**
+ * Conversas que os agentes guardam (cada um numa pasta própria; arquivo exato também vale).
+ * Hermes (NousResearch/hermes-agent, HERMES_HOME padrão ~/.hermes): sessions/ e o banco state.db
+ * (com os arquivos -wal e -shm do SQLite). oh-my-pi (can1357/oh-my-pi, agentDir padrão
+ * ~/.omp/agent): sessions/.
+ */
 private val CONVERSATION_DIRS = listOf(
     "root/.claude/projects",
     "root/.codex/sessions",
@@ -27,6 +32,11 @@ private val CONVERSATION_DIRS = listOf(
     "root/.local/share/opencode/storage",
     "root/.qwen/tmp",
     "root/.pi/agent/sessions",
+    "root/.hermes/sessions",
+    "root/.hermes/state.db",
+    "root/.hermes/state.db-wal",
+    "root/.hermes/state.db-shm",
+    "root/.omp/agent/sessions",
 )
 
 /**
