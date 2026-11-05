@@ -100,7 +100,10 @@ class JobMemoryTest {
     @Test
     fun trabalhoInvalidoViraNullSemLerODisco() {
         // Existe um arquivo válido exatamente onde "../x" apontaria; mesmo assim o nome é recusado.
-        relatorio("../x", "7516 4")
+        // A pasta jobs precisa existir: o Linux não resolve "jobs/.." se jobs não existe.
+        File(tmp.root, "var/lib/jangada/jobs").mkdirs()
+        val fora = relatorio("../x", "7516 4")
+        assertEquals(File(tmp.root, "var/lib/jangada/x").canonicalFile, fora.canonicalFile)
         assertNull(JobMemory.read(tmp.root, "../x", agora))
     }
 
