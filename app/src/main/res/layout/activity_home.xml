@@ -175,6 +175,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="8dp"
                 android:background="@color/bar_bg"
+                android:importantForAccessibility="no"
                 android:orientation="horizontal">
 
                 <View
