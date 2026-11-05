@@ -39,6 +39,8 @@ agent=$$
     newcore=" $agent "
     tree=" $agent "
     procs=0
+    # Órfãos de ppid 1 já conferidos nesta volta que não são do agente (a 2ª passada não repete o grep).
+    other=" "
     # Duas passadas: um processo filho pode ter número menor que o pai.
     for pass in 1 2; do
       for f in /proc/[0-9]*/stat; do
@@ -52,7 +54,10 @@ agent=$$
           # Órfão (nohup/setsid cuja shell terminou, reparentado para o init): continua do agente
           # se herdou JANGADA_AGENT_PID=$agent. Só quem tem ppid 1 é conferido, para não abrir o
           # environ de todo processo do celular a cada 5 s; os filhos dele entram pela árvore.
-          if [ "$2" != 1 ] || ! grep -aqzx "JANGADA_AGENT_PID=$agent" "/proc/$pid/environ" 2>/dev/null; then
+          [ "$2" = 1 ] || continue
+          case "$other" in *" $pid "*) continue ;; esac
+          if ! grep -aqzx "JANGADA_AGENT_PID=$agent" "/proc/$pid/environ" 2>/dev/null; then
+            other="$other$pid "
             continue
           fi ;;
         esac
