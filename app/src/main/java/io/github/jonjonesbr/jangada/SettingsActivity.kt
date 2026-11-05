@@ -128,7 +128,10 @@ class SettingsActivity : JangadaActivity() {
         // Só vale quando o agente inicia de novo: não reinicia nada aqui.
         val autoButton = findViewById<Button>(R.id.settings_auto_compact)
         fun showAutoCompact() {
-            autoButton.text = autoCompactText(this, settings.autoCompact)
+            val value = autoCompactText(this, settings.autoCompact)
+            autoButton.text = value
+            // O rótulo "Compactação automática" é o título da seção, acima do botão: o leitor precisa dele junto.
+            autoButton.contentDescription = getString(R.string.settings_auto_compact_label, value)
         }
         showAutoCompact()
         autoButton.setOnClickListener {
