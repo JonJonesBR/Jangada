@@ -256,14 +256,14 @@ class ProjectsTest {
         )
         for (comando in comandos) {
             val process = ProcessBuilder(comando).directory(pasta).redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+                .redirectOutput(File("/dev/null")).start()
             assertEquals("${comando.joinToString(" ")} falhou", 0, process.waitFor())
         }
         return pasta
     }
 
     private fun gitDisponivel(): Boolean = try {
-        ProcessBuilder("git", "--version").redirectOutput(ProcessBuilder.Redirect.DISCARD).start().waitFor() == 0
+        ProcessBuilder("git", "--version").redirectOutput(File("/dev/null")).start().waitFor() == 0
     } catch (e: Exception) {
         false
     }
