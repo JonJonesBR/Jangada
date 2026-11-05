@@ -117,6 +117,8 @@ class AcpChat(
             if (ready) return@Runnable
             add(ChatItem.Info(context.getString(R.string.chat_acp_init_timeout), isError = true))
             stop()
+            // A mensagem enviada não vai ter resposta: avisa (a pessoa pode ter saído da tela enquanto esperava).
+            attention(ChatAttention.FAILED)
         }
         initTimeout = timeout
         main.postDelayed(timeout, INIT_TIMEOUT_MS)
@@ -405,6 +407,8 @@ class AcpChat(
             // não tem para onde ir. Descarta (os itens ficam para editar e reenviar) e não mostra outro cartão.
             if (isStopped(error)) {
                 dropQueue()
+                // Quem parou (stop/finish) já desligou o busy; garante para não ficar em "Trabalhando…".
+                busy = false
                 changed()
                 return@request
             }
@@ -821,8 +825,12 @@ class AcpChat(
         const val LIMITS_DELAY_MS = 1_000L
         /** Quanto o cartão de login espera o navegador antes de dar o login como não terminado. */
         const val LOGIN_TIMEOUT_MS = 120_000L
-        /** Quanto o início espera a resposta ao initialize antes de dar o agente como preso e parar. */
-        const val INIT_TIMEOUT_MS = 90_000L
+        /**
+         * Quanto o início espera a resposta ao initialize antes de dar o agente como preso e parar.
+         * Conta desde o start: inclui a subida do proot e, no primeiro uso, agentes lentos (Hermes em
+         * Python) num celular com pouca memória; folga maior, porque parar um agente lento custa mais.
+         */
+        const val INIT_TIMEOUT_MS = 120_000L
         /** Campo interno que marca a falha "o agente parou" (não vem do agente). */
         const val STOPPED = "jangadaStopped"
     }

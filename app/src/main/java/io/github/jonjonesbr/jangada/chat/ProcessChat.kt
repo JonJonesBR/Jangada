@@ -293,7 +293,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     }
 
     /** Avisa o usuário (na thread principal). */
-    private fun attention(kind: ChatAttention) {
+    protected fun attention(kind: ChatAttention) {
         onAttention?.invoke(kind)
     }
 
