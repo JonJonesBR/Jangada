@@ -96,6 +96,8 @@ class AcpChat(
     private var loginTimeout: Runnable? = null
     /** Tempo limite da resposta ao initialize (ver INIT_TIMEOUT_MS). */
     private var initTimeout: Runnable? = null
+    /** O agente fechou sozinho e [onExited] já mostrou o motivo (vale só até o fim de [onStopped]). */
+    private var exitShown = false
 
     /** Inicia o agente; com [resume], recarrega essa conversa (se o agente suportar). */
     fun start(resume: String? = null) {
@@ -416,9 +418,10 @@ class AcpChat(
             refreshLimits(LIMITS_DELAY_MS)
             val refused = error == null && result?.optString("stopReason") == "refusal"
             if (error != null) {
-                // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar.
+                // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar,
+                // nem quando o agente fechou sozinho no meio da resposta (onExited já avisou).
                 if (AcpParse.isAuthError(error)) requireLogin(sessionId)
-                else if (!cancelled) add(ChatItem.Info(friendlyError(error), isError = true))
+                else if (!cancelled && !(isStopped(error) && exitShown)) add(ChatItem.Info(friendlyError(error), isError = true))
             }
             else if (refused) add(ChatItem.Info(context.getString(R.string.chat_acp_refused), isError = true))
             // Erro, login ou recusa: a fila não segue sozinha, a pessoa revisa antes.
@@ -611,18 +614,25 @@ class AcpChat(
         clearLoginTimeout()
         clearInitTimeout()
         for (callback in waiting) callback(null, stoppedError())
+        exitShown = false
         loginCard?.takeIf { it.state == ChatItem.Login.State.WORKING }?.let {
             it.state = ChatItem.Login.State.FAILED
             it.message = context.getString(R.string.chat_acp_agent_stopped)
         }
     }
 
-    override fun onExited(code: Int, stderr: String) {
-        // Agente que fecha logo no início reclamando de login: mostra o cartão de login.
-        if (!ready && code != 0 && Regex("auth|login|sign.?in|credential", RegexOption.IGNORE_CASE).containsMatchIn(stderr)) {
-            requireLogin(sessionId)
-        } else {
-            add(ChatItem.Info(exitMessage(code), isError = code != 0, details = detailsOf(stderr).takeIf { code != 0 }))
+    override fun onExited(code: Int, stderr: String, midTurn: Boolean) {
+        // A saída já foi contada aqui: a resposta pendente que onStopped encerra não repete o aviso.
+        exitShown = true
+        when {
+            // Agente que fecha logo no início reclamando de login: mostra o cartão de login.
+            !ready && code != 0 && Regex("auth|login|sign.?in|credential", RegexOption.IGNORE_CASE).containsMatchIn(stderr) ->
+                requireLogin(sessionId)
+            // O cartão de login já avisou: o erro de saída não repete.
+            items.lastOrNull() is ChatItem.Login -> Unit
+            // Saiu bem no meio da resposta: o aviso de resposta pela metade no lugar do de saída normal.
+            code == 0 && midTurn -> add(ChatItem.Info(midTurnMessage()))
+            else -> add(ChatItem.Info(exitMessage(code), isError = code != 0, details = detailsOf(stderr).takeIf { code != 0 }))
         }
     }
 

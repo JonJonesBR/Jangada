@@ -220,13 +220,23 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
 
     /**
      * O agente fechou sozinho (thread principal, antes de [onStopped]).
-     * [stderr] traz as últimas linhas de erro dele. O padrão é mostrar o
-     * motivo quando não foi normal.
+     * [stderr] traz as últimas linhas de erro dele; [midTurn]: havia um turno em andamento que o
+     * usuário não parou. O padrão é mostrar o motivo quando não foi normal, ou que a resposta
+     * ficou pela metade.
      */
-    protected open fun onExited(code: Int, stderr: String) {
+    protected open fun onExited(code: Int, stderr: String, midTurn: Boolean) {
         // Com o cartão de login já na conversa, o erro de saída não repete.
-        if (code != 0 && items.lastOrNull() !is ChatItem.Login) add(ChatItem.Info(exitMessage(code), isError = true, details = detailsOf(stderr)))
+        if (items.lastOrNull() is ChatItem.Login) return
+        if (code != 0) add(ChatItem.Info(exitMessage(code), isError = true, details = detailsOf(stderr)))
+        else if (midTurn) add(ChatItem.Info(midTurnMessage()))
     }
+
+    /**
+     * Saída com código 0 no meio da resposta (com erro, [exitMessage] já diz o que fazer). Só sugere
+     * continuar quando a conversa pode ser retomada; senão, a mensagem da saída normal.
+     */
+    protected fun midTurnMessage(): String =
+        context.getString(if (canResume) R.string.chat_exit_midturn else R.string.chat_exit_normal)
 
     private fun readOutput(c: Connection, proc: Process) {
         try {
@@ -251,18 +261,18 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                 if (connection !== c) return@post
                 // Antes de qualquer aviso da saída entrar. Com o cartão de login já na conversa, o agente espera
                 // o usuário (não está no meio da resposta) e o erro de saída não repete.
-                val afterLogin = items.lastOrNull() is ChatItem.Login
+                val loginBefore = items.lastOrNull() is ChatItem.Login
                 // Turno em andamento que o usuário não parou: o agente saiu no meio da resposta (antes de finish, que zera busy).
-                val midTurn = busy && !silentTurn && !afterLogin
+                val midTurn = busy && !silentTurn && !loginBefore
                 finish(c)
-                onExited(code, synchronized(stderrTail) { stderrTail.joinToString("\n") })
-                if (midTurn) {
-                    // Com código 0 não há mensagem de erro: o aviso diz que dá para continuar. Com erro, a saída já disse.
-                    if (code == 0) add(ChatItem.Info(context.getString(R.string.chat_exit_midturn)))
-                    interrupted = true
-                }
+                // A mensagem da saída (inclusive a de resposta pela metade) fica com onExited: um texto só.
+                onExited(code, synchronized(stderrTail) { stderrTail.joinToString("\n") }, midTurn)
+                // O AcpChat pode mostrar o cartão de login na saída: aí o cartão é o único aviso.
+                val loginShown = loginBefore || items.lastOrNull() is ChatItem.Login
+                // Continuar só faz sentido se a mesma conversa pode ser retomada.
+                if (midTurn && !loginShown && canResume) interrupted = true
                 // Saiu com erro ou no meio da resposta, sem ser parado pelo usuário: um aviso só.
-                if ((code != 0 || midTurn) && !afterLogin) attention(ChatAttention.FAILED)
+                if ((code != 0 || midTurn) && !loginShown) attention(ChatAttention.FAILED)
                 settleItems()
                 onStopped()
                 changed()
