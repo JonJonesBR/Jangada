@@ -368,6 +368,8 @@ class TerminalService : Service() {
                 runCatching { leftover.join() }
                 main.post {
                     runNextQueued()
+                    // O aviso deixa de dizer que limpa (se o serviço continua em primeiro plano).
+                    updateNotification()
                     leaveForegroundIfIdle()
                 }
             }
@@ -682,6 +684,7 @@ class TerminalService : Service() {
                 // Tarefas de agente pedidas durante a limpeza esperaram na fila (ver runAgentTask).
                 runNextQueued()
                 done()
+                updateNotification()
                 leaveForegroundIfIdle()
             }
         }
@@ -1040,6 +1043,7 @@ class TerminalService : Service() {
                 },
                 running.recipe.name,
             )
+            cleaningCaches() -> getString(R.string.storage_cleaning)
             else -> resources.getQuantityString(R.plurals.service_sessions, count, count)
         }
         return Notification.Builder(this, CHANNEL_SESSIONS)
