@@ -150,6 +150,8 @@
     <string name="chat_jump_end">Ir para a última mensagem</string>
     <string name="chat_background_one">Em segundo plano: %1$s</string>
     <string name="chat_background_many">Em segundo plano (%1$d): %2$s</string>
+    <string name="chat_background_task">tarefa</string>
+    <string name="chat_background_tasks">tarefas</string>
     <string name="chat_background_title">Em segundo plano</string>
     <string name="chat_background_message">Parar uma tarefa avisa o agente, que pode responder sobre ela. Você pode continuar mandando mensagens.</string>
     <string name="chat_background_stop_one">Parar: %1$s</string>

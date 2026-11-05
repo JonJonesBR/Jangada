@@ -1034,10 +1034,15 @@ class ChatActivity : JangadaActivity() {
         if (chat.busy) lines += getString(R.string.chat_working)
         if (background.size == 1) {
             val task = background[0]
-            val what = listOfNotNull(task.description.ifBlank { null }, task.activity?.ifBlank { null }).distinct().joinToString(" · ")
+            // Sem descrição nenhuma, o rótulo genérico: a faixa nunca fica "Em segundo plano: " vazio.
+            val what = listOfNotNull(task.description.ifBlank { null }, task.activity?.ifBlank { null })
+                .distinct().joinToString(" · ").ifEmpty { getString(R.string.chat_background_task) }
             lines += getString(R.string.chat_background_one, what)
         } else if (background.size > 1) {
-            lines += getString(R.string.chat_background_many, background.size, background.joinToString(", ") { it.description })
+            // Descrições em branco não entram na lista (nada de ", ,"); se nenhuma tem texto, o rótulo genérico.
+            val names = background.map { it.description.trim() }.filter { it.isNotEmpty() }
+            val what = names.joinToString(", ").ifEmpty { getString(R.string.chat_background_tasks) }
+            lines += getString(R.string.chat_background_many, background.size, what)
         }
         // Com turno em andamento a faixa já diz "Trabalhando…"; sem ele, avisa que dá para tocar e parar.
         // No compacto não cabe a dica: a faixa é uma linha só.

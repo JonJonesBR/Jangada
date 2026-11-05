@@ -152,6 +152,8 @@
     <string name="chat_jump_end">Go to the latest message</string>
     <string name="chat_background_one">In the background: %1$s</string>
     <string name="chat_background_many">In the background (%1$d): %2$s</string>
+    <string name="chat_background_task">task</string>
+    <string name="chat_background_tasks">tasks</string>
     <string name="chat_background_title">In the background</string>
     <string name="chat_background_message">Stopping a task lets the agent know; it may reply about it. You can keep sending messages.</string>
     <string name="chat_background_stop_one">Stop: %1$s</string>
