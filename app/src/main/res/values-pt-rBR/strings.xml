@@ -133,7 +133,8 @@
     <string name="storage_clean_caches">Limpar caches</string>
     <string name="storage_clean_caches_desc">Apaga só downloads guardados, que os programas baixam de novo se precisarem. Não mexe em conversas, logins, configurações nem projetos.</string>
     <string name="storage_cleaning">Limpando os caches…</string>
-    <string name="storage_clean_busy">Indisponível agora: espere terminar a tarefa de agente ou a limpeza em andamento.</string>
+    <string name="storage_clean_busy">Indisponível agora: espere terminar a instalação, atualização ou limpeza em andamento.</string>
+    <string name="storage_clean_nothing">Não há caches para limpar agora.</string>
     <string name="storage_cleaned">Caches limpos.</string>
 
     <string name="chat_title">Claude Code</string>

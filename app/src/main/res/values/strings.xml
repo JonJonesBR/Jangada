@@ -135,7 +135,8 @@
     <string name="storage_clean_caches">Clear caches</string>
     <string name="storage_clean_caches_desc">Deletes only downloaded files that programs fetch again when needed. Doesn\'t touch conversations, logins, settings or projects.</string>
     <string name="storage_cleaning">Clearing caches…</string>
-    <string name="storage_clean_busy">Not available now: wait for the running agent task or cleanup to finish.</string>
+    <string name="storage_clean_busy">Not available now: wait for the running install, update or cleanup to finish.</string>
+    <string name="storage_clean_nothing">There are no caches to clear right now.</string>
     <string name="storage_cleaned">Caches cleared.</string>
 
     <string name="chat_title">Claude Code</string>

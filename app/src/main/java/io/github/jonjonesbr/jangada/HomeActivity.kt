@@ -314,7 +314,13 @@ class HomeActivity : JangadaActivity() {
             .row(
                 Sheet.Row(
                     title = getString(R.string.storage_clean_caches),
-                    description = getString(if (busy) R.string.storage_clean_busy else R.string.storage_clean_caches_desc),
+                    description = getString(
+                        when {
+                            busy -> R.string.storage_clean_busy
+                            breakdown.cachesBytes <= 0 -> R.string.storage_clean_nothing
+                            else -> R.string.storage_clean_caches_desc
+                        },
+                    ),
                     enabled = cleanable,
                 ) { cleanCaches() },
             )
