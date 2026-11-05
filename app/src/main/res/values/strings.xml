@@ -254,6 +254,7 @@
     <string name="chat_chip_limits">⏱ %1$s</string>
     <string name="chat_chip_limits_high">⚠ %1$s</string>
     <string name="chat_chip_limits_description">Plan limits: %1$s. Tap for details.</string>
+    <string name="agent_limits_description">Plan limits: %1$s.</string>
     <string name="chat_limit_short_five_hour">5h %1$d%%</string>
     <string name="chat_limit_short_weekly">wk %1$d%%</string>
     <string name="chat_limits_title">Plan limits</string>

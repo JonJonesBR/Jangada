@@ -61,11 +61,12 @@ import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.autoCompactShort
 import io.github.jonjonesbr.jangada.chat.autoCompactText
-import io.github.jonjonesbr.jangada.chat.LimitWindow
 import io.github.jonjonesbr.jangada.chat.PlanLimits
 import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
 import io.github.jonjonesbr.jangada.chat.formatLimitReset
+import io.github.jonjonesbr.jangada.chat.limitName
+import io.github.jonjonesbr.jangada.chat.limitsSummary
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
@@ -1265,32 +1266,15 @@ class ChatActivity : JangadaActivity() {
      * destaque. Sem essas janelas, o chip some (janelas "outras" só aparecem no painel).
      */
     private fun updateLimitsChip(limits: PlanLimits?) {
-        val shown = limits?.windows.orEmpty().filter { it.kind != LimitWindow.Kind.OTHER }
-        if (shown.isEmpty()) {
+        val summary = limitsSummary(this, limits)
+        if (summary == null) {
             chipLimits.visibility = View.GONE
             return
         }
-        val high = shown.any { it.usedPercent >= COMPACT_PERCENT }
-        val parts = shown.joinToString(" · ") { w ->
-            if (w.kind == LimitWindow.Kind.FIVE_HOUR) {
-                getString(R.string.chat_limit_short_five_hour, w.usedPercent)
-            } else {
-                getString(R.string.chat_limit_short_weekly, w.usedPercent)
-            }
-        }
         chipLimits.visibility = View.VISIBLE
-        chipLimits.text = getString(if (high) R.string.chat_chip_limits_high else R.string.chat_chip_limits, parts)
-        chipLimits.setTextColor(getColor(if (high) R.color.setup_error else R.color.setup_text))
-        chipLimits.contentDescription = getString(
-            R.string.chat_chip_limits_description, shown.joinToString(" · ") { limitName(it) },
-        )
-    }
-
-    /** Uma janela por extenso, sem o horário de renovação. */
-    private fun limitName(w: LimitWindow): String = when (w.kind) {
-        LimitWindow.Kind.FIVE_HOUR -> getString(R.string.chat_limit_five_hour, w.usedPercent)
-        LimitWindow.Kind.WEEKLY -> getString(R.string.chat_limit_weekly, w.usedPercent)
-        LimitWindow.Kind.OTHER -> getString(R.string.chat_limit_other, w.label.orEmpty(), w.usedPercent)
+        chipLimits.text = summary.text
+        chipLimits.setTextColor(getColor(if (summary.high) R.color.setup_error else R.color.setup_text))
+        chipLimits.contentDescription = getString(R.string.chat_chip_limits_description, summary.names)
     }
 
     /** Toque no chip de limites: uma linha por janela, com quando renova, e quando foi atualizado. */
@@ -1298,7 +1282,7 @@ class ChatActivity : JangadaActivity() {
         val now = System.currentTimeMillis()
         val limits = limitsStore.load(agentId)?.let { PlanLimitsParser.current(it, now) } ?: return
         val lines = limits.windows.joinToString("\n") { w ->
-            listOfNotNull(limitName(w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatLimitReset(this, it)) })
+            listOfNotNull(limitName(this, w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatLimitReset(this, it)) })
                 .joinToString(" · ")
         }
         val updated = DateUtils.getRelativeTimeSpanString(limits.updatedAtMs, now, DateUtils.SECOND_IN_MILLIS)

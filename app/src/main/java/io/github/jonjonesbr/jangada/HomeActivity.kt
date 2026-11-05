@@ -44,7 +44,10 @@ import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.agents.Versions
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.ChatState
+import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
+import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
 import io.github.jonjonesbr.jangada.chat.chatState
+import io.github.jonjonesbr.jangada.chat.limitsSummary
 import io.github.jonjonesbr.jangada.linux.Breakdown
 import io.github.jonjonesbr.jangada.linux.JobMemory
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
@@ -132,6 +135,8 @@ class HomeActivity : JangadaActivity() {
     private val detectAgain = AtomicBoolean(false)
 
     private val prefs by lazy { AgentPrefs.prefs(this) }
+    /** Limites do plano que cada agente informou (ver PlanLimitsStore). */
+    private val limitsStore by lazy { PlanLimitsStore(this) }
     private val sessionsListener: () -> Unit = { renderSessions() }
     /**
      * Confere a lista de trabalhos enquanto há chat aberto (o estado muda sem aviso). Só
@@ -673,6 +678,18 @@ class HomeActivity : JangadaActivity() {
 
         val known = installed
         val isInstalled = known?.contains(recipe.command) == true
+        // Limites do plano (agentes que os informam, já instalados): linha pequena, em destaque a partir de 80%.
+        if (isInstalled) {
+            val limits = limitsStore.load(recipe.id)?.let { PlanLimitsParser.current(it, System.currentTimeMillis()) }
+            limitsSummary(this, limits)?.let { summary ->
+                card.findViewById<TextView>(R.id.agent_limits).apply {
+                    text = summary.text
+                    setTextColor(getColor(if (summary.high) R.color.setup_error else R.color.setup_muted))
+                    contentDescription = getString(R.string.agent_limits_description, summary.names)
+                    visibility = View.VISIBLE
+                }
+            }
+        }
         val version = installedVersions[recipe.command]
         val latest = latestVersions[recipe.id]
         val task = service?.tasks?.get(recipe.id)

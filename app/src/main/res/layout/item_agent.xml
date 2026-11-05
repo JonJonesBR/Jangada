@@ -61,6 +61,15 @@
         android:textSize="13sp"
         android:visibility="gone" />
 
+    <TextView
+        android:id="@+id/agent_limits"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:textColor="@color/setup_muted"
+        android:textSize="13sp"
+        android:visibility="gone" />
+
     <ProgressBar
         android:id="@+id/task_progress"
         style="?android:attr/progressBarStyleHorizontal"

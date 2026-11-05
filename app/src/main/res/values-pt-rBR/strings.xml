@@ -252,6 +252,7 @@
     <string name="chat_chip_limits">⏱ %1$s</string>
     <string name="chat_chip_limits_high">⚠ %1$s</string>
     <string name="chat_chip_limits_description">Limites do plano: %1$s. Toque para detalhes.</string>
+    <string name="agent_limits_description">Limites do plano: %1$s.</string>
     <string name="chat_limit_short_five_hour">5h %1$d%%</string>
     <string name="chat_limit_short_weekly">semana %1$d%%</string>
     <string name="chat_limits_title">Limites do plano</string>
