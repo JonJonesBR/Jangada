@@ -229,7 +229,7 @@ class AcpChat(
                 if (error != null) {
                     // Parou no meio da recarga: mantém o sessionId para retomar a mesma conversa depois.
                     if (isStopped(error)) return@request
-                    if (isAuthError(error)) {
+                    if (AcpParse.isAuthError(error)) {
                         requireLogin(resume)
                         return@request
                     }
@@ -255,7 +255,7 @@ class AcpChat(
         request("session/new", params) { result, error ->
             if (result == null) {
                 if (isStopped(error)) return@request
-                if (isAuthError(error)) {
+                if (AcpParse.isAuthError(error)) {
                     requireLogin(null)
                 } else {
                     add(ChatItem.Info(friendlyError(error), isError = true))
@@ -389,7 +389,7 @@ class AcpChat(
             val refused = error == null && result?.optString("stopReason") == "refusal"
             if (error != null) {
                 // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar.
-                if (isAuthError(error)) requireLogin(sessionId)
+                if (AcpParse.isAuthError(error)) requireLogin(sessionId)
                 else if (!cancelled) add(ChatItem.Info(friendlyError(error), isError = true))
             }
             else if (refused) add(ChatItem.Info(context.getString(R.string.chat_acp_refused), isError = true))
@@ -503,7 +503,7 @@ class AcpChat(
                 if (o.optString("type", "select") != "select") return@mapNotNull null
                 ConfigOption(
                     o.optString("id"), o.optString("name"), o.optString("category"),
-                    o.optString("currentValue"), selectChoices(o.optJSONArray("options")), ConfigOption.Source.CONFIG,
+                    o.optString("currentValue"), AcpParse.selectChoices(o.optJSONArray("options")), ConfigOption.Source.CONFIG,
                 )
             }
             changed()
@@ -539,19 +539,6 @@ class AcpChat(
             if (name.isEmpty()) null else SlashCommand(name, c.optString("description"))
         }
         changed()
-    }
-
-    /** Opções de um seletor; grupos (ex.: "Recomendados") viram uma lista só. */
-    private fun selectChoices(options: JSONArray?): List<Pair<String, String>> {
-        options ?: return emptyList()
-        val out = mutableListOf<Pair<String, String>>()
-        for (i in 0 until options.length()) {
-            val o = options.optJSONObject(i) ?: continue
-            val group = o.optJSONArray("options")
-            if (group != null) out += selectChoices(group)
-            else out += o.optString("value") to o.optString("name").ifEmpty { o.optString("value") }
-        }
-        return out
     }
 
     /**
@@ -635,17 +622,7 @@ class AcpChat(
         val known = tools[toolCall.optString("toolCallId")]
         val title = toolCall.optString("title").ifEmpty { known?.name ?: context.getString(R.string.chat_action) }
         val summary = summaryOf(toolCall).ifEmpty { known?.summary.orEmpty() }
-        val options = params.optJSONArray("options") ?: JSONArray()
-        val parsed = (0 until options.length()).mapNotNull { i ->
-            val o = options.optJSONObject(i) ?: return@mapNotNull null
-            val kind = when (o.optString("kind")) {
-                "allow_always" -> PermissionOption.Kind.ALLOW_ALWAYS
-                "reject_once" -> PermissionOption.Kind.REJECT_ONCE
-                "reject_always" -> PermissionOption.Kind.REJECT_ALWAYS
-                else -> PermissionOption.Kind.ALLOW_ONCE
-            }
-            PermissionOption(o.optString("optionId"), o.optString("name"), kind)
-        }
+        val parsed = AcpParse.permissionOptions(params.optJSONArray("options"))
         add(ChatItem.Permission(id, title, summary, parsed, diff = DiffText.fromAcpContent(toolCall.optJSONArray("content"))))
     }
 
@@ -772,12 +749,6 @@ class AcpChat(
         }
         call.optJSONArray("locations")?.optJSONObject(0)?.optString("path")?.takeIf { it.isNotEmpty() }?.let { return it }
         return ""
-    }
-
-    private fun isAuthError(error: JSONObject?): Boolean {
-        error ?: return false
-        val text = error.optString("message") + " " + error.opt("data")?.toString().orEmpty()
-        return error.optInt("code") == -32000 || Regex("auth|login|sign.?in|credential|api.?key", RegexOption.IGNORE_CASE).containsMatchIn(text)
     }
 
     private fun friendlyError(error: JSONObject?): String {
