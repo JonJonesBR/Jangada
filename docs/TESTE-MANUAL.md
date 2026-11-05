@@ -33,4 +33,12 @@ Os testes automáticos cobrem as partes puras (parsers, scripts, regras). O que 
 
 - [ ] Abrir o terminal, rodar um comando, voltar ao chat.
 
+## Acessibilidade (TalkBack ligado)
+
+- [ ] Abrir um painel: o título é anunciado; no menu de ações do TalkBack, "Fechar" fecha sem escolher nenhuma linha.
+- [ ] Tela inicial com trabalhos: a legenda da memória é lida como "Memória: agentes…, outros apps…, livre…", depois o "Dá para usar" e a previsão; a linha de um trabalho focada não é relida a cada atualização.
+- [ ] Chips de contexto e ⏱ em alerta: a descrição diz o percentual e o alerta.
+- [ ] Botão ↓ do chat é encontrado no fim da lista; a faixa de segundo plano e o Parar são alcançáveis.
+- [ ] Tema claro: a legenda da memória e a linha de espaço têm contraste suficiente.
+
 Achou algo? Anote no `docs/BACKLOG.md` antes de publicar.
