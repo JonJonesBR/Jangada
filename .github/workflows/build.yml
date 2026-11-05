@@ -73,9 +73,8 @@ jobs:
       - name: Testes
         run: ./gradlew --no-daemon :app:testDebugUnitTest
 
-      # Lint informativo: os avisos não derrubam o build (abortOnError=false). O relatório vai nos artefatos.
+      # Lint: erros derrubam o build; avisos ficam no relatório dos artefatos.
       - name: Lint
-        continue-on-error: true
         run: ./gradlew --no-daemon :app:lintDebug
 
       - name: Guardar relatório de lint
