@@ -63,11 +63,16 @@ object Workspace {
     /**
      * Pasta do trabalho isolado [name] do repositório [repo] ("<repo>--<nome>"), se o nome e a
      * pasta são válidos (a pasta precisa passar em [isValidName] para aparecer na lista); senão null.
+     * O nome também vira o branch jangada/<nome>, então precisa ser aceito pelo git (ver [isValidBranchPart]).
      */
     fun worktreeFolder(repo: String, name: String): String? {
-        if (!isValidName(repo) || !isValidName(name)) return null
+        if (!isValidName(repo) || !isValidName(name) || !isValidBranchPart(name)) return null
         return "$repo$WORKTREE_SEP$name".takeIf { isValidName(it) }
     }
+
+    /** O git recusa nomes de branch com "..", "@{", ".lock" no fim ou ponto no fim. */
+    fun isValidBranchPart(name: String): Boolean =
+        !name.contains("..") && !name.contains("@{") && !name.endsWith(".lock") && !name.endsWith(".")
 
     /** Nome de subpasta que existe e pode aparecer na lista: sem barra, não oculta e não é "anexos". */
     internal fun isListable(name: String): Boolean =

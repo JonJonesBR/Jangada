@@ -44,6 +44,21 @@ class WorkspaceTest {
     }
 
     @Test
+    fun nomeDeTrabalhoQueOGitRecusaNaoEValido() {
+        // O nome vira o branch jangada/<nome>: "..", ".lock" e ponto no fim o git recusa.
+        assertNull(Workspace.worktreeFolder("jangada", "a..b"))
+        assertNull(Workspace.worktreeFolder("jangada", "x.lock"))
+        assertNull(Workspace.worktreeFolder("jangada", "x."))
+        assertNull(Workspace.worktreeFolder("jangada", "..")) // já não passa em isValidName
+        // "@{" não passa nem em isValidName (o @ e as chaves não são aceitos); o teste fica como guarda.
+        assertNull(Workspace.worktreeFolder("jangada", "a@{b"))
+        // Nomes comuns continuam valendo, inclusive com ponto e sublinhado no meio.
+        assertEquals("jangada--feature.v2", Workspace.worktreeFolder("jangada", "feature.v2"))
+        assertEquals("jangada--lock_x", Workspace.worktreeFolder("jangada", "lock_x"))
+        assertEquals("jangada--a.lockx", Workspace.worktreeFolder("jangada", "a.lockx"))
+    }
+
+    @Test
     fun chaveDoClaudeTrocaCaracteresQueNaoSaoLetrasOuNumeros() {
         assertEquals("-root-projetos", Workspace.claudeProjectKey("/root/projetos"))
         assertEquals("-root-projetos-meu-app", Workspace.claudeProjectKey("/root/projetos/meu.app"))
