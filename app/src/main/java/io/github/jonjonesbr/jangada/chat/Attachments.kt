@@ -122,9 +122,12 @@ object Attachments {
         Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }.getOrNull()
 
-    /** Orientação EXIF da foto; sem EXIF ou se a leitura falhar, vale NORMAL (sem girar). */
+    /**
+     * Orientação EXIF da foto; sem EXIF ou se a leitura falhar, vale NORMAL (sem girar).
+     * Usa o caminho (String): o construtor com File só existe a partir da API 29.
+     */
     private fun exifOrientation(file: File): Int = runCatching {
-        ExifInterface(file).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+        ExifInterface(file.absolutePath).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
     /** Aplica a rotação e o espelhamento da orientação EXIF. Sem nada a fazer, devolve o mesmo bitmap. */
