@@ -1411,10 +1411,8 @@ class ChatActivity : JangadaActivity() {
 
     /** /new no campo (ou na sugestão): começa uma conversa nova, se o agente não está respondendo. */
     private fun startNewConversationFromBox() {
-        if (engine?.busy == true) {
-            Toast.makeText(this, R.string.chat_new_wait, Toast.LENGTH_LONG).show()
-            return
-        }
+        // Mesmo critério do ＋ do menu ⋮ (ver [busyBlocks]).
+        if (busyBlocks(R.string.chat_new_wait)) return
         // Sem o serviço ligado, nada abriria: o texto fica na caixa.
         if (service == null) return
         input.setText("")
@@ -1594,12 +1592,19 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Trocar de conversa, modelo, esforço ou compactação reinicia o agente: com um turno em andamento,
-     * cortaria a resposta. Nesse caso mostra o aviso e devolve true (não reabre nem salva nada).
+     * Trocar de conversa, modelo, esforço ou compactação reinicia o agente: com um turno em andamento
+     * (a fila e as permissões pendentes só existem com turno), cortaria a resposta; com tarefas em
+     * segundo plano, pararia o que o agente ainda faz (o `sleep` também recusa). Nesses casos mostra
+     * o aviso e devolve true (não reabre nem salva nada). [busyMessage] é o aviso do turno em andamento.
      */
-    private fun busyBlocks(): Boolean {
-        if (engine?.busy != true) return false
-        Toast.makeText(this, R.string.chat_wait_turn, Toast.LENGTH_LONG).show()
+    private fun busyBlocks(busyMessage: Int = R.string.chat_wait_turn): Boolean {
+        val chat = engine ?: return false
+        val message = when {
+            chat.busy -> busyMessage
+            chat.running && chat.background.isNotEmpty() -> R.string.chat_wait_background
+            else -> return false
+        }
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         return true
     }
 
@@ -1773,7 +1778,7 @@ class ChatActivity : JangadaActivity() {
         }
         val rows = mutableListOf<Sheet.Row>()
         rows += Sheet.Row(title = getString(R.string.chat_new), description = getString(R.string.chat_menu_new_desc), icon = "＋") {
-            if (!busyBlocks()) newConversation()
+            if (!busyBlocks(R.string.chat_new_wait)) newConversation()
         }
         rows += Sheet.Row(title = getString(R.string.chat_menu_history), description = getString(R.string.chat_menu_history_desc), icon = "🕘") {
             showHistory()
