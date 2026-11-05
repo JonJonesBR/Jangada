@@ -8,6 +8,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
@@ -56,6 +57,8 @@ class Sheet(private val activity: Activity) {
     private val items = mutableListOf<Row>()
     private var onDismissAction: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
+    // Id da ação "Fechar" do leitor de tela (ver show): único neste painel.
+    private val closeActionId = View.generateViewId()
 
     fun title(text: CharSequence): Sheet = apply { titleText = text }
 
@@ -223,6 +226,25 @@ class Sheet(private val activity: Activity) {
 
         // O título da janela é anunciado pelo leitor de tela quando o painel aparece (API 28+).
         if (Build.VERSION.SDK_INT >= 28) titleText?.let { root.accessibilityPaneTitle = it }
+        // Ação "Fechar" no menu de ações do leitor de tela: sem o arrasto, que não existe para quem não toca na tela.
+        val closeAction = AccessibilityNodeInfoCompat.AccessibilityActionCompat(
+            closeActionId,
+            activity.getString(R.string.session_close),
+        )
+        ViewCompat.setAccessibilityDelegate(root, object : AccessibilityDelegateCompat() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfoCompat) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.addAction(closeAction)
+            }
+
+            override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+                if (action == closeActionId) {
+                    dialog.cancel() // roda o onDismiss (não é uma linha escolhida)
+                    return true
+                }
+                return super.performAccessibilityAction(host, action, args)
+            }
+        })
 
         dialog.setContentView(root, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // Depois do conteúdo: o tema de diálogo não pode impor moldura, fundo nem largura menor.
