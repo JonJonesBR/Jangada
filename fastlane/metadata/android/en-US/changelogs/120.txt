@@ -1,0 +1,1 @@
+Chat: auto-compact configurable globally and per job (agent default, off on Claude, or at 50-90% of the context). Free up space: one safe cleanup that never forces you to reinstall anything. Panels close by pulling the handle down.

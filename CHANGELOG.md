@@ -1,5 +1,12 @@
 # Novidades
 
+## 1.14.0
+
+- Chat: compactação automática configurável, nos Ajustes (geral) e em cada trabalho (menu ⋮ ou chip de contexto): padrão do agente, desligada (no Claude) ou ao chegar a 50, 60, 70, 80 ou 90% do contexto. No Claude, quem compacta é o próprio Claude Code; nos outros agentes, o app manda /compact ao fim da resposta.
+- Liberar espaço: uma limpeza só, na tela inicial e nos Ajustes, que apaga apenas o que os programas baixam de novo sozinhos (caches de download, temporários de navegador e versões antigas do Claude Code, mantendo a atual, a mais nova e as em uso). Não apaga mais navegadores de teste nem pacotes do npx. O painel de espaço mostra quanto dá para liberar.
+- Painéis: puxar para baixo pela alça, título ou texto fecha o painel.
+- Espaço: a linha de limpar diz por que está desligada (nada a limpar, ou instalação/atualização em andamento).
+
 ## 1.13.0
 
 - Tela inicial: com chats abertos, uma barra mostra a memória do celular dividida entre agentes, outros apps e livre, e quanto dá para usar antes de o Android começar a fechar apps. Cada trabalho mostra quanto usa (≈ 420 MB · 6 processos) ou que está dormindo; o painel ⇄ do chat também.

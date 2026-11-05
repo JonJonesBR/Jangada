@@ -1,0 +1,1 @@
+Chat: compactação automática configurável no geral e em cada trabalho (padrão do agente, desligada no Claude ou ao chegar a 50-90% do contexto). Liberar espaço: uma limpeza só, segura, que não obriga a reinstalar nada. Painéis fecham puxando a alça para baixo.
