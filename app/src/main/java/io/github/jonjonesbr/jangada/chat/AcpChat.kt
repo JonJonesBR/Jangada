@@ -754,8 +754,8 @@ class AcpChat(
     private fun friendlyError(error: JSONObject?): String {
         val message = error?.optString("message").orEmpty()
         val data = error?.opt("data")?.toString().orEmpty()
-        val auth = error?.optInt("code") == -32000 || message.contains("auth", true) || data.contains("auth", true)
-        return if (auth) context.getString(R.string.chat_acp_login_hint)
+        // Mesmo critério de login dos outros lugares (AcpParse.isAuthError).
+        return if (AcpParse.isAuthError(error)) context.getString(R.string.chat_acp_login_hint)
         else listOf(message, data).filter { it.isNotEmpty() && it != "null" }.joinToString("\n")
             .ifEmpty { context.getString(R.string.chat_acp_error) + "\n" + context.getString(R.string.chat_error_hint) }
     }
