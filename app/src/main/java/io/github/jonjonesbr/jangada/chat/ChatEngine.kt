@@ -47,6 +47,8 @@ class ChatEngine(
     /** Chaves liberadas com "Sempre permitir nesta conversa" (ver [permissionKey]). */
     private val alwaysAllowed = HashSet<String>()
 
+    /** Já houve mensagem enviada nesta execução do Claude (o histórico que chega depois não é interrupção). */
+    private var sentThisRun = false
     private var draft: ChatItem.Assistant? = null
     private val tools = HashMap<String, ChatItem.Tool>()
     /** Lista de tarefas (TodoWrite) da conversa: um único plano, atualizado a cada chamada. */
@@ -71,6 +73,7 @@ class ChatEngine(
     ) {
         if (running) return
         contextUsage = null
+        sentThisRun = false
         val previousId = previous?.sessionId
         val previousItems = previous?.items?.toList().orEmpty()
         if (resume != null) sessionId = resume
@@ -120,7 +123,8 @@ class ChatEngine(
         if (plan == null) loaded.filterIsInstance<ChatItem.Plan>().lastOrNull()?.let { plan = it }
         // Terminou numa ação ou numa mensagem sua, sem resposta depois: foi interrompida.
         // O raciocínio não conta (ele vem antes da ação ou da resposta, e pode ser a última coisa gravada).
-        if (markInterrupted) interrupted = loaded.lastOrNull { it !is ChatItem.Thinking }.let { it is ChatItem.Tool || it is ChatItem.User }
+        // Se o usuário já enviou algo antes deste histórico chegar, a conversa foi continuada: não é interrupção.
+        if (markInterrupted && !sentThisRun) interrupted = loaded.lastOrNull { it !is ChatItem.Thinking }.let { it is ChatItem.Tool || it is ChatItem.User }
         changed()
     }
 
@@ -130,6 +134,7 @@ class ChatEngine(
      */
     override fun sendMessage(text: String, attachments: List<Attachment>) {
         if (!running) start(resume = sessionId)
+        sentThisRun = true
         val item = ChatItem.User(text, attachments.map { it.name })
         add(item)
         // Turno em andamento: a mensagem espera na fila e vai quando o turno acabar (ver "result").
