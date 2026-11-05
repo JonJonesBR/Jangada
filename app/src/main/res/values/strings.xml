@@ -262,7 +262,7 @@
     <string name="chat_limit_other">%1$s: %2$d%% used</string>
     <string name="chat_limit_resets">resets %1$s</string>
     <string name="chat_limits_updated">Updated %1$s.</string>
-    <string name="chat_limits_explain">Limits apply to the whole account, including the website and other devices. The agent reports them with each reply.</string>
+    <string name="chat_limits_explain">Limits apply to the whole account, including the website and other devices. The values are updated with each reply.</string>
     <string name="chat_compact_now">Compact now</string>
     <string name="chat_compacted">🗜️ Conversation compacted: older messages became a summary, and the agent continues from it.</string>
     <string name="chat_permission_bar_title">%1$s wants to:</string>

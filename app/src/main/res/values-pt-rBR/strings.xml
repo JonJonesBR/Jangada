@@ -260,7 +260,7 @@
     <string name="chat_limit_other">%1$s: %2$d%% usado</string>
     <string name="chat_limit_resets">renova %1$s</string>
     <string name="chat_limits_updated">Atualizado %1$s.</string>
-    <string name="chat_limits_explain">Os limites valem para a conta toda, inclusive no site e em outros aparelhos. O agente informa os valores a cada resposta.</string>
+    <string name="chat_limits_explain">Os limites valem para a conta toda, inclusive no site e em outros aparelhos. Os valores são atualizados a cada resposta.</string>
     <string name="chat_compact_now">Compactar agora</string>
     <string name="chat_compacted">🗜️ Conversa compactada: as mensagens antigas viraram um resumo, e o agente continua a partir dele.</string>
     <string name="chat_permission_bar_title">%1$s quer:</string>
