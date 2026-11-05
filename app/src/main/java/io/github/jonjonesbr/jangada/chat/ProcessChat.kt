@@ -224,7 +224,8 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * motivo quando não foi normal.
      */
     protected open fun onExited(code: Int, stderr: String) {
-        if (code != 0) add(ChatItem.Info(exitMessage(code), isError = true, details = detailsOf(stderr)))
+        // Com o cartão de login já na conversa, o erro de saída não repete.
+        if (code != 0 && items.lastOrNull() !is ChatItem.Login) add(ChatItem.Info(exitMessage(code), isError = true, details = detailsOf(stderr)))
     }
 
     private fun readOutput(c: Connection, proc: Process) {
@@ -248,17 +249,20 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
             val code = runCatching { proc.waitFor() }.getOrDefault(-1)
             main.post {
                 if (connection !== c) return@post
-                // Havia turno e o usuário não parou: o agente saiu no meio da resposta. Antes de finish, que zera busy.
-                val midTurn = busy && !silentTurn
+                // Antes de qualquer aviso da saída entrar. Com o cartão de login já na conversa, o agente espera
+                // o usuário (não está no meio da resposta) e o erro de saída não repete.
+                val afterLogin = items.lastOrNull() is ChatItem.Login
+                // Turno em andamento que o usuário não parou: o agente saiu no meio da resposta (antes de finish, que zera busy).
+                val midTurn = busy && !silentTurn && !afterLogin
                 finish(c)
                 onExited(code, synchronized(stderrTail) { stderrTail.joinToString("\n") })
-                // Saiu no meio da resposta: código 0 ganha um aviso (com erro, o da saída já diz); Continuar aparece.
                 if (midTurn) {
+                    // Com código 0 não há mensagem de erro: o aviso diz que dá para continuar. Com erro, a saída já disse.
                     if (code == 0) add(ChatItem.Info(context.getString(R.string.chat_exit_midturn)))
                     interrupted = true
                 }
-                // Saiu com erro (ou no meio da resposta) sem ser parado pelo usuário: um aviso só (se o cartão de login já avisou, não repete).
-                if ((code != 0 || midTurn) && items.lastOrNull() !is ChatItem.Login) attention(ChatAttention.FAILED)
+                // Saiu com erro ou no meio da resposta, sem ser parado pelo usuário: um aviso só.
+                if ((code != 0 || midTurn) && !afterLogin) attention(ChatAttention.FAILED)
                 settleItems()
                 onStopped()
                 changed()
