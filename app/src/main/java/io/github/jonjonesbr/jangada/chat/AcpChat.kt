@@ -328,7 +328,9 @@ class AcpChat(
             finishDrafts()
             val refused = error == null && result?.optString("stopReason") == "refusal"
             if (error != null) {
-                if (isAuthError(error)) requireLogin(sessionId) else add(ChatItem.Info(friendlyError(error), isError = true))
+                // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar.
+                if (isAuthError(error)) requireLogin(sessionId)
+                else if (!cancelled) add(ChatItem.Info(friendlyError(error), isError = true))
             }
             else if (refused) add(ChatItem.Info(context.getString(R.string.chat_acp_refused), isError = true))
             // Erro, login ou recusa: a fila não segue sozinha, a pessoa revisa antes.
