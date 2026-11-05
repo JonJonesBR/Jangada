@@ -27,7 +27,12 @@ class AcpChat(
     override val cwd: String,
     /** Id do agente na receita (ex.: "codex"); só alguns mostram limites do plano. */
     private val agentId: String = "",
+    /** Compactação automática deste trabalho (ver AutoCompact), lida a cada fim de turno. */
+    private val autoCompact: () -> String = { AutoCompact.DEFAULT },
 ) : ProcessChat(linux, TAG) {
+
+    /** Pode compactar sozinho de novo? Some ao compactar e volta quando o contexto cai abaixo do percentual. */
+    private var autoCompactArmed = true
 
     private val limitsStore by lazy { PlanLimitsStore(context) }
 
@@ -391,10 +396,32 @@ class AcpChat(
             // Erro, login ou recusa: a fila não segue sozinha, a pessoa revisa antes.
             // O erro de um turno que a pessoa mesma parou não conta: a fila já foi descartada no Parar.
             if ((error != null || refused) && !cancelled) dropQueue()
+            // Turno que acabou bem com o contexto cheio: o /compact entra na fila antes da próxima mensagem.
+            if (!cancelled && error == null && !refused) autoCompactIfDue()
             changed()
             // O turno acabou: a próxima mensagem da fila (se houver) vai agora.
             sendNext()
         }
+    }
+
+    /**
+     * Compactação automática (ver AutoCompact), no fim de um turno (thread principal). Manda /compact
+     * como mensagem na fila: o turno segue, sem o aviso de fim, e o /compact vai à frente de quem
+     * esperava. Só uma vez seguida: depois, espera o contexto cair abaixo do percentual.
+     */
+    private fun autoCompactIfDue() {
+        val percentSetting = AutoCompact.percentOf(autoCompact())
+        val used = contextUsage?.percent
+        if (AutoCompact.rearms(percentSetting, used)) autoCompactArmed = true
+        val hasCompact = commands.any { it.name == COMPACT_NAME }
+        if (used == null || !AutoCompact.shouldCompact(percentSetting, used, autoCompactArmed, hasCompact, queue.isNotEmpty())) return
+        autoCompactArmed = false
+        add(ChatItem.Info(context.getString(R.string.chat_auto_compacting, used)))
+        // Mesmo caminho de uma mensagem enviada com turno em andamento: entra na fila e sai em sendNext().
+        val item = ChatItem.User(COMPACT_TEXT)
+        item.queued = true
+        add(item)
+        queue += QueuedMessage(COMPACT_TEXT, emptyList(), item)
     }
 
     override fun interrupt() {
@@ -791,6 +818,9 @@ class AcpChat(
         const val TAG = "JangadaAcp"
         /** Id do Codex na receita: só ele lê os limites do plano pelas sessões. */
         const val CODEX_ID = "codex"
+        /** Comando do agente que compacta a conversa (o mesmo do "Compactar agora") e o texto que o manda. */
+        const val COMPACT_NAME = "compact"
+        const val COMPACT_TEXT = "/compact"
         /** Espera depois do fim do turno antes de ler as sessões (o Codex grava o arquivo em paralelo). */
         const val LIMITS_DELAY_MS = 1_000L
         /** Quanto o cartão de login espera o navegador antes de dar o login como não terminado. */

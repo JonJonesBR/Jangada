@@ -289,13 +289,21 @@ class TerminalService : Service() {
         val linux = LinuxEnv(this)
         // A integração com o Linux é refeita pelo próprio chat, fora da thread principal.
         startLinkWatcher(linux)
+        val settings = AppSettings(this)
         val chat: AgentChat = if (agentId == CLAUDE) {
-            val settings = AppSettings(this)
-            ChatEngine(linux, settings.askPermissions, settings.chatModel, settings.chatEffort, Workspace.path(folder))
+            // O Claude lê a compactação ao iniciar: trocar o ajuste reabre a conversa (ver ChatActivity).
+            ChatEngine(
+                linux, settings.askPermissions, settings.chatModel, settings.chatEffort, Workspace.path(folder),
+                autoCompact = settings.autoCompactFor(key),
+            )
         } else {
             val recipe = AgentCatalog.load(this).first { it.id == agentId }
             val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
-            AcpChat(linux, recipe.acp!!.command, version, Workspace.path(folder), agentId = recipe.id)
+            // Nos agentes ACP, o valor é lido a cada fim de turno (vale na hora).
+            AcpChat(
+                linux, recipe.acp!!.command, version, Workspace.path(folder), agentId = recipe.id,
+                autoCompact = { settings.autoCompactFor(key) },
+            )
         }
         // Para o chat anterior deste par (se havia) antes de o novo começar.
         current?.stop()

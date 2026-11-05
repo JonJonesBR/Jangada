@@ -14,6 +14,8 @@ import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
@@ -116,6 +118,27 @@ class SettingsActivity : JangadaActivity() {
                         Sheet.Row(title = sleepLabel(minutes), checked = minutes == settings.sleepAfterMinutes) {
                             settings.sleepAfterMinutes = minutes
                             showSleepAfter()
+                        }
+                    },
+                )
+                .show()
+        }
+
+        // Compactação automática da conversa (ajuste geral; cada trabalho pode ter o seu, ver AutoCompact).
+        // Só vale quando o agente inicia de novo: não reinicia nada aqui.
+        val autoButton = findViewById<Button>(R.id.settings_auto_compact)
+        fun showAutoCompact() {
+            autoButton.text = autoCompactText(this, settings.autoCompact)
+        }
+        showAutoCompact()
+        autoButton.setOnClickListener {
+            Sheet(this)
+                .title(getString(R.string.auto_compact_title))
+                .rows(
+                    AutoCompact.GENERAL.map { value ->
+                        Sheet.Row(title = autoCompactText(this, value), checked = value == settings.autoCompact) {
+                            settings.autoCompact = value
+                            showAutoCompact()
                         }
                     },
                 )

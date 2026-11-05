@@ -684,4 +684,13 @@
     <string name="sheet_desc_sleep_job">Pôr para dormir (a conversa continua depois)</string>
     <string name="chat_history_delete_row">Apagar conversas…</string>
     <string name="chat_history_delete_title">Qual conversa apagar?</string>
+    <string name="auto_compact_title">Compactação automática</string>
+    <string name="auto_compact_default">Padrão do agente</string>
+    <string name="auto_compact_off">Desligada</string>
+    <string name="auto_compact_percent">Ao chegar a %1$d%%</string>
+    <string name="auto_compact_global">Usar o ajuste geral (%1$s)</string>
+    <string name="auto_compact_global_short">Geral (%1$s)</string>
+    <string name="auto_compact_acp_note">Neste agente, o app manda /compact ao fim de uma resposta quando o contexto chega ao percentual (se o agente tiver esse comando). Desligar só é possível no Claude.</string>
+    <string name="settings_auto_compact_desc">Resume a conversa quando o contexto enche, para o agente seguir com espaço. No Claude, ele mesmo compacta e o ajuste vale quando ele iniciar de novo. Nos outros agentes, o app manda /compact ao fim de uma resposta quando o contexto chega ao percentual (se o agente tiver esse comando). Cada trabalho pode ter o seu, no menu ⋮ do chat.</string>
+    <string name="chat_auto_compacting">Compactando a conversa automaticamente (contexto em %1$d%%).</string>
 </resources>

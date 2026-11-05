@@ -1,10 +1,13 @@
 package io.github.jonjonesbr.jangada
 
 import android.content.Context
+import io.github.jonjonesbr.jangada.chat.AutoCompact
 
 /** Preferências do usuário (tela de configurações). */
 class AppSettings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    /** Compactação automática por trabalho: chave = TerminalService.chatKey; ausente = segue o geral. */
+    private val jobPrefs = context.applicationContext.getSharedPreferences("auto_compact", Context.MODE_PRIVATE)
 
     /** Modo Simples: chat e caixa de texto por padrão. Modo Pro: terminal primeiro. */
     var simpleMode: Boolean
@@ -104,6 +107,24 @@ class AppSettings(context: Context) {
         get() = prefs.getInt(KEY_SLEEP_AFTER, 30).takeIf { it in SLEEP_AFTER_MINUTES } ?: 30
         set(value) = prefs.edit().putInt(KEY_SLEEP_AFTER, value).apply()
 
+    /** Compactação automática da conversa, ajuste geral (ver AutoCompact). */
+    var autoCompact: String
+        get() = AutoCompact.normalizeGeneral(prefs.getString(KEY_AUTO_COMPACT, AutoCompact.DEFAULT))
+        set(value) = prefs.edit().putString(KEY_AUTO_COMPACT, value).apply()
+
+    /** Compactação automática de um trabalho ([key] = TerminalService.chatKey): um de AutoCompact.JOB; "global" segue o geral. */
+    fun autoCompactOfJob(key: String): String = AutoCompact.normalizeJob(jobPrefs.getString(key, null))
+
+    /** Guarda a compactação de um trabalho; "global" tira a chave (o trabalho volta a seguir o geral). */
+    fun setAutoCompactOfJob(key: String, value: String) {
+        if (value == AutoCompact.GLOBAL) jobPrefs.edit().remove(key).apply()
+        else jobPrefs.edit().putString(key, AutoCompact.normalizeJob(value)).apply()
+    }
+
+    /** O valor que vale para o trabalho [key]: o dele, ou o geral (ver AutoCompact.effectiveAutoCompact). */
+    fun autoCompactFor(key: String): String =
+        AutoCompact.effectiveAutoCompact(autoCompact, jobPrefs.getString(key, null))
+
     /** Tamanho do texto do chat: um de [CHAT_TEXT_SCALES]; outro valor guardado volta a 1f. */
     var chatTextScale: Float
         get() = prefs.getFloat(KEY_CHAT_TEXT_SCALE, 1f).takeIf { it in CHAT_TEXT_SCALES } ?: 1f
@@ -142,5 +163,6 @@ class AppSettings(context: Context) {
         private const val KEY_AGENT_MEMORY_TIPS = "agent_memory_tips"
         private const val KEY_MAX_AGENTS = "max_agents"
         private const val KEY_SLEEP_AFTER = "sleep_after_minutes"
+        private const val KEY_AUTO_COMPACT = "auto_compact"
     }
 }

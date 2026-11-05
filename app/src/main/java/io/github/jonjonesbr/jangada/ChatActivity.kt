@@ -58,6 +58,9 @@ import io.github.jonjonesbr.jangada.chat.AcpChat
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
+import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.chat.autoCompactShort
+import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.LimitWindow
 import io.github.jonjonesbr.jangada.chat.PlanLimits
 import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
@@ -1241,11 +1244,9 @@ class ChatActivity : JangadaActivity() {
     private fun showContextSheet(chat: AgentChat) {
         val percent = chat.contextUsage?.percent ?: return
         val canCompact = isClaude || (chat as? AcpChat)?.commands?.any { it.name == "compact" } == true
-        val rows: List<Sheet.Row> = if (canCompact) {
-            listOf(Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") })
-        } else {
-            emptyList()
-        }
+        val rows = mutableListOf<Sheet.Row>()
+        if (canCompact) rows += Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") }
+        rows += autoCompactRow()
         Sheet(this)
             .title(getString(R.string.chat_context_title))
             .message(getString(R.string.chat_context_explain, percent))
@@ -1780,6 +1781,7 @@ class ChatActivity : JangadaActivity() {
             description = getString(R.string.chat_menu_finish_desc),
             icon = "⏏",
         ) { loadFolders { folders -> showWorktreeFinish(folders) } }
+        rows += autoCompactRow()
         rows += Sheet.Row(
             title = getString(R.string.chat_menu_settings),
             description = getString(R.string.chat_menu_settings_desc),
@@ -2265,6 +2267,59 @@ class ChatActivity : JangadaActivity() {
             .show()
     }
 
+    /**
+     * Linha da compactação automática deste trabalho (painel do chip de contexto e menu ⋮). O valor
+     * mostra o do trabalho, ou "Geral (…)" quando ele segue o ajuste geral.
+     */
+    private fun autoCompactRow() = Sheet.Row(
+        title = getString(R.string.auto_compact_title),
+        value = autoCompactValue(),
+        icon = "🗜",
+    ) { chooseAutoCompact() }
+
+    private fun autoCompactValue(): String {
+        val job = settings.autoCompactOfJob(chatKey)
+        return if (job == AutoCompact.GLOBAL) {
+            getString(R.string.auto_compact_global_short, autoCompactShort(this, settings.autoCompact))
+        } else {
+            autoCompactShort(this, job)
+        }
+    }
+
+    /**
+     * Escolha da compactação deste trabalho: o ajuste geral, o padrão do agente, desligada (só no Claude)
+     * e os percentuais. Nos agentes ACP, a nota explica que o app manda /compact.
+     */
+    private fun chooseAutoCompact() {
+        val job = settings.autoCompactOfJob(chatKey)
+        val rows = mutableListOf(
+            Sheet.Row(
+                title = getString(R.string.auto_compact_global, autoCompactShort(this, settings.autoCompact)),
+                checked = job == AutoCompact.GLOBAL,
+            ) { saveAutoCompact(AutoCompact.GLOBAL) },
+        )
+        val values = listOfNotNull(AutoCompact.DEFAULT, AutoCompact.OFF.takeIf { isClaude }) + AutoCompact.PERCENTS.map { it.toString() }
+        rows += values.map { value ->
+            Sheet.Row(title = autoCompactText(this, value), checked = job == value) { saveAutoCompact(value) }
+        }
+        val sheet = Sheet(this).title(getString(R.string.auto_compact_title))
+        if (!isClaude) sheet.message(getString(R.string.auto_compact_acp_note))
+        sheet.rows(rows).show()
+    }
+
+    /**
+     * Guarda a compactação do trabalho. O Claude só lê o ajuste ao iniciar: se o valor que vale mudou,
+     * reabre a mesma conversa (como o modelo e o esforço). Nos ACP, o valor é lido a cada fim de turno.
+     */
+    private fun saveAutoCompact(value: String) {
+        val before = settings.autoCompactFor(chatKey)
+        settings.setAutoCompactOfJob(chatKey, value)
+        if (!isClaude || settings.autoCompactFor(chatKey) == before) return
+        val svc = service ?: return
+        val id = engine?.sessionId
+        reopenChat(svc) { svc.openChat(agentId, folder = folder, resume = id, restart = true) }
+    }
+
     private fun modelLabel(alias: String) = when (alias) {
         "" -> getString(R.string.chat_model_default)
         else -> alias.replaceFirstChar { it.uppercase() }
@@ -2311,8 +2366,12 @@ class ChatActivity : JangadaActivity() {
     }
 
     /** Comando que abre o Claude Code na pasta de trabalho do chat; [args] vai depois do comando. */
-    private fun claudeLaunchScript(args: String): String =
-        AgentRecipe.claudeIn(Workspace.path(folder), exec = false) + args
+    private fun claudeLaunchScript(args: String): String {
+        // Compactação automática do trabalho: vale só para este Claude (o shell da aba segue aberto depois).
+        val autoCompact = settings.autoCompactFor(chatKey)
+        return AutoCompact.claudeEnvPrefix(autoCompact) + AgentRecipe.claudeIn(Workspace.path(folder), exec = false) + args +
+            AutoCompact.claudeEnvSuffix(autoCompact)
+    }
 
     /**
      * Fecha o chat e abre a tela de terminal com o [script], na pasta do chat;

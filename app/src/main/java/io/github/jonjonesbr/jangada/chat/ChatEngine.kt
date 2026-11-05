@@ -26,6 +26,8 @@ class ChatEngine(
     private val effort: String = "",
     /** Pasta de trabalho (caminho dentro do Debian). */
     override val cwd: String,
+    /** Compactação automática que vale para este trabalho (ver AutoCompact); "default" não mexe em nada. */
+    private val autoCompact: String = AutoCompact.DEFAULT,
 ) : ProcessChat(linux, TAG) {
 
     @Volatile override var sessionId: String? = null
@@ -95,7 +97,8 @@ class ChatEngine(
     }
 
     private fun command(resume: String?): String {
-        val args = StringBuilder(AgentRecipe.claudeIn(cwd, exec = true, job = jobId))
+        // O prefixo põe a variável de ambiente antes do cd e do exec: o Claude a lê ao iniciar.
+        val args = StringBuilder(AutoCompact.claudeEnvPrefix(autoCompact) + AgentRecipe.claudeIn(cwd, exec = true, job = jobId))
         args.append(" --output-format stream-json --verbose --input-format stream-json")
         args.append(" --include-partial-messages")
         if (askPermissions) {
