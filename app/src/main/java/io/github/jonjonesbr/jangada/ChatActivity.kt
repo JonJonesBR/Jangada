@@ -1593,6 +1593,16 @@ class ChatActivity : JangadaActivity() {
         }
     }
 
+    /**
+     * Trocar de conversa, modelo, esforço ou compactação reinicia o agente: com um turno em andamento,
+     * cortaria a resposta. Nesse caso mostra o aviso e devolve true (não reabre nem salva nada).
+     */
+    private fun busyBlocks(): Boolean {
+        if (engine?.busy != true) return false
+        Toast.makeText(this, R.string.chat_wait_turn, Toast.LENGTH_LONG).show()
+        return true
+    }
+
     /** Conversas anteriores: toque para retomar, 🗑 para apagar (a aberta já vira uma nova). */
     private fun showHistory() {
         val chat = engine
@@ -1628,7 +1638,7 @@ class ChatActivity : JangadaActivity() {
                 description = if (conversation.updatedAt > 0) DateUtils.getRelativeTimeSpanString(conversation.updatedAt) else null,
                 checked = isCurrent,
             ) {
-                if (!isCurrent) reopenChat(svc) {
+                if (!isCurrent && !busyBlocks()) reopenChat(svc) {
                     svc.openChat(agentId, folder = folder, resume = conversation.id, restart = true)
                 }
             }
@@ -1763,7 +1773,7 @@ class ChatActivity : JangadaActivity() {
         }
         val rows = mutableListOf<Sheet.Row>()
         rows += Sheet.Row(title = getString(R.string.chat_new), description = getString(R.string.chat_menu_new_desc), icon = "＋") {
-            newConversation()
+            if (!busyBlocks()) newConversation()
         }
         rows += Sheet.Row(title = getString(R.string.chat_menu_history), description = getString(R.string.chat_menu_history_desc), icon = "🕘") {
             showHistory()
@@ -2254,7 +2264,7 @@ class ChatActivity : JangadaActivity() {
             .title(getString(titleRes))
             .rows(values.map { value ->
                 Sheet.Row(title = label(value), checked = value == current) {
-                    if (value != current) {
+                    if (value != current && !busyBlocks()) {
                         save(value)
                         val svc = service
                         if (svc != null) {
@@ -2312,6 +2322,8 @@ class ChatActivity : JangadaActivity() {
      * reabre a mesma conversa (como o modelo e o esforço). Nos ACP, o valor é lido a cada fim de turno.
      */
     private fun saveAutoCompact(value: String) {
+        // Só o Claude reabre a conversa; no ACP, mudar o valor não corta nada. Escolher o valor atual não conta.
+        if (isClaude && settings.autoCompactOfJob(chatKey) != value && busyBlocks()) return
         val before = settings.autoCompactFor(chatKey)
         settings.setAutoCompactOfJob(chatKey, value)
         if (!isClaude || settings.autoCompactFor(chatKey) == before) return
