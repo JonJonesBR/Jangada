@@ -1,5 +1,17 @@
 # Novidades
 
+## 1.15.0
+
+- Limites do plano: quando o limite de 5 horas ou o semanal passa de 90%, chega um aviso (uma vez por período). O cartão do Claude e o do Codex na tela inicial mostram o uso, em vermelho a partir de 80%.
+- Chat: trocar modelo, esforço, compactação automática, conversa ou começar outra espera o agente terminar a resposta e as tarefas em segundo plano, em vez de cortá-las.
+- Chat: o agente que fecha no meio da resposta avisa uma vez só (também nos agentes ACP) e oferece Continuar; o Continuar não aparece numa conversa que você já continuou. Agente ACP que não responde ao iniciar avisa em 2 minutos.
+- Chat ACP: uma opção de permissão de tipo desconhecido aparece com o nome dado pelo agente, por último, e não vira mais "Permitir".
+- Memória: servidores que o agente solta (nohup, setsid) continuam contando como dele, e o trabalho não dorme com eles rodando. A linha de cada trabalho não mostra mais "0 processo".
+- Liberar espaço: roda em primeiro plano, nunca duas ao mesmo tempo, e o aviso do serviço diz que está limpando. O painel de espaço conta as conversas do Hermes e do oh-my-pi.
+- Correções: uma pasta ~/celular com arquivos é guardada ao lado (celular.antigo-<data>) em vez de apagada; fotos giram pela orientação também no Android 8 e 9; desinstalar nunca apaga arquivos de projeto; nomes de worktree que o git recusa são recusados antes; a faixa de segundo plano não fica com texto vazio.
+- Painéis: ação Fechar pelo leitor de tela, e o título de uma linha não é mais espremido pelo valor à direita.
+- Capturas de tela novas no README.
+
 ## 1.14.0
 
 - Chat: compactação automática configurável, nos Ajustes (geral) e em cada trabalho (menu ⋮ ou chip de contexto): padrão do agente, desligada (no Claude) ou ao chegar a 50, 60, 70, 80 ou 90% do contexto. No Claude, quem compacta é o próprio Claude Code; nos outros agentes, o app manda /compact ao fim da resposta.
