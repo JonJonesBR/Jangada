@@ -121,6 +121,22 @@
     <string name="storage_ready">Projects: ~/projetos · Phone files: ~/celular (Downloads in ~/celular/Download)</string>
     <string name="storage_denied">Access not granted. You can allow it in Android settings for Jangada.</string>
     <string name="storage_new_sessions">Open sessions see the phone files after you reopen them.</string>
+    <string name="storage_space">Phone: %1$s free of %2$s.</string>
+    <string name="storage_space_low">Phone: only %1$s free of %2$s. Free up space so agents don\'t fail.</string>
+    <string name="storage_details">See what uses space</string>
+    <string name="storage_details_title">Space in Linux</string>
+    <string name="storage_measuring">Measuring… this may take a few seconds.</string>
+    <string name="storage_part_system">Linux and agents: %1$s</string>
+    <string name="storage_part_projects">Projects (~/projetos): %1$s</string>
+    <string name="storage_part_conversations">Agent conversations: %1$s</string>
+    <string name="storage_part_caches">Caches (npm, pip, uv, bun, apt): %1$s</string>
+    <string name="storage_total">Total: %1$s</string>
+    <string name="storage_measure_failed">Couldn\'t measure the space right now.</string>
+    <string name="storage_clean_caches">Clear caches</string>
+    <string name="storage_clean_caches_desc">Deletes only downloaded files that programs fetch again when needed. Doesn\'t touch conversations, logins, settings or projects.</string>
+    <string name="storage_cleaning">Clearing caches…</string>
+    <string name="storage_clean_busy">Not available now: wait for the running agent task or cleanup to finish.</string>
+    <string name="storage_cleaned">Caches cleared.</string>
 
     <string name="chat_title">Claude Code</string>
     <string name="chat_new">New conversation</string>

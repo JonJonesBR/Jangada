@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada
 
 import android.Manifest
 import android.app.AlertDialog
+import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
@@ -15,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.StatFs
 import android.os.SystemClock
 import android.provider.Settings
 import android.text.SpannableString
@@ -43,8 +45,10 @@ import io.github.jonjonesbr.jangada.agents.Versions
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.chatState
+import io.github.jonjonesbr.jangada.linux.Breakdown
 import io.github.jonjonesbr.jangada.linux.JobMemory
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.measure
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
@@ -144,6 +148,8 @@ class HomeActivity : JangadaActivity() {
     /** Estados dos trabalhos na última vez que a lista foi desenhada. */
     private var drawnJobStates: List<Pair<String, ChatState>> = emptyList()
     private val simpleMode get() = AppSettings(this).simpleMode
+    /** Flag do cálculo de espaço em andamento; vira true ao fechar o painel de espera ou a tela. */
+    private var measuring: AtomicBoolean? = null
     private var askedStorage = false
     private var allFilesOpened = false
     private var paused = true
@@ -181,6 +187,7 @@ class HomeActivity : JangadaActivity() {
 
         findViewById<Button>(R.id.open_terminal).setOnClickListener { openTerminal() }
         findViewById<Button>(R.id.storage_allow).setOnClickListener { requestStorage() }
+        findViewById<Button>(R.id.storage_details).setOnClickListener { showSpaceDetails() }
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -238,6 +245,92 @@ class HomeActivity : JangadaActivity() {
         findViewById<TextView>(R.id.storage_text).setText(if (granted) R.string.storage_ready else R.string.storage_ask)
         findViewById<View>(R.id.storage_allow).visibility = if (granted) View.GONE else View.VISIBLE
         findViewById<View>(R.id.storage_card).visibility = if (linux.isReady) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.storage_details).visibility = if (linux.isReady) View.VISIBLE else View.GONE
+        renderSpace()
+    }
+
+    /** Espaço livre do celular (o Linux fica na memória interna). Abaixo de 1 GiB, aviso em vermelho. */
+    private fun renderSpace() {
+        val view = findViewById<TextView>(R.id.storage_space)
+        val stat = runCatching { StatFs(linux.rootfs.path) }.getOrNull()
+        if (stat == null) {
+            view.visibility = View.GONE
+            return
+        }
+        val free = stat.availableBytes
+        val low = free < LOW_SPACE_BYTES
+        view.text = getString(
+            if (low) R.string.storage_space_low else R.string.storage_space,
+            Formatter.formatShortFileSize(this, free),
+            Formatter.formatShortFileSize(this, stat.totalBytes),
+        )
+        view.setTextColor(getColor(if (low) R.color.setup_error else R.color.setup_muted))
+        view.visibility = View.VISIBLE
+    }
+
+    /** Painel de espera; o cálculo roda em outra thread e, pronto, troca o painel pelo resultado. */
+    private fun showSpaceDetails() {
+        measuring?.set(true) // um cálculo anterior ainda rodando já não interessa
+        val cancelled = AtomicBoolean(false)
+        measuring = cancelled
+        val waiting = Sheet(this)
+            .title(getString(R.string.storage_details_title))
+            .message(getString(R.string.storage_measuring))
+            .onDismiss { cancelled.set(true) }
+            .show() ?: return
+        val rootfs = linux.rootfs
+        thread(name = "jangada-espaco") {
+            val breakdown = runCatching { measure(rootfs) { cancelled.get() } }.getOrNull()
+            mainHandler.post { showSpaceResult(breakdown, cancelled, waiting) }
+        }
+    }
+
+    /** Resultado do cálculo, na thread principal. Ignora se o painel foi fechado ou a tela saiu. */
+    private fun showSpaceResult(breakdown: Breakdown?, cancelled: AtomicBoolean, waiting: Dialog) {
+        if (cancelled.get() || isFinishing || isDestroyed) return
+        waiting.dismiss()
+        val title = getString(R.string.storage_details_title)
+        if (breakdown == null) {
+            Sheet(this).title(title).message(getString(R.string.storage_measure_failed)).show()
+            return
+        }
+        fun size(bytes: Long) = Formatter.formatShortFileSize(this, bytes)
+        // Do maior para o menor.
+        val lines = listOf(
+            breakdown.systemBytes to R.string.storage_part_system,
+            breakdown.projectsBytes to R.string.storage_part_projects,
+            breakdown.conversationsBytes to R.string.storage_part_conversations,
+            breakdown.cachesBytes to R.string.storage_part_caches,
+        ).sortedByDescending { it.first }
+            .joinToString("\n") { (bytes, res) -> getString(res, size(bytes)) }
+        val message = lines + "\n\n" + getString(R.string.storage_total, size(breakdown.linuxBytes))
+        // Limpar só com caches para apagar e nenhum agente instalando, atualizando ou na fila.
+        val svc = service
+        val busy = svc == null || svc.agentTaskBusy() || svc.cleaningCaches()
+        val cleanable = breakdown.cachesBytes > 0 && !busy
+        Sheet(this)
+            .title(title)
+            .message(message)
+            .row(
+                Sheet.Row(
+                    title = getString(R.string.storage_clean_caches),
+                    description = getString(if (busy) R.string.storage_clean_busy else R.string.storage_clean_caches_desc),
+                    enabled = cleanable,
+                ) { cleanCaches() },
+            )
+            .show()
+    }
+
+    /** Apaga os caches dentro do Linux (nunca do lado Android, ver TerminalService.cleanCaches) e atualiza o cartão. */
+    private fun cleanCaches() {
+        val started = service?.cleanCaches {
+            if (!isFinishing && !isDestroyed) {
+                Toast.makeText(this, R.string.storage_cleaned, Toast.LENGTH_SHORT).show()
+                renderStorage()
+            }
+        } == true
+        // Entre o painel e o toque, uma tarefa de agente pode ter começado (ou o serviço desligado).
+        Toast.makeText(this, if (started) R.string.storage_cleaning else R.string.storage_clean_busy, Toast.LENGTH_SHORT).show()
     }
 
     /**
@@ -313,6 +406,7 @@ class HomeActivity : JangadaActivity() {
     }
 
     override fun onDestroy() {
+        measuring?.set(true) // o painel de espera fecha sem avisar (Sheet): para o cálculo aqui
         mainHandler.removeCallbacks(renderLater)
         mainHandler.removeCallbacks(jobsTicker)
         super.onDestroy()
@@ -1307,6 +1401,8 @@ class HomeActivity : JangadaActivity() {
         const val UPDATE_QUIET_MS = 7L * 24 * 60 * 60 * 1000
         const val RENDER_GAP_MS = 300L
         const val REQUEST_STORAGE = 42
+        /** Abaixo disso de espaço livre no celular, o cartão avisa em vermelho (1 GiB). */
+        const val LOW_SPACE_BYTES = 1_073_741_824L
         /** Com esta quantidade de linhas (trabalhos + terminais), aparecem os filtros. */
         const val FILTER_MIN_ROWS = 4
         /** Intervalo em que a lista de trabalhos se redesenha enquanto há chat aberto. */

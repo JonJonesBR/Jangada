@@ -33,6 +33,7 @@ import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.PermissionOption
+import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Projects
@@ -65,6 +66,8 @@ class TerminalService : Service() {
     private val directLinkOpens = ArrayDeque<Long>()
     /** Limpeza de restos antigos (onCreate); closeEverything espera por ela antes de apagar o Linux. */
     @Volatile private var legacyCleanup: Thread? = null
+    /** Limpeza dos caches pedida na tela inicial; closeEverything espera por ela antes de apagar o Linux. */
+    @Volatile private var cacheCleaner: Thread? = null
     /** Vigia a rede do celular, para regravar o DNS do Debian quando ela muda. */
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     /** Último aviso de progresso da instalação do Linux (no máximo 1 por segundo). */
@@ -629,6 +632,27 @@ class TerminalService : Service() {
     /** true se há tarefas esperando a vez. */
     fun hasQueue(): Boolean = taskQueue.isNotEmpty()
 
+    /** true se uma tarefa de agente (instalar, atualizar, desinstalar) roda ou espera na fila. Só na thread principal. */
+    fun agentTaskBusy(): Boolean = hasQueue() || tasks.values.any { it.state == AgentTask.State.RUNNING }
+
+    /** true enquanto a limpeza dos caches roda. */
+    fun cleaningCaches(): Boolean = cacheCleaner?.isAlive == true
+
+    /**
+     * Limpa os caches dentro do Debian ([CACHE_CLEAN_SCRIPT]) numa thread. Não começa (devolve false)
+     * com outra limpeza ou uma tarefa de agente rodando ou na fila. [done] roda na thread principal.
+     * Fica no serviço (e não na tela) para nunca rodar duas vezes e para o closeEverything esperar por ela.
+     * Só na thread principal.
+     */
+    fun cleanCaches(done: () -> Unit): Boolean {
+        if (cleaningCaches() || agentTaskBusy()) return false
+        cacheCleaner = thread(name = "jangada-limpeza") {
+            runCatching { LinuxEnv(this).run(CACHE_CLEAN_SCRIPT) { } }
+            main.post { done() }
+        }
+        return true
+    }
+
     /** Ids dos agentes na fila; a tela compara com o que desenhou para saber se precisa redesenhar. */
     fun queuedIds(): Set<String> = taskQueue.mapTo(HashSet()) { it.recipe.id }
 
@@ -909,6 +933,7 @@ class TerminalService : Service() {
             workers.forEach { runCatching { it.join(5_000) } }
             // Apagar o Linux enquanto a limpeza apaga parte dele faria as duas falharem.
             legacyCleanup?.let { runCatching { it.join(60_000) } }
+            cacheCleaner?.let { runCatching { it.join(60_000) } }
             main.post {
                 onExit?.invoke()
                 leaveForeground()

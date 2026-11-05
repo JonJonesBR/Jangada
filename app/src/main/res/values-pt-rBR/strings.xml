@@ -119,6 +119,22 @@
     <string name="storage_ready">Projetos: ~/projetos · Arquivos do celular: ~/celular (Downloads em ~/celular/Download)</string>
     <string name="storage_denied">Acesso não liberado. Você pode permitir nas configurações do Android, no app Jangada.</string>
     <string name="storage_new_sessions">Sessões já abertas só enxergam os arquivos do celular depois de reabertas.</string>
+    <string name="storage_space">Celular: %1$s livres de %2$s.</string>
+    <string name="storage_space_low">Celular: só %1$s livres de %2$s. Libere espaço para os agentes não falharem.</string>
+    <string name="storage_details">Ver o que ocupa espaço</string>
+    <string name="storage_details_title">Espaço no Linux</string>
+    <string name="storage_measuring">Calculando… pode levar alguns segundos.</string>
+    <string name="storage_part_system">Linux e agentes: %1$s</string>
+    <string name="storage_part_projects">Projetos (~/projetos): %1$s</string>
+    <string name="storage_part_conversations">Conversas dos agentes: %1$s</string>
+    <string name="storage_part_caches">Caches (npm, pip, uv, bun, apt): %1$s</string>
+    <string name="storage_total">Total: %1$s</string>
+    <string name="storage_measure_failed">Não deu para calcular o espaço agora.</string>
+    <string name="storage_clean_caches">Limpar caches</string>
+    <string name="storage_clean_caches_desc">Apaga só downloads guardados, que os programas baixam de novo se precisarem. Não mexe em conversas, logins, configurações nem projetos.</string>
+    <string name="storage_cleaning">Limpando os caches…</string>
+    <string name="storage_clean_busy">Indisponível agora: espere terminar a tarefa de agente ou a limpeza em andamento.</string>
+    <string name="storage_cleaned">Caches limpos.</string>
 
     <string name="chat_title">Claude Code</string>
     <string name="chat_new">Nova conversa</string>
