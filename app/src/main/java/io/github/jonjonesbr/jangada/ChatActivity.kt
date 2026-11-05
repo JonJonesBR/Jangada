@@ -94,6 +94,7 @@ import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
 import java.util.Collections
 import java.util.IdentityHashMap
+import java.util.Locale
 import java.util.WeakHashMap
 import kotlin.concurrent.thread
 
@@ -1285,7 +1286,9 @@ class ChatActivity : JangadaActivity() {
             listOfNotNull(limitName(this, w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatLimitReset(this, it)) })
                 .joinToString(" · ")
         }
+        // O texto relativo vem com maiúscula ("Há 2 minutos"); no meio da frase fica com minúscula.
         val updated = DateUtils.getRelativeTimeSpanString(limits.updatedAtMs, now, DateUtils.SECOND_IN_MILLIS)
+            .toString().let { it.take(1).lowercase(Locale.getDefault()) + it.drop(1) }
         val text = "$lines\n\n${getString(R.string.chat_limits_updated, updated)}\n\n${getString(R.string.chat_limits_explain)}"
         Sheet(this).title(getString(R.string.chat_limits_title)).message(text).show()
     }
