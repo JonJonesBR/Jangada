@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -166,16 +167,30 @@ class AgentRecipeTest {
     }
 
     private fun checkSyntax(label: String, script: String) {
-        val process = ProcessBuilder("bash", "-n", "-c", script).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText()
-        assertTrue("$label: bash demorou demais", process.waitFor(10, TimeUnit.SECONDS))
-        assertEquals("$label: erro de sintaxe\n$output\n--- script ---\n$script", 0, process.exitValue())
+        val (code, output) = runProcess(listOf("bash", "-n", "-c", script))
+        assertEquals("$label: erro de sintaxe\n$output\n--- script ---\n$script", 0, code)
     }
 
     private fun runBash(script: String): List<String> {
-        val process = ProcessBuilder("bash", "-c", script).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText()
-        process.waitFor(10, TimeUnit.SECONDS)
+        val (_, output) = runProcess(listOf("bash", "-c", script))
         return output.removeSuffix("\n").split("\n")
+    }
+
+    /**
+     * Roda o comando com stdout e stderr num arquivo temporário: a saída não fica presa num pipe
+     * (que travaria a leitura se o script não terminasse). Script que passa de 10 s é morto e falha.
+     */
+    private fun runProcess(command: List<String>): Pair<Int, String> {
+        val out = File.createTempFile("jangada-teste", ".txt")
+        try {
+            val process = ProcessBuilder(command).redirectErrorStream(true).redirectOutput(out).start()
+            if (!process.waitFor(10, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                fail("script não terminou em 10 s")
+            }
+            return process.exitValue() to out.readText()
+        } finally {
+            out.delete()
+        }
     }
 }
