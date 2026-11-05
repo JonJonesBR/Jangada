@@ -106,6 +106,27 @@ class AcpParseTest {
     }
 
     @Test
+    fun tipoDesconhecidoNaoViraPermitir() {
+        // Fora do protocolo (ou sem "kind"): não é "Permitir" nem liberação; o optionId do agente fica.
+        val parsed = AcpParse.permissionOptions(
+            JSONArray(
+                """[{"optionId":"s","name":"Permitir nesta sessão","kind":"allow_session"},
+                   {"optionId":"n","name":"Sem tipo"},
+                   {"optionId":"a","name":"Permitir","kind":"allow_once"}]""",
+            ),
+        )
+        assertEquals(
+            listOf(PermissionOption.Kind.OTHER, PermissionOption.Kind.OTHER, PermissionOption.Kind.ALLOW_ONCE),
+            parsed.map { it.kind },
+        )
+        assertFalse(parsed[0].allows)
+        assertEquals("s", parsed[0].id)
+        assertEquals("Permitir nesta sessão", parsed[0].label)
+        // O botão Permitir da faixa e do aviso pega a primeira ALLOW_ONCE: a do agente, não a desconhecida.
+        assertEquals("a", parsed.first { it.kind == PermissionOption.Kind.ALLOW_ONCE }.id)
+    }
+
+    @Test
     fun permissaoSemOpcoesOuComItemInvalido() {
         assertEquals(emptyList<PermissionOption>(), AcpParse.permissionOptions(null))
         val parsed = AcpParse.permissionOptions(JSONArray("""[3,{"optionId":"ok","kind":"allow_once"}]"""))

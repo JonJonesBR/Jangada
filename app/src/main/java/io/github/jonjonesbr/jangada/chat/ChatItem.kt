@@ -87,7 +87,11 @@ fun chatState(chat: AgentChat): ChatState {
 }
 
 class PermissionOption(val id: String, val label: String, val kind: Kind) {
-    enum class Kind { ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE, REJECT_ALWAYS }
+    /**
+     * OTHER: tipo que o app não conhece (fora do protocolo). Aparece com o nome dado pelo agente,
+     * por último, e nunca é escolhido pelos botões Permitir/Recusar da faixa ou do aviso.
+     */
+    enum class Kind { ALLOW_ONCE, ALLOW_ALWAYS, REJECT_ONCE, REJECT_ALWAYS, OTHER }
     val allows get() = kind == Kind.ALLOW_ONCE || kind == Kind.ALLOW_ALWAYS
 }
 

@@ -31,11 +31,13 @@ internal object AcpParse {
         options ?: return emptyList()
         return (0 until options.length()).mapNotNull { i ->
             val o = options.optJSONObject(i) ?: return@mapNotNull null
+            // Tipo desconhecido não vira "permitir": o rótulo e os botões rápidos dependem do tipo.
             val kind = when (o.optString("kind")) {
+                "allow_once" -> PermissionOption.Kind.ALLOW_ONCE
                 "allow_always" -> PermissionOption.Kind.ALLOW_ALWAYS
                 "reject_once" -> PermissionOption.Kind.REJECT_ONCE
                 "reject_always" -> PermissionOption.Kind.REJECT_ALWAYS
-                else -> PermissionOption.Kind.ALLOW_ONCE
+                else -> PermissionOption.Kind.OTHER
             }
             PermissionOption(o.optString("optionId"), o.optString("name"), kind)
         }

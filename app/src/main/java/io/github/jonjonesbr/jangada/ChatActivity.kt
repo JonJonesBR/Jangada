@@ -2459,6 +2459,8 @@ class ChatActivity : JangadaActivity() {
         }
         PermissionOption.Kind.REJECT_ONCE -> getString(R.string.chat_deny)
         PermissionOption.Kind.REJECT_ALWAYS -> getString(R.string.chat_deny_always)
+        // Tipo desconhecido: o nome que o agente deu (o app não sabe o que a opção faz).
+        PermissionOption.Kind.OTHER -> option.label.ifEmpty { option.id }
     }
 
     /** Monta cada item da conversa (sem XML: são poucos tipos e bem simples). */
