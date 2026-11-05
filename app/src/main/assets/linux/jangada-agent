@@ -48,7 +48,14 @@ agent=$$
         case "$tree" in *" $pid "*) continue ;; esac
         rest=${line##*") "}
         set -- $rest
-        case "$tree" in *" $2 "*) ;; *) continue ;; esac
+        case "$tree" in *" $2 "*) ;; *)
+          # Órfão (nohup/setsid cuja shell terminou, reparentado para o init): continua do agente
+          # se herdou JANGADA_AGENT_PID=$agent. Só quem tem ppid 1 é conferido, para não abrir o
+          # environ de todo processo do celular a cada 5 s; os filhos dele entram pela árvore.
+          if [ "$2" != 1 ] || ! grep -aqzx "JANGADA_AGENT_PID=$agent" "/proc/$pid/environ" 2>/dev/null; then
+            continue
+          fi ;;
+        esac
         tree="$tree$pid "
         # Nas 3 primeiras voltas (~10 s), filho de quem é parte do agente também é parte dele,
         # menos um comando que o agente rodou logo na largada: um shell (bash, sh) ou quem já
