@@ -1451,6 +1451,8 @@ internal fun stateText(context: Context, state: ChatState): String = context.get
 internal fun jobMemoryText(context: Context, chat: AgentChat, usage: JobMemory.Usage?): String? = when {
     chatState(chat) == ChatState.ASLEEP -> context.getString(R.string.home_job_asleep_memory)
     usage == null -> null
+    // Sem processos contados (só a memória do próprio agente): "0 processo" não diz nada.
+    usage.processes == 0 -> context.getString(R.string.home_job_memory_only, Formatter.formatShortFileSize(context, usage.rssKb * 1024L))
     else -> context.resources.getQuantityString(
         R.plurals.home_job_memory,
         usage.processes,
