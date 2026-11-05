@@ -384,6 +384,13 @@ class AcpChat(
             val cancelled = cancelling
             cancelling = false
             finishDrafts()
+            // O agente caiu ou foi parado no meio da resposta: a saída já foi mostrada (onExited) e a fila
+            // não tem para onde ir. Descarta (os itens ficam para editar e reenviar) e não mostra outro cartão.
+            if (isStopped(error)) {
+                dropQueue()
+                changed()
+                return@request
+            }
             // Fim do turno: o Codex gravou o que gastou, então lê os limites de novo.
             refreshLimits(LIMITS_DELAY_MS)
             val refused = error == null && result?.optString("stopReason") == "refusal"
