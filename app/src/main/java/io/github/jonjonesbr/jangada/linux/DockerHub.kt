@@ -29,24 +29,11 @@ class DockerHub(private val repository: String) {
      */
     fun layers(reference: String, architecture: String): List<Layer> {
         var manifest = manifest(reference)
-        val list = manifest.optJSONArray("manifests")
-        if (list != null) {
-            var digest: String? = null
-            for (i in 0 until list.length()) {
-                val entry = list.getJSONObject(i)
-                val platform = entry.optJSONObject("platform") ?: continue
-                if (platform.optString("os") == "linux" && platform.optString("architecture") == architecture) {
-                    digest = entry.getString("digest")
-                    break
-                }
-            }
-            manifest = manifest(digest ?: throw IOException("imagem sem versão para $architecture"))
+        if (manifest.optJSONArray("manifests") != null) {
+            val digest = pickManifest(manifest, architecture) ?: throw IOException("imagem sem versão para $architecture")
+            manifest = manifest(digest)
         }
-        val layers = manifest.getJSONArray("layers")
-        return (0 until layers.length()).map {
-            val layer = layers.getJSONObject(it)
-            Layer(layer.getString("digest"), layer.getLong("size"), layer.getString("mediaType"))
-        }
+        return parseLayers(manifest)
     }
 
     /** Baixa uma camada para [dest], conferindo o SHA-256 no final. */
@@ -153,6 +140,31 @@ class DockerHub(private val repository: String) {
 
     companion object {
         internal fun sha256(bytes: ByteArray): String = hex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
+        /**
+         * Escolhe, no índice de manifestos (manifest list ou OCI index), o digest da entrada
+         * linux/[architecture]. A primeira que bater vence; null se a arquitetura não existe.
+         */
+        internal fun pickManifest(index: JSONObject, architecture: String): String? {
+            val list = index.optJSONArray("manifests") ?: return null
+            for (i in 0 until list.length()) {
+                val entry = list.getJSONObject(i)
+                val platform = entry.optJSONObject("platform") ?: continue
+                if (platform.optString("os") == "linux" && platform.optString("architecture") == architecture) {
+                    return entry.getString("digest")
+                }
+            }
+            return null
+        }
+
+        /** Camadas de um manifesto de imagem (pura). */
+        internal fun parseLayers(manifest: JSONObject): List<Layer> {
+            val layers = manifest.getJSONArray("layers")
+            return (0 until layers.length()).map {
+                val layer = layers.getJSONObject(it)
+                Layer(layer.getString("digest"), layer.getLong("size"), layer.getString("mediaType"))
+            }
+        }
 
         private fun hex(digest: ByteArray) = "sha256:" + digest.joinToString("") { "%02x".format(it) }
 
