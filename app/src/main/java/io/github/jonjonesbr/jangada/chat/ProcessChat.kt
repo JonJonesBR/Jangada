@@ -318,6 +318,17 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         onAttention?.invoke(kind)
     }
 
+    /** Janela do último aviso de limite (o serviço lê ao montar o aviso). Só a thread principal escreve. */
+    @Volatile private var limitWindow: LimitWindow? = null
+    override val limitCrossed: LimitWindow? get() = limitWindow
+
+    /** Avisa que um limite do plano passou de 90%: a primeira janela da lista (ver [crossedWindows]). Na thread principal. */
+    protected fun warnLimits(windows: List<LimitWindow>) {
+        val first = windows.firstOrNull() ?: return
+        limitWindow = first
+        attention(ChatAttention.LIMIT)
+    }
+
     /**
      * Quando o agente para, nada fica pendente: pedidos de permissão sem
      * resposta viram cancelados e nenhuma resposta fica com o cursor piscando.

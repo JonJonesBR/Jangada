@@ -32,6 +32,9 @@ import io.github.jonjonesbr.jangada.chat.ChatAttention
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.LimitWindow
+import io.github.jonjonesbr.jangada.chat.formatLimitReset
+import io.github.jonjonesbr.jangada.chat.limitKindName
 import io.github.jonjonesbr.jangada.chat.PermissionOption
 import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
@@ -1095,6 +1098,7 @@ class TerminalService : Service() {
             ChatAttention.LOGIN -> R.string.notify_login_title to R.string.notify_login_text
             ChatAttention.FINISHED -> R.string.notify_finished_title to R.string.notify_finished_text
             ChatAttention.FAILED -> R.string.notify_failed_title to R.string.notify_failed_text
+            ChatAttention.LIMIT -> R.string.notify_limit_title to R.string.notify_limit_text
         }
         val open = Intent(this, ChatActivity::class.java)
             .putExtra(ChatActivity.EXTRA_AGENT_ID, agentId)
@@ -1118,11 +1122,23 @@ class TerminalService : Service() {
             )
             permissionNotices += key
         } else {
-            attentionNotification(requestCode, NOTIFICATION_CHAT, getString(title, name), getString(text), open, tag = key)
+            val limit = if (attention == ChatAttention.LIMIT) chats[key]?.chat?.limitCrossed else null
+            if (limit != null) {
+                attentionNotification(requestCode, NOTIFICATION_CHAT, getString(title), limitText(name, limit), open, tag = key)
+            } else {
+                attentionNotification(requestCode, NOTIFICATION_CHAT, getString(title, name), getString(text), open, tag = key)
+            }
             permissionNotices -= key
         }
         // A lista da tela inicial mostra o estado de cada trabalho: redesenha.
         sessionsChanged()
+    }
+
+    /** Texto do aviso de limite: o agente, a janela, o percentual e, se houver, quando renova. */
+    private fun limitText(name: String, limit: LimitWindow): String {
+        val what = limitKindName(this, limit)
+        val reset = limit.resetsAtMs ?: return getString(R.string.notify_limit_text_noreset, name, what, limit.usedPercent)
+        return getString(R.string.notify_limit_text, name, what, limit.usedPercent, formatLimitReset(this, reset))
     }
 
     /** Nome de um trabalho nos avisos: o agente e, se não for a raiz, a pasta. */

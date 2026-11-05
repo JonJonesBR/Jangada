@@ -356,8 +356,10 @@ class ChatEngine(
         info ?: return
         val limits = PlanLimitsParser.fromClaude(info, System.currentTimeMillis()) ?: return
         // Evento com só uma janela (sem unifiedWindows): as outras guardadas continuam valendo.
-        val merged = limitsStore.load(LIMITS_AGENT_ID)?.let { PlanLimitsParser.merge(it, limits) } ?: limits
+        val old = limitsStore.load(LIMITS_AGENT_ID)
+        val merged = old?.let { PlanLimitsParser.merge(it, limits) } ?: limits
         limitsStore.save(LIMITS_AGENT_ID, merged)
+        warnLimits(crossedWindows(old, merged))
         changed()
     }
 

@@ -270,6 +270,36 @@ class PlanLimitsTest {
         )
     }
 
+    private fun limite(percent: Int, resets: Long? = 1793862000000L) =
+        PlanLimits(listOf(LimitWindow(LimitWindow.Kind.FIVE_HOUR, percent, resets)), agora)
+
+    @Test
+    fun avisaQuandoSubiuDeAbaixoDe90() {
+        val cruzou = crossedWindows(limite(85), limite(92))
+        assertEquals(listOf(92), cruzou.map { it.usedPercent })
+    }
+
+    @Test
+    fun naoAvisaDeNovoNoMesmoPeriodo() {
+        assertEquals(emptyList<LimitWindow>(), crossedWindows(limite(93), limite(95)))
+    }
+
+    @Test
+    fun avisaDeNovoQuandoRenovou() {
+        val cruzou = crossedWindows(limite(95, 1793862000000L), limite(91, 1793880000000L))
+        assertEquals(listOf(91), cruzou.map { it.usedPercent })
+    }
+
+    @Test
+    fun naoAvisaAbaixoDe90() {
+        assertEquals(emptyList<LimitWindow>(), crossedWindows(limite(10), limite(89)))
+    }
+
+    @Test
+    fun primeiraLeituraAcimaDe90Avisa() {
+        assertEquals(listOf(90), crossedWindows(null, limite(90)).map { it.usedPercent })
+    }
+
     /** Linha de token_count do Codex com todos os campos (ver o comentário acima dos testes "codexFormatoReal"). */
     private fun linhaCodexReal(primary: String, secondary: String, reached: String = "null"): String =
         """{"timestamp":"2026-11-04T21:10:00.000Z","type":"event_msg","payload":{"type":"token_count",""" +

@@ -320,11 +320,16 @@ class AcpChat(
         val started = runCatching {
             thread(name = "jangada-limites") {
                 var found = false
+                var crossed: List<LimitWindow> = emptyList()
                 try {
                     if (delayMs > 0) Thread.sleep(delayMs)
-                    val limits = CodexLimits.read(sessions, System.currentTimeMillis())
+                    val now = System.currentTimeMillis()
+                    val limits = CodexLimits.read(sessions, now)
                     if (limits != null) {
+                        val old = limitsStore.load(agentId)
                         limitsStore.save(agentId, limits)
+                        // Sessão antiga pode trazer uma janela já renovada: essa não é um aviso.
+                        crossed = crossedWindows(old, limits).filter { it.resetsAtMs == null || it.resetsAtMs > now }
                         found = true
                     }
                 } catch (e: Exception) {
@@ -333,6 +338,7 @@ class AcpChat(
                     main.post {
                         limitsReading = false
                         if (found) changed()
+                        warnLimits(crossed)
                         // Outro fim de turno chegou durante a leitura: lê de novo (só se o chat segue aberto).
                         if (limitsAgain) {
                             limitsAgain = false

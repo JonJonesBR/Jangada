@@ -65,6 +65,7 @@ import io.github.jonjonesbr.jangada.chat.LimitWindow
 import io.github.jonjonesbr.jangada.chat.PlanLimits
 import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
+import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
@@ -1297,22 +1298,12 @@ class ChatActivity : JangadaActivity() {
         val now = System.currentTimeMillis()
         val limits = limitsStore.load(agentId)?.let { PlanLimitsParser.current(it, now) } ?: return
         val lines = limits.windows.joinToString("\n") { w ->
-            listOfNotNull(limitName(w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatReset(it)) })
+            listOfNotNull(limitName(w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatLimitReset(this, it)) })
                 .joinToString(" · ")
         }
         val updated = DateUtils.getRelativeTimeSpanString(limits.updatedAtMs, now, DateUtils.SECOND_IN_MILLIS)
         val text = "$lines\n\n${getString(R.string.chat_limits_updated, updated)}\n\n${getString(R.string.chat_limits_explain)}"
         Sheet(this).title(getString(R.string.chat_limits_title)).message(text).show()
-    }
-
-    /** Horário de renovação: só a hora se for hoje; senão, dia da semana e hora. */
-    private fun formatReset(ms: Long): String {
-        val flags = if (DateUtils.isToday(ms)) {
-            DateUtils.FORMAT_SHOW_TIME
-        } else {
-            DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_ABBREV_WEEKDAY or DateUtils.FORMAT_SHOW_TIME
-        }
-        return DateUtils.formatDateTime(this, ms, flags)
     }
 
     // ---- Sugestões de comandos "/" (do app e do agente) ----

@@ -566,6 +566,11 @@
     <string name="notify_finished_text">Toque para ver a resposta.</string>
     <string name="notify_failed_title">%1$s: algo deu errado</string>
     <string name="notify_failed_text">Abra o chat para ver o que aconteceu.</string>
+    <string name="notify_limit_title">Limite do plano quase no fim</string>
+    <string name="notify_limit_text">%1$s: %2$s chegou a %3$d%%. Renova %4$s.</string>
+    <string name="notify_limit_text_noreset">%1$s: %2$s chegou a %3$d%%.</string>
+    <string name="limit_name_five_hour">limite de 5 horas</string>
+    <string name="limit_name_weekly">limite semanal</string>
     <string name="notify_memory_title">Pouca memória no celular</string>
     <string name="notify_memory_text">%1$s está usando %2$s. Se faltar memória, o Linux encerra primeiro os comandos dos agentes (como navegadores de teste), não os agentes.</string>
     <string name="notify_memory_text_generic">Feche apps ou trabalhos que não estiver usando. Se faltar memória, o Linux encerra primeiro os comandos dos agentes.</string>

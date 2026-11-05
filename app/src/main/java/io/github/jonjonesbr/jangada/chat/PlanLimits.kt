@@ -21,6 +21,18 @@ data class LimitWindow(val kind: Kind, val usedPercent: Int, val resetsAtMs: Lon
 data class PlanLimits(val windows: List<LimitWindow>, val updatedAtMs: Long)
 
 /**
+ * Janelas de [new] que passaram de [threshold]% agora: a janela do mesmo tipo e nome em [old] estava
+ * abaixo, não existia, ou era de outro período (renovou e voltou a subir). Sem [old], todas que
+ * estão acima contam. Uma janela já acima no mesmo período não conta de novo.
+ */
+fun crossedWindows(old: PlanLimits?, new: PlanLimits, threshold: Int = 90): List<LimitWindow> =
+    new.windows.filter { w ->
+        if (w.usedPercent < threshold) return@filter false
+        val before = old?.windows?.firstOrNull { it.kind == w.kind && it.label == w.label }
+        before == null || before.usedPercent < threshold || before.resetsAtMs != w.resetsAtMs
+    }
+
+/**
  * Lê os limites do plano que cada agente informa (Claude pelo stream-json, Codex pelas sessões
  * que ele grava). Nunca lança exceção: dado ruim vira null.
  */

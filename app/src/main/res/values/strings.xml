@@ -568,6 +568,11 @@
     <string name="notify_finished_text">Tap to see the answer.</string>
     <string name="notify_failed_title">%1$s: something went wrong</string>
     <string name="notify_failed_text">Open the chat to see what happened.</string>
+    <string name="notify_limit_title">Plan limit almost reached</string>
+    <string name="notify_limit_text">%1$s: %2$s reached %3$d%%. Resets %4$s.</string>
+    <string name="notify_limit_text_noreset">%1$s: %2$s reached %3$d%%.</string>
+    <string name="limit_name_five_hour">5-hour limit</string>
+    <string name="limit_name_weekly">weekly limit</string>
     <string name="notify_memory_title">Phone memory is low</string>
     <string name="notify_memory_text">%1$s is using %2$s. If memory runs out, Linux stops the agents’ commands first (such as test browsers), not the agents.</string>
     <string name="notify_memory_text_generic">Close apps or jobs you aren’t using. If memory runs out, Linux stops the agents’ commands first.</string>

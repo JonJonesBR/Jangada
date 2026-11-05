@@ -60,7 +60,7 @@ sealed class ChatItem {
 }
 
 /** Quando o chat pede a atenção do usuário (o serviço decide se mostra um aviso). */
-enum class ChatAttention { PERMISSION, LOGIN, FINISHED, FAILED }
+enum class ChatAttention { PERMISSION, LOGIN, FINISHED, FAILED, LIMIT }
 
 /** Estado de um trabalho de chat, mostrado na lista da tela inicial. */
 enum class ChatState { WORKING, WAITING, READY, ASLEEP, STOPPED }
@@ -184,6 +184,8 @@ interface AgentChat {
     val idleSinceMs: Long get() = 0L
     /** Identificador do trabalho para o relatório de memória (ver JobMemory); null se não há. */
     val jobId: String? get() = null
+    /** Janela do plano que passou de 90% no último aviso [ChatAttention.LIMIT]; null se não há. */
+    val limitCrossed: LimitWindow? get() = null
     var onChanged: (() -> Unit)?
     /**
      * Avisos para o usuário (chamado na thread principal): pedido de permissão,
