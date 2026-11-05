@@ -706,7 +706,7 @@
     <string name="auto_compact_off">Off</string>
     <string name="auto_compact_percent">At %1$d%%</string>
     <string name="auto_compact_global">Use the general setting (%1$s)</string>
-    <string name="auto_compact_global_short">General (%1$s)</string>
+    <string name="auto_compact_from_general">Follows the general setting</string>
     <string name="auto_compact_acp_note">On this agent, the app sends /compact at the end of a reply when the context reaches the percentage (if the agent has that command). Turning it off is only possible on Claude.</string>
     <string name="settings_auto_compact_label">Auto-compact: %1$s</string>
     <string name="settings_auto_compact_desc">Summarizes the conversation when the context fills up, so the agent can keep going with room. On Claude, the agent itself compacts and the setting applies when it starts again. On the other agents, the app sends /compact at the end of a reply when the context reaches the percentage (if the agent has that command). Each job can have its own, in the chat\'s ⋮ menu.</string>

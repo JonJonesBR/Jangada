@@ -2263,22 +2263,18 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Linha da compactação automática deste trabalho (painel do chip de contexto e menu ⋮). O valor
-     * mostra o do trabalho, ou "Geral (…)" quando ele segue o ajuste geral.
+     * Linha da compactação automática deste trabalho (painel do chip de contexto e menu ⋮). O valor é
+     * curto (o efetivo); quando ele vem do ajuste geral, a descrição diz isso.
      */
-    private fun autoCompactRow() = Sheet.Row(
-        title = getString(R.string.auto_compact_title),
-        value = autoCompactValue(),
-        icon = "🗜",
-    ) { chooseAutoCompact() }
-
-    private fun autoCompactValue(): String {
+    private fun autoCompactRow(): Sheet.Row {
         val job = settings.autoCompactOfJob(chatKey)
-        return if (job == AutoCompact.GLOBAL) {
-            getString(R.string.auto_compact_global_short, autoCompactShort(this, settings.autoCompact))
-        } else {
-            autoCompactShort(this, job)
-        }
+        val fromGeneral = job == AutoCompact.GLOBAL
+        return Sheet.Row(
+            title = getString(R.string.auto_compact_title),
+            description = if (fromGeneral) getString(R.string.auto_compact_from_general) else null,
+            value = autoCompactShort(this, if (fromGeneral) settings.autoCompact else job),
+            icon = "🗜",
+        ) { chooseAutoCompact() }
     }
 
     /**

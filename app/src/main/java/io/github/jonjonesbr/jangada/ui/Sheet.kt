@@ -10,6 +10,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -304,6 +305,10 @@ class Sheet(private val activity: Activity) {
                         text = value
                         textSize = 14f
                         setTextColor(activity.getColor(R.color.accent_text))
+                        // O valor nunca passa de 40% da tela: o título (com peso) fica com o resto.
+                        maxWidth = activity.resources.displayMetrics.widthPixels * 40 / 100
+                        maxLines = 2
+                        ellipsize = TextUtils.TruncateAt.END
                         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                     },
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
