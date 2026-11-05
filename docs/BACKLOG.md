@@ -6,24 +6,13 @@ Próximos trabalhos do Jangada, na ordem em que serão feitos. Ao concluir um it
 
 - Tela inicial: barra da RAM (agentes, outros, livre) com legenda, quanto dá para usar antes de o Android fechar apps e a memória de cada trabalho (também no painel ⇄).
 - "Cabe mais um?": pico de cada agente nos últimos 5 trabalhos (`MemoryPeaks`), previsão na tela inicial e no painel ao abrir mais um agente.
-
-## 1. Limites do plano (5 horas e semanal)
-
-- O Claude Code manda `rate_limit_event` no stream-json (`rate_limit_info`: `status`, `rateLimitType` como `five_hour`/`seven_day`, `utilization`, `resetsAt`). Mostrar no chat, junto do uso do contexto (que já existe): quanto foi usado e quando renova.
-- Conferir com conversas reais se `utilization` vem sempre ou só perto do limite. Se vier só perto, considerar o mesmo dado do `/usage` do Claude Code (`/api/oauth/usage`, não documentado: pode mudar).
-- Vale para todos os agentes que informarem os limites, não só o Claude. Investigar um por um:
-  - Codex: o CLI conhece os limites (`rate_limits` no uso de tokens, janela de 5 h e semanal); ver se o adaptador ACP repassa ou se dá para ler de outro jeito (arquivo de sessão do Codex).
-  - Qwen Code, OpenCode, Pi, Hermes, Command Code: conferir se o ACP ou os arquivos deles trazem cota ou uso.
-  - Quem não informar nada: mostrar só o contexto e não inventar número.
-- A tela deve ser a mesma para todos (um modelo comum de "limite: usado %, renova em"), cada agente preenche o que tiver.
-
-## 2. Armazenamento
-
-- Cartão "Armazenamento" na tela inicial: espaço livre no celular, tamanho do Linux e divisão entre agentes, projetos, conversas (`~/.claude/projects` e equivalentes) e caches (npm, apt).
-- Calcular só quando pedir (o `du` é lento).
-- "Limpar caches", sem nunca apagar logins nem configurações.
+- Chat: limites do plano (5 horas e semanal) no Claude (`rate_limit_event`) e no Codex (arquivos de sessão do Codex). Os outros agentes não informam limites.
+- Tela inicial: espaço livre do celular e o que ocupa espaço no Linux (projetos, conversas, caches), com Limpar caches.
+- Chat ACP: Parar não mostra cartão de erro quando o agente responde com erro.
 
 ## Menores
 
-- `AcpChat`: se um agente responder ao Parar com erro JSON-RPC em vez de `stopReason: cancelled`, o chat mostra cartão de erro (como acontecia no Claude antes da correção).
+- Codex: conferir num Codex de verdade se os limites aparecem (o formato dos arquivos de sessão não foi visto aqui; o Codex não está instalado neste ambiente).
+- Juntar "Limpar caches" (tela inicial) e "Liberar espaço" (Ajustes, mais amplo: todo o ~/.cache e versões antigas do Claude) num só lugar, ou explicar a diferença nas duas telas.
+- Espaço: as conversas do Hermes, Command Code e oh-my-pi ainda contam como "Linux e agentes".
 - Testes dos parsers do chat (`ChatEngine`/`AcpChat`).
