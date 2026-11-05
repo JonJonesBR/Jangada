@@ -1,6 +1,6 @@
 package io.github.jonjonesbr.jangada.agents
 
-import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -48,7 +48,7 @@ class AgentRecipeTest {
             recipe.acp?.installScript()?.let { checkSyntax("${recipe.id} acp", it) }
         }
         checkSyntax("detect", AgentCatalog.detectScript(recipes))
-        checkSyntax("cleanup", LinuxEnv.CLEANUP_SCRIPT)
+        checkSyntax("cleanup", CACHE_CLEAN_SCRIPT)
     }
 
     @Test

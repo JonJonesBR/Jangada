@@ -560,32 +560,6 @@ class LinuxEnv(context: Context) {
                 "export PATH\n" +
                 "export BROWSER=/usr/local/bin/jangada-open\n"
 
-        /**
-         * "Liberar espaço": caches de download (apt, npm, bun, ~/.cache),
-         * versões antigas do Claude Code e arquivos temporários com mais de
-         * um dia. Não mexe em agentes, logins, conversas nem projetos.
-         */
-        const val CLEANUP_SCRIPT = """
-for f in /etc/profile ~/.profile ~/.bashrc; do [ -f "${'$'}f" ] && . "${'$'}f"; done 2>/dev/null
-echo "Limpando o cache do apt"; apt-get clean >/dev/null 2>&1
-if command -v npm >/dev/null 2>&1; then echo "Limpando o cache do npm"; npm cache clean --force >/dev/null 2>&1; fi
-rm -rf ~/.npm/_cacache ~/.npm/_npx ~/.bun/install/cache 2>/dev/null
-echo "Limpando ~/.cache"; rm -rf ~/.cache/* 2>/dev/null
-if [ -d ~/.local/share/claude/versions ]; then
-  cur=${'$'}(readlink -f "${'$'}(command -v claude 2>/dev/null)" 2>/dev/null)
-  case "${'$'}cur" in
-    "${'$'}HOME"/.local/share/claude/versions/*)
-      for v in ~/.local/share/claude/versions/*; do
-        [ -e "${'$'}v" ] || continue
-        case "${'$'}cur" in "${'$'}v"|"${'$'}v"/*) continue ;; esac
-        echo "Removendo versão antiga do Claude Code: ${'$'}{v##*/}"; rm -rf "${'$'}v"
-      done ;;
-  esac
-fi
-find /tmp /var/tmp -mindepth 1 -maxdepth 1 -mtime +1 -exec rm -rf {} + 2>/dev/null
-echo "JANGADA_OK"
-"""
-
         private const val OPEN_SCRIPT =
             "#!/bin/sh\n" +
                 "# Abre um link no Android, pelo app Jangada. Gerado pelo Jangada.\n" +

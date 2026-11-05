@@ -268,25 +268,62 @@ class SettingsActivity : JangadaActivity() {
         total
     }.getOrDefault(0L)
 
-    /** Apaga caches e versões antigas dentro do Linux e mostra quanto liberou. */
+    /** Libera espaço pela mesma limpeza da tela inicial (no serviço) e mostra quanto liberou. */
     private fun freeSpace() {
         val progress = AlertDialog.Builder(this).setMessage(R.string.settings_cleaning).setCancelable(false).show()
-        val linux = LinuxEnv(this)
-        thread(name = "linux-cleanup") {
+        thread(name = "linux-cleanup-before") {
             val before = linuxBytes()
-            runCatching { linux.refreshIntegration() }
-            runCatching { linux.runBash(LinuxEnv.CLEANUP_SCRIPT) { } }
-            val freed = (before - linuxBytes()).coerceAtLeast(0)
-            runOnUiThread {
-                progress.dismiss()
-                if (isDestroyed) return@runOnUiThread
-                val message = if (freed < 1_048_576) getString(R.string.settings_nothing_to_clean)
-                else getString(R.string.settings_cleaned, (freed / 1_048_576).toString())
-                AlertDialog.Builder(this)
-                    .setMessage(message)
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show()
-                showLinuxSize()
+            runOnUiThread { CacheCleaner(before, progress).start() }
+        }
+    }
+
+    /**
+     * Liga-se ao serviço e pede a limpeza. O bind dura até a limpeza acabar (senão o serviço
+     * pode parar no meio). Se o serviço recusar (tarefa de agente ou outra limpeza), mostra
+     * [R.string.storage_clean_busy].
+     */
+    private inner class CacheCleaner(private val before: Long, private val progress: AlertDialog) : ServiceConnection {
+        private var bound = false
+        private var finished = false
+
+        fun start() {
+            bound = runCatching {
+                applicationContext.bindService(Intent(applicationContext, TerminalService::class.java), this, Context.BIND_AUTO_CREATE)
+            }.getOrDefault(false)
+            if (!bound) finish(busy = true)
+        }
+
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            val service = (binder as? TerminalService.LocalBinder)?.service
+            val started = service?.cleanCaches { finish(busy = false) } == true
+            if (!started) finish(busy = true)
+        }
+
+        override fun onServiceDisconnected(name: ComponentName?) = finish(busy = true)
+
+        private fun finish(busy: Boolean) {
+            if (finished) return
+            finished = true
+            if (bound) runCatching { applicationContext.unbindService(this) }
+            bound = false
+            if (busy) {
+                runCatching { progress.dismiss() }
+                if (!isDestroyed) Toast.makeText(this@SettingsActivity, R.string.storage_clean_busy, Toast.LENGTH_SHORT).show()
+                return
+            }
+            thread(name = "linux-cleanup-after") {
+                val freed = (before - linuxBytes()).coerceAtLeast(0)
+                runOnUiThread {
+                    runCatching { progress.dismiss() }
+                    if (isDestroyed) return@runOnUiThread
+                    val message = if (freed < 1_048_576) getString(R.string.settings_nothing_to_clean)
+                    else getString(R.string.settings_cleaned, (freed / 1_048_576).toString())
+                    AlertDialog.Builder(this@SettingsActivity)
+                        .setMessage(message)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
+                    showLinuxSize()
+                }
             }
         }
     }

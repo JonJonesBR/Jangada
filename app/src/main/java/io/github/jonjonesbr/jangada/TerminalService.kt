@@ -68,6 +68,13 @@ class TerminalService : Service() {
     @Volatile private var legacyCleanup: Thread? = null
     /** Limpeza dos caches pedida na tela inicial; closeEverything espera por ela antes de apagar o Linux. */
     @Volatile private var cacheCleaner: Thread? = null
+    /**
+     * true do início da limpeza até o fim dela chegar à thread principal (só ela mexe). Enquanto
+     * isso, tarefas de agente esperam na fila: instalar ou atualizar junto com a limpeza disputaria
+     * os caches do npm e as versões do Claude Code. (cleaningCaches olha a thread, que ainda está
+     * viva quando o fim é postado; por isso a fila usa esta marca.)
+     */
+    private var cleaningNow = false
     /** Vigia a rede do celular, para regravar o DNS do Debian quando ela muda. */
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     /** Último aviso de progresso da instalação do Linux (no máximo 1 por segundo). */
@@ -506,7 +513,7 @@ class TerminalService : Service() {
         // Pedido novo substitui o que esperava na fila para este agente.
         taskQueue.removeAll { it.recipe.id == recipe.id }
         // Com fila, entra no fim mesmo sem nada rodando (a anterior pode estar acabando): não passa na frente.
-        if (taskQueue.isNotEmpty() || tasks.values.any { it.state == AgentTask.State.RUNNING }) {
+        if (cleaningNow || taskQueue.isNotEmpty() || tasks.values.any { it.state == AgentTask.State.RUNNING }) {
             taskQueue.addLast(QueuedTask(recipe, updating, uninstalling))
             goForeground()
             updateNotification()
@@ -647,16 +654,29 @@ class TerminalService : Service() {
     fun cleaningCaches(): Boolean = cacheCleaner?.isAlive == true
 
     /**
-     * Limpa os caches dentro do Debian ([CACHE_CLEAN_SCRIPT]) numa thread. Não começa (devolve false)
-     * com outra limpeza ou uma tarefa de agente rodando ou na fila. [done] roda na thread principal.
+     * Limpeza segura do Linux ([CACHE_CLEAN_SCRIPT]) numa thread: caches de download, temporários de
+     * navegador e versões antigas do Claude Code. Não começa (devolve false) com outra limpeza ou uma
+     * tarefa de agente rodando ou na fila. [done] roda na thread principal.
      * Fica no serviço (e não na tela) para nunca rodar duas vezes e para o closeEverything esperar por ela.
      * Só na thread principal.
      */
     fun cleanCaches(done: () -> Unit): Boolean {
         if (cleaningCaches() || agentTaskBusy()) return false
+        cleaningNow = true
         cacheCleaner = thread(name = "jangada-limpeza") {
-            runCatching { LinuxEnv(this).run(CACHE_CLEAN_SCRIPT) { } }
-            main.post { done() }
+            runCatching {
+                // As peças do app (PATH dos instaladores) antes do script. Sem mexer no ~/.claude.json:
+                // a limpeza não abre o Claude, e ele pode estar gravando o arquivo num chat aberto.
+                val linux = LinuxEnv(this)
+                linux.refreshIntegration(trustClaude = false)
+                linux.runBash(CACHE_CLEAN_SCRIPT) { }
+            }
+            main.post {
+                cleaningNow = false
+                // Tarefas de agente pedidas durante a limpeza esperaram na fila (ver runAgentTask).
+                runNextQueued()
+                done()
+            }
         }
         return true
     }
@@ -676,7 +696,7 @@ class TerminalService : Service() {
 
     /** Começa o próximo da fila, se nenhuma tarefa de agente está rodando. */
     private fun runNextQueued() {
-        if (tasks.values.any { it.state == AgentTask.State.RUNNING }) return
+        if (cleaningNow || tasks.values.any { it.state == AgentTask.State.RUNNING }) return
         val next = taskQueue.removeFirstOrNull() ?: return
         startAgentTask(next.recipe, next.updating, next.uninstalling)
     }

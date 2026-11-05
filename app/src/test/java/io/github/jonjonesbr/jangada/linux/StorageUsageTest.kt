@@ -1,7 +1,9 @@
 package io.github.jonjonesbr.jangada.linux
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeNoException
 import org.junit.Rule
 import org.junit.Test
@@ -59,6 +61,24 @@ class StorageUsageTest {
     }
 
     @Test
+    fun cachesContaTemporariosDeNavegadorEVersoesAntigasDoClaude() {
+        val root = tmp.newFolder("rootfs")
+        write(root, "root/.cache/chromium-headless/scoped_dir123/perfil.bin", 11)
+        write(root, "root/.cache/chromium-headless/outro.bin", 99)
+        write(root, "root/.local/share/claude/versions/2.1.8", 13)
+        write(root, "root/.local/share/claude/versions/2.1.9", 17)
+        write(root, "root/.local/share/claude/versions/2.1.10", 19)
+        val link = File(root, "root/.local/bin/claude")
+        if (!symlink(link, File("/root/.local/share/claude/versions/2.1.9"))) return
+
+        val result = measure(root) { false }
+
+        requireNotNull(result)
+        // Só a versão antiga (2.1.8) e o scoped_dir entram; a atual, a mais nova e o outro arquivo não.
+        assertEquals(11L + 13L, result.cachesBytes)
+    }
+
+    @Test
     fun linkDeArquivoNaoConta() {
         val root = tmp.newFolder("rootfs")
         val outsideFile = File(tmp.root, "fora.bin").apply { writeBytes(ByteArray(500)) }
@@ -73,12 +93,46 @@ class StorageUsageTest {
     }
 
     @Test
-    fun limpezaApagaSoAsPastasDeCache() {
-        assertEquals(
-            "apt-get clean >/dev/null 2>&1; rm -rf /root/.npm/_cacache /root/.cache/pip /root/.cache/uv " +
-                "/root/.bun/install/cache 2>/dev/null; true",
-            CACHE_CLEAN_SCRIPT,
-        )
+    fun limpezaApagaOsCachesETemporariosDeNavegador() {
+        val script = CACHE_CLEAN_SCRIPT
+        listOf(
+            "apt-get clean",
+            "/root/.npm/_cacache",
+            "/root/.cache/pip",
+            "/root/.cache/uv",
+            "/root/.bun/install/cache",
+            "/root/.cache/claude-cli-nodejs",
+            "/root/.cache/chromium-headless",
+            "scoped_dir*",
+            "-mmin +60",
+            "/root/.local/share/claude/versions",
+            "readlink -f",
+        ).forEach { assertTrue("falta $it", script.contains(it)) }
+    }
+
+    @Test
+    fun limpezaNaoApagaNadaQueOUsuarioUsa() {
+        val script = CACHE_CLEAN_SCRIPT
+        listOf("_npx", "ms-playwright", "puppeteer", "rm -rf /root/.cache/*", "rm -rf ~/.cache/*")
+            .forEach { assertFalse("não pode conter $it", script.contains(it)) }
+    }
+
+    @Test
+    fun versoesAntigasMantemAtualEMaisNova() {
+        assertEquals(listOf("2.1.8"), oldClaudeVersions(listOf("2.1.8", "2.1.9", "2.1.10"), "2.1.9"))
+        assertEquals(listOf("2.1.8", "2.1.9"), oldClaudeVersions(listOf("2.1.9", "2.1.10", "2.1.8", "2.1.11"), "2.1.10"))
+    }
+
+    @Test
+    fun ordemDeVersaoComparaNumeros() {
+        // 2.1.9 é mais antiga que 2.1.10 (comparação de texto diria o contrário).
+        assertEquals(listOf("2.1.9"), oldClaudeVersions(listOf("2.1.9", "2.1.10"), "2.1.10"))
+        assertEquals(listOf("2.1.9", "2.1.10"), oldClaudeVersions(listOf("2.1.9", "2.1.10", "2.1.11"), "2.1.8"))
+    }
+
+    @Test
+    fun semAtualNaoApagaNenhuma() {
+        assertEquals(emptyList<String>(), oldClaudeVersions(listOf("2.1.8", "2.1.9"), null))
     }
 
     @Test
