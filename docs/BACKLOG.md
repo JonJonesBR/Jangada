@@ -2,8 +2,10 @@
 
 Próximos trabalhos do Jangada, na ordem em que serão feitos. Ao concluir um item, ele sai daqui e vai para o `CHANGELOG.md`.
 
-## Menores
+## Feito, falta publicar (vai para o CHANGELOG na próxima versão)
 
-- Codex: conferir num Codex de verdade se os limites aparecem (o formato dos arquivos de sessão não foi visto aqui; o Codex não está instalado neste ambiente).
-- Espaço: as conversas do Hermes, Command Code e oh-my-pi ainda contam como "Linux e agentes".
-- Testes dos parsers do chat (`ChatEngine`/`AcpChat`).
+- Espaço: as conversas do Hermes (`~/.hermes`) e do oh-my-pi (`~/.omp/agent/sessions`) contam como conversas.
+
+## Pendentes
+
+Nada pendente.
