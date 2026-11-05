@@ -166,6 +166,27 @@ class AgentRecipeTest {
         assertFalse(Versions.isNewer("x", "1.0.0"))
     }
 
+    @Test
+    fun desinstalarNaoApagaArquivoDeProjeto() {
+        // Um link numa pasta de instalação que aponta para um projeto: o link sai, o projeto fica.
+        // O script roda em /root de verdade, então aqui se confere o texto: a guarda vem antes do rm do alvo.
+        for (recipe in recipes) {
+            val script = recipe.uninstallScript()
+            val guard = script.indexOf("/root/projetos/*|/root/celular/*) ;;")
+            val remove = script.indexOf("rm -f \"\$t\"")
+            assertTrue("${recipe.id}: sem guarda para projetos e celular", guard >= 0)
+            assertTrue("${recipe.id}: a guarda vem depois do rm do alvo", guard < remove)
+            assertFalse("${recipe.id}: apaga a pasta /root inteira", script.contains("/root/*"))
+        }
+        // Os padrões de `case` do script, na prática: o alvo só some dentro das pastas de instalação.
+        val pick = "t=\"\$1\"; case \"\$t\" in /root/projetos/*|/root/celular/*) echo guarda;; ${AgentRecipe.INSTALL_DIRS}) echo apaga;; *) echo fica;; esac"
+        assertEquals(listOf("guarda"), runBash("set -- /root/projetos/app/x.kt; $pick"))
+        assertEquals(listOf("guarda"), runBash("set -- /root/celular/Download/a.apk; $pick"))
+        assertEquals(listOf("apaga"), runBash("set -- /root/.local/share/claude/versions/2.1.0; $pick"))
+        assertEquals(listOf("apaga"), runBash("set -- /usr/local/lib/node_modules/x/bin.js; $pick"))
+        assertEquals(listOf("fica"), runBash("set -- /root/outra/coisa; $pick"))
+    }
+
     private fun checkSyntax(label: String, script: String) {
         val (code, output) = runProcess(listOf("bash", "-n", "-c", script))
         assertEquals("$label: erro de sintaxe\n$output\n--- script ---\n$script", 0, code)

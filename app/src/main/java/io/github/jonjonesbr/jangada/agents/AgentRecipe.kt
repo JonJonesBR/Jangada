@@ -95,7 +95,9 @@ data class AgentRecipe(
 
     /**
      * Desinstala em segundo plano: roda os passos da receita e apaga o
-     * comando do agente (só dentro de /root ou /usr/local, nunca do sistema).
+     * comando do agente. Só apaga dentro das pastas onde as receitas instalam
+     * (INSTALL_DIRS); o alvo de um link nunca é apagado se estiver em projetos
+     * ou no celular, mesmo que o link esteja numa pasta de instalação.
      * Configurações e logins ficam guardados, para uma reinstalação futura.
      */
     fun uninstallScript(): String {
@@ -107,8 +109,8 @@ data class AgentRecipe(
             for i in 1 2 3; do
               p=${'$'}(command -v $c 2>/dev/null) || break
               t=${'$'}(readlink -f "${'$'}p")
-              case "${'$'}p" in /root/*|/usr/local/*) rm -f "${'$'}p" ;; *) break ;; esac
-              case "${'$'}t" in /root/*|/usr/local/*) rm -f "${'$'}t" ;; esac
+              case "${'$'}p" in $INSTALL_DIRS) rm -f "${'$'}p" ;; *) break ;; esac
+              case "${'$'}t" in /root/projetos/*|/root/celular/*) ;; $INSTALL_DIRS) rm -f "${'$'}t" ;; esac
               hash -r
             done
             if command -v $c >/dev/null 2>&1; then echo "JANGADA_FAIL ainda instalado em ${'$'}(command -v $c)"; exit 1; fi
@@ -130,6 +132,12 @@ data class AgentRecipe(
 
         /** Nome do wrapper instalado no Debian (assets/linux/jangada-agent, em /usr/local/bin). */
         const val AGENT_WRAPPER = "jangada-agent"
+
+        /**
+         * Padrões (de `case`) das pastas onde as receitas instalam o agente. O desinstalar só apaga
+         * arquivos dentro delas. Quem criar receita com outra pasta precisa incluí-la aqui.
+         */
+        const val INSTALL_DIRS = "/root/.local/*|/root/.npm-global/*|/root/.bun/*|/root/.opencode/*|/usr/local/*|/usr/lib/node_modules/*"
 
         /**
          * Põe [command] (um agente) atrás do wrapper [AGENT_WRAPPER]: os comandos que o agente
