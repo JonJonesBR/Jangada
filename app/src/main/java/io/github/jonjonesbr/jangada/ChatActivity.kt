@@ -58,6 +58,10 @@ import io.github.jonjonesbr.jangada.chat.AcpChat
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
+import io.github.jonjonesbr.jangada.chat.LimitWindow
+import io.github.jonjonesbr.jangada.chat.PlanLimits
+import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
+import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
@@ -114,6 +118,7 @@ class ChatActivity : JangadaActivity() {
     private lateinit var chipModel: TextView
     private lateinit var chipView: TextView
     private lateinit var chipContext: TextView
+    private lateinit var chipLimits: TextView
     private lateinit var chipChanges: TextView
     /** Faixa fixa do pedido de permissão pendente (acima dos atalhos; ver [updatePermissionBar]). */
     private lateinit var permissionBar: View
@@ -216,6 +221,7 @@ class ChatActivity : JangadaActivity() {
     private val agentNames by lazy { AgentCatalog.load(this).associate { it.id to it.name } }
     /** Rascunhos da caixa de texto, um por trabalho (o texto não enviado sobrevive a sair da tela). */
     private val drafts by lazy { ChatDrafts(this) }
+    private val limitsStore by lazy { PlanLimitsStore(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -242,6 +248,7 @@ class ChatActivity : JangadaActivity() {
         chipModel = findViewById(R.id.chat_chip_model)
         chipView = findViewById(R.id.chat_chip_view)
         chipContext = findViewById(R.id.chat_chip_context)
+        chipLimits = findViewById(R.id.chat_chip_limits)
         chipChanges = findViewById(R.id.chat_chip_changes)
         permissionBar = findViewById(R.id.chat_permission_bar)
         permissionTitle = findViewById(R.id.chat_permission_title)
@@ -302,6 +309,7 @@ class ChatActivity : JangadaActivity() {
         chipModel.setOnClickListener { showModelSheet() }
         chipView.setOnClickListener { chooseView() }
         chipContext.setOnClickListener { engine?.let { showContextSheet(it) } }
+        chipLimits.setOnClickListener { showLimitsSheet() }
         chipChanges.setOnClickListener { openChanges() }
         permissionAllow.setOnClickListener { answerBarPermission(PermissionOption.Kind.ALLOW_ONCE) }
         permissionDeny.setOnClickListener { answerBarPermission(PermissionOption.Kind.REJECT_ONCE) }
@@ -894,7 +902,7 @@ class ChatActivity : JangadaActivity() {
     private fun applyTextScale() {
         val scale = settings.chatTextScale
         input.textSize = INPUT_TEXT_SP * scale
-        for (chip in listOf(chipFolder, chipModel, chipView, chipContext, chipChanges)) chip.textSize = CHIP_TEXT_SP * scale
+        for (chip in listOf(chipFolder, chipModel, chipView, chipContext, chipLimits, chipChanges)) chip.textSize = CHIP_TEXT_SP * scale
         if (adapter.chatScale != scale) {
             adapter.chatScale = scale
             adapter.notifyDataSetChanged()
@@ -1169,6 +1177,10 @@ class ChatActivity : JangadaActivity() {
             chipContext.contentDescription = getString(R.string.chat_chip_context_description, percent)
         }
 
+        // Limites do plano: o último valor conhecido do agente (vale para a conta), só para os que informam.
+        val limits = limitsStore.load(agentId)?.let { PlanLimitsParser.current(it, System.currentTimeMillis()) }
+        updateLimitsChip(limits)
+
         // Mudanças: só numa pasta git com arquivos alterados (a contagem vem de readChanges).
         val changes = changedFiles ?: 0
         val showChanges = branch != null && changes > 0
@@ -1239,6 +1251,62 @@ class ChatActivity : JangadaActivity() {
             .message(getString(R.string.chat_context_explain, percent))
             .rows(rows)
             .show()
+    }
+
+    /**
+     * Chip de limites: uso da janela de 5 horas e da semanal (as que existirem). Com 80% ou mais, em
+     * destaque. Sem essas janelas, o chip some (janelas "outras" só aparecem no painel).
+     */
+    private fun updateLimitsChip(limits: PlanLimits?) {
+        val shown = limits?.windows.orEmpty().filter { it.kind != LimitWindow.Kind.OTHER }
+        if (shown.isEmpty()) {
+            chipLimits.visibility = View.GONE
+            return
+        }
+        val high = shown.any { it.usedPercent >= COMPACT_PERCENT }
+        val parts = shown.joinToString(" · ") { w ->
+            if (w.kind == LimitWindow.Kind.FIVE_HOUR) {
+                getString(R.string.chat_limit_short_five_hour, w.usedPercent)
+            } else {
+                getString(R.string.chat_limit_short_weekly, w.usedPercent)
+            }
+        }
+        chipLimits.visibility = View.VISIBLE
+        chipLimits.text = getString(if (high) R.string.chat_chip_limits_high else R.string.chat_chip_limits, parts)
+        chipLimits.setTextColor(getColor(if (high) R.color.setup_error else R.color.setup_text))
+        chipLimits.contentDescription = getString(
+            R.string.chat_chip_limits_description, shown.joinToString(" · ") { limitName(it) },
+        )
+    }
+
+    /** Uma janela por extenso, sem o horário de renovação. */
+    private fun limitName(w: LimitWindow): String = when (w.kind) {
+        LimitWindow.Kind.FIVE_HOUR -> getString(R.string.chat_limit_five_hour, w.usedPercent)
+        LimitWindow.Kind.WEEKLY -> getString(R.string.chat_limit_weekly, w.usedPercent)
+        LimitWindow.Kind.OTHER -> getString(R.string.chat_limit_other, w.label.orEmpty(), w.usedPercent)
+    }
+
+    /** Toque no chip de limites: uma linha por janela, com quando renova, e quando foi atualizado. */
+    private fun showLimitsSheet() {
+        val now = System.currentTimeMillis()
+        val limits = limitsStore.load(agentId)?.let { PlanLimitsParser.current(it, now) } ?: return
+        val lines = limits.windows.joinToString("\n") { w ->
+            listOfNotNull(limitName(w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatReset(it)) })
+                .joinToString(" · ")
+        }
+        val updated = DateUtils.getRelativeTimeSpanString(limits.updatedAtMs, now, DateUtils.SECOND_IN_MILLIS)
+        val text = "$lines\n\n${getString(R.string.chat_limits_updated, updated)}\n\n${getString(R.string.chat_limits_explain)}"
+        Sheet(this).title(getString(R.string.chat_limits_title)).message(text).show()
+    }
+
+    /** Horário de renovação: só a hora se for hoje; senão, dia da semana e hora. */
+    private fun formatReset(ms: Long): String {
+        val flags = if (DateUtils.isToday(ms)) {
+            DateUtils.FORMAT_SHOW_TIME
+        } else {
+            DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_ABBREV_WEEKDAY or DateUtils.FORMAT_SHOW_TIME
+        }
+        return DateUtils.formatDateTime(this, ms, flags)
     }
 
     // ---- Sugestões de comandos "/" (do app e do agente) ----

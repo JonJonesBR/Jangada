@@ -292,7 +292,7 @@ class TerminalService : Service() {
         } else {
             val recipe = AgentCatalog.load(this).first { it.id == agentId }
             val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
-            AcpChat(linux, recipe.acp!!.command, version, Workspace.path(folder))
+            AcpChat(linux, recipe.acp!!.command, version, Workspace.path(folder), agentId = recipe.id)
         }
         // Para o chat anterior deste par (se havia) antes de o novo começar.
         current?.stop()

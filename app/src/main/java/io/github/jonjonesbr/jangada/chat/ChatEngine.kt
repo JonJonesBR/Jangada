@@ -52,6 +52,7 @@ class ChatEngine(
     private var requestCounter = 0
     /** Maior janela de contexto que o Claude informou (0 = ainda não sabemos). */
     private var contextWindow = 0L
+    private val limitsStore by lazy { PlanLimitsStore(context) }
 
     /**
      * Inicia o Claude. [resume] continua uma conversa específica;
@@ -338,7 +339,18 @@ class ChatEngine(
             }
             "control_request" -> handleControlRequest(json)
             "control_cancel_request" -> handleControlCancel(json.optString("request_id"))
+            "rate_limit_event" -> updateLimits(json.optJSONObject("rate_limit_info"))
         }
+    }
+
+    /** Guarda os limites do plano que o Claude informou (a conta toda, não só esta conversa). */
+    private fun updateLimits(info: JSONObject?) {
+        info ?: return
+        val limits = PlanLimitsParser.fromClaude(info, System.currentTimeMillis()) ?: return
+        // Evento com só uma janela (sem unifiedWindows): as outras guardadas continuam valendo.
+        val merged = limitsStore.load(LIMITS_AGENT_ID)?.let { PlanLimitsParser.merge(it, limits) } ?: limits
+        limitsStore.save(LIMITS_AGENT_ID, merged)
+        changed()
     }
 
     /**
@@ -561,6 +573,8 @@ class ChatEngine(
     companion object {
         private const val TAG = "JangadaChat"
         const val MAX_HISTORY = 300
+        /** Id do agente Claude nas preferências de limites (igual a TerminalService.CLAUDE). */
+        const val LIMITS_AGENT_ID = "claude-code"
 
         /** Ferramentas que executam comando: "sempre permitir" vale só para o mesmo comando. */
         private val SHELL_TOOLS = setOf("Bash", "BashOutput", "KillShell")

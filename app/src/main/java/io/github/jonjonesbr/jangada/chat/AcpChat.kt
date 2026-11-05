@@ -6,6 +6,8 @@ import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
+import kotlin.concurrent.thread
 
 /**
  * Chat com qualquer agente que fale o Agent Client Protocol (ACP):
@@ -23,7 +25,11 @@ class AcpChat(
     private val appVersion: String,
     /** Pasta de trabalho (caminho dentro do Debian). */
     override val cwd: String,
+    /** Id do agente na receita (ex.: "codex"); só alguns mostram limites do plano. */
+    private val agentId: String = "",
 ) : ProcessChat(linux, TAG) {
+
+    private val limitsStore by lazy { PlanLimitsStore(context) }
 
     @Volatile override var sessionId: String? = null
         private set
@@ -263,7 +269,54 @@ class AcpChat(
     private fun becomeReady() {
         ready = true
         changed()
+        refreshLimits()
         sendNext()
+    }
+
+    /** Leitura dos limites em andamento (só a thread principal mexe): uma por vez. */
+    private var limitsReading = false
+    /** Pediram outra leitura durante a atual: ela roda de novo ao terminar. */
+    private var limitsAgain = false
+
+    /**
+     * Codex: lê os limites do plano nas sessões que ele grava (numa thread própria, uma por vez) e
+     * guarda o que achar. [delayMs] dá tempo ao Codex de gravar o fim do turno. Não faz nada para os
+     * outros agentes. Roda na thread principal.
+     */
+    private fun refreshLimits(delayMs: Long = 0L) {
+        if (agentId != CODEX_ID) return
+        if (limitsReading) {
+            limitsAgain = true
+            return
+        }
+        limitsReading = true
+        val sessions = File(linux.rootfs, "root/.codex/sessions")
+        val started = runCatching {
+            thread(name = "jangada-limites") {
+                var found = false
+                try {
+                    if (delayMs > 0) Thread.sleep(delayMs)
+                    val limits = CodexLimits.read(sessions, System.currentTimeMillis())
+                    if (limits != null) {
+                        limitsStore.save(agentId, limits)
+                        found = true
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "limites do Codex", e)
+                } finally {
+                    main.post {
+                        limitsReading = false
+                        if (found) changed()
+                        // Outro fim de turno chegou durante a leitura: lê de novo (só se o chat segue aberto).
+                        if (limitsAgain) {
+                            limitsAgain = false
+                            if (running) refreshLimits()
+                        }
+                    }
+                }
+            }
+        }
+        if (started.isFailure) limitsReading = false
     }
 
     override fun sendMessage(text: String, attachments: List<Attachment>) {
@@ -326,6 +379,8 @@ class AcpChat(
             val cancelled = cancelling
             cancelling = false
             finishDrafts()
+            // Fim do turno: o Codex gravou o que gastou, então lê os limites de novo.
+            refreshLimits(LIMITS_DELAY_MS)
             val refused = error == null && result?.optString("stopReason") == "refusal"
             if (error != null) {
                 // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar.
@@ -734,6 +789,10 @@ class AcpChat(
 
     private companion object {
         const val TAG = "JangadaAcp"
+        /** Id do Codex na receita: só ele lê os limites do plano pelas sessões. */
+        const val CODEX_ID = "codex"
+        /** Espera depois do fim do turno antes de ler as sessões (o Codex grava o arquivo em paralelo). */
+        const val LIMITS_DELAY_MS = 1_000L
         /** Quanto o cartão de login espera o navegador antes de dar o login como não terminado. */
         const val LOGIN_TIMEOUT_MS = 120_000L
         /** Campo interno que marca a falha "o agente parou" (não vem do agente). */
