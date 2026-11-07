@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.text.Editable
+import android.text.InputType
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextPaint
@@ -83,12 +84,14 @@ import io.github.jonjonesbr.jangada.chat.ToolText
 import io.github.jonjonesbr.jangada.chat.friendlyModel
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.OpenCodeAuth
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
+import io.github.jonjonesbr.jangada.ui.dpToPx
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
@@ -163,6 +166,9 @@ class ChatActivity : JangadaActivity() {
     private var opening = false
     /** As pastas dos ajustes estão sendo lidas (evita abrir o diálogo duas vezes). */
     private var loadingSettings = false
+
+    /** Há uma tarefa de contas do OpenCode rodando (uma por vez). Lida e escrita só na thread principal. */
+    private var openCodeBusy = false
     /** O trabalho isolado desta tela está sendo tirado: os chats da pasta fecham e não reabrem. */
     private var removingWorktree = false
     /** Remoção pedida sem o serviço ligado (tela parada): roda quando ele voltar. */
@@ -1811,6 +1817,12 @@ class ChatActivity : JangadaActivity() {
             rows += claudeEffortRow()
         }
         rows += viewRow()
+        // O OpenCode tem contas e chaves próprias: conectadas pelo app, sem passar pelo chat.
+        if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += Sheet.Row(
+            title = getString(R.string.opencode_auth_row),
+            description = getString(R.string.opencode_auth_row_desc),
+            icon = "🔑",
+        ) { openOpenCodeAccounts() }
         // Sem ajustes do agente (ou sem chat pronto), o painel mostra a pasta e a visualização, que são do app.
         if (!isClaude) rows += optionRows(engine as? AcpChat)
         Sheet(this).title(getString(R.string.chat_settings_title)).rows(rows).show()
@@ -2205,6 +2217,182 @@ class ChatActivity : JangadaActivity() {
             }
         }
     }
+
+    /** Contas e chaves do OpenCode: lê as contas fora da thread principal e abre o painel. */
+    private fun openOpenCodeAccounts() {
+        runOpenCodeTask(getString(R.string.opencode_auth_loading), { OpenCodeAuth.list(linux) }) { accounts ->
+            if (accounts == null) openCodeToast(getString(R.string.opencode_auth_read_failed))
+            else showOpenCodeAccounts(accounts)
+        }
+    }
+
+    /** Painel das contas: uma linha por conta (toque remove), Adicionar chave e, havendo contas, Voltar ao plano free. */
+    private fun showOpenCodeAccounts(accounts: List<OpenCodeAuth.Account>) {
+        val sheet = Sheet(this).title(getString(R.string.opencode_auth_title))
+        if (accounts.isEmpty()) sheet.message(getString(R.string.opencode_auth_none))
+        accounts.forEach { account ->
+            val provider = OpenCodeAuth.displayName(account.integration)
+            sheet.row(Sheet.Row(
+                title = account.label.ifBlank { provider },
+                description = if (account.active) provider else "$provider · ${getString(R.string.opencode_auth_inactive)}",
+                icon = "🔑",
+            ) { confirmRemoveOpenCodeAccount(account) })
+        }
+        sheet.row(Sheet.Row(
+            title = getString(R.string.opencode_auth_add),
+            description = getString(R.string.opencode_auth_add_desc),
+            icon = "+",
+        ) { showAddOpenCodeKey() })
+        if (accounts.isNotEmpty()) sheet.row(Sheet.Row(
+            title = getString(R.string.opencode_auth_free),
+            description = getString(R.string.opencode_auth_free_desc),
+            icon = "↺",
+            destructive = true,
+        ) { confirmOpenCodeFree() })
+        sheet.show()
+    }
+
+    /** Escolhe o provedor da chave: os sugeridos ou "Outro…", com o id digitado. */
+    private fun showAddOpenCodeKey() {
+        val rows = OpenCodeAuth.SUGGESTED.map { (id, name) ->
+            Sheet.Row(title = name, value = id, icon = "🔑") { askOpenCodeKey(id, name) }
+        }
+        Sheet(this)
+            .title(getString(R.string.opencode_auth_pick_title))
+            .rows(rows)
+            .row(Sheet.Row(
+                title = getString(R.string.opencode_auth_other),
+                description = getString(R.string.opencode_auth_other_desc),
+                icon = "…",
+            ) { askOtherOpenCodeProvider() })
+            .show()
+    }
+
+    /** Campo para digitar o id de outro provedor; id fora do padrão mantém o diálogo aberto com o erro. */
+    private fun askOtherOpenCodeProvider() {
+        val field = EditText(this).apply {
+            hint = getString(R.string.opencode_auth_other_hint)
+            inputType = InputType.TYPE_CLASS_TEXT
+            setSingleLine(true)
+        }
+        val content = LinearLayout(this).apply {
+            setPadding(dpToPx(20), dpToPx(8), dpToPx(20), 0)
+            addView(field)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.opencode_auth_other_title)
+            .setView(content)
+            .setPositiveButton(android.R.string.ok, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val id = field.text.toString().trim()
+                if (OpenCodeAuth.isValidIntegration(id)) {
+                    dialog.dismiss()
+                    askOpenCodeKey(id, OpenCodeAuth.displayName(id))
+                } else {
+                    field.error = getString(R.string.opencode_auth_id_invalid)
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /**
+     * Pede a chave de API (campo de senha) e conecta a integração [id]. A chave só existe no campo e
+     * depois no processo do login (ver [OpenCodeAuth.login]); o campo é esvaziado ao sair daqui.
+     */
+    private fun askOpenCodeKey(id: String, name: String) {
+        val field = EditText(this).apply {
+            hint = getString(R.string.opencode_auth_key_hint)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setSingleLine(true)
+        }
+        val content = LinearLayout(this).apply {
+            setPadding(dpToPx(20), dpToPx(8), dpToPx(20), 0)
+            addView(field)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.opencode_auth_key_title, name))
+            .setView(content)
+            .setPositiveButton(R.string.opencode_auth_connect, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val key = field.text.toString().trim()
+                if (!OpenCodeAuth.isValidKey(key)) {
+                    field.error = getString(R.string.opencode_auth_key_invalid)
+                    return@setOnClickListener
+                }
+                field.text.clear()
+                dialog.dismiss()
+                runOpenCodeTask(getString(R.string.opencode_auth_connecting, name), { OpenCodeAuth.login(linux, id, key) }) { ok ->
+                    openCodeToast(getString(if (ok == true) R.string.opencode_auth_added else R.string.opencode_auth_add_failed))
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    /** Confirma a remoção de uma conta; a conta sai só com o OK. */
+    private fun confirmRemoveOpenCodeAccount(account: OpenCodeAuth.Account) {
+        val name = account.label.ifBlank { OpenCodeAuth.displayName(account.integration) }
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.opencode_auth_remove_title, name))
+            .setMessage(R.string.opencode_auth_remove_message)
+            .setPositiveButton(R.string.opencode_auth_remove) { _, _ ->
+                runOpenCodeTask(getString(R.string.opencode_auth_removing), { OpenCodeAuth.remove(linux, account) }) { ok ->
+                    openCodeToast(getString(if (ok == true) R.string.opencode_auth_removed else R.string.opencode_auth_remove_failed))
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Confirma o plano free: remove todas as contas. */
+    private fun confirmOpenCodeFree() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.opencode_auth_free_title)
+            .setMessage(R.string.opencode_auth_free_message)
+            .setPositiveButton(R.string.opencode_auth_free) { _, _ ->
+                runOpenCodeTask(getString(R.string.opencode_auth_removing), { OpenCodeAuth.removeAll(linux) }) { left ->
+                    openCodeToast(
+                        when {
+                            left == null -> getString(R.string.opencode_auth_read_failed)
+                            left > 0 -> getString(R.string.opencode_auth_free_partial, left)
+                            else -> getString(R.string.opencode_auth_free_done)
+                        },
+                    )
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * Roda [work] (um comando do OpenCode) fora da thread principal, com o aviso [busy] enquanto roda,
+     * e entrega o resultado na principal ([then] recebe null se falhou). Uma tarefa de contas por vez.
+     */
+    private fun <T> runOpenCodeTask(busy: String, work: () -> T, then: (T?) -> Unit) {
+        if (openCodeBusy) {
+            openCodeToast(getString(R.string.opencode_auth_busy))
+            return
+        }
+        openCodeBusy = true
+        openCodeToast(busy)
+        thread(name = "opencode-auth") {
+            // Um erro inesperado não derruba o app: o resultado vira null.
+            val result = runCatching { work() }.getOrNull()
+            onUi {
+                openCodeBusy = false
+                then(result)
+            }
+        }
+    }
+
+    private fun openCodeToast(text: String) = Toast.makeText(this, text, Toast.LENGTH_LONG).show()
 
     /** Linha "Visualização" dos ajustes: o modo atual como valor, e o que ele mostra como descrição. */
     private fun viewRow() = Sheet.Row(
