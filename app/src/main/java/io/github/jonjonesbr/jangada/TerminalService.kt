@@ -315,7 +315,8 @@ class TerminalService : Service() {
         when (chat) {
             // O Claude lê o histórico do chat anterior do mesmo par (se houver).
             is ChatEngine -> chat.start(resume = resume, continueLast = continueLast, history = true, previous = current)
-            is AcpChat -> chat.start(resume = resume)
+            // Os agentes ACP também reaproveitam os itens do chat anterior (o replay do session/load é ignorado).
+            is AcpChat -> chat.start(resume = resume, previous = current)
         }
         sessionsChanged()
         return chat

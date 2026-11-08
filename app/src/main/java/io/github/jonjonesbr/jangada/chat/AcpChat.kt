@@ -99,10 +99,23 @@ class AcpChat(
     /** O agente fechou sozinho e [onExited] já mostrou o motivo (vale só até o fim de [onStopped]). */
     private var exitShown = false
 
-    /** Inicia o agente; com [resume], recarrega essa conversa (se o agente suportar). */
-    fun start(resume: String? = null) {
+    /**
+     * A conversa já está na tela (itens guardados): o replay do `session/load` é ignorado, para não
+     * duplicar nem refazer na tela tudo o que já foi conversado. O agente ainda recarrega o contexto.
+     */
+    private var skipReplay = false
+
+    /**
+     * Inicia o agente; com [resume], recarrega essa conversa (se o agente suportar). [previous] é o
+     * chat anterior do mesmo par: se era a mesma conversa, os itens dele voltam para a tela na hora.
+     */
+    fun start(resume: String? = null, previous: AgentChat? = null) {
         if (running) return
         contextUsage = null
+        if (resume != null && items.isEmpty() && previous != null && previous.sessionId == resume) {
+            items += previous.items.toList()
+        }
+        skipReplay = resume != null && items.isNotEmpty()
         launch(interactive = true) {
             runCatching { linux.refreshIntegration(trustFolder = cwd) }.onFailure { Log.w(TAG, "integração", it) }
             "${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(command, jobId)}"
@@ -673,7 +686,10 @@ class AcpChat(
 
     private fun handleUpdate(params: JSONObject?) {
         val update = params?.optJSONObject("update") ?: return
-        when (update.optString("sessionUpdate")) {
+        val kind = update.optString("sessionUpdate")
+        // Replay da conversa que já está na tela: só o que muda o estado do agente (comandos, opções, contexto) vale.
+        if (loadingHistory && skipReplay && kind in REPLAYED) return
+        when (kind) {
             "agent_message_chunk" -> {
                 userDraft = null
                 thoughtDraft = null
@@ -832,6 +848,10 @@ class AcpChat(
 
     private companion object {
         const val TAG = "JangadaAcp"
+        /** Atualizações que compõem a conversa: no replay de uma conversa já na tela, são descartadas. */
+        val REPLAYED = setOf(
+            "agent_message_chunk", "agent_thought_chunk", "user_message_chunk", "tool_call", "tool_call_update", "plan",
+        )
         /** Id do Codex na receita: só ele lê os limites do plano pelas sessões. */
         const val CODEX_ID = "codex"
         /** Comando do agente que compacta a conversa (o mesmo do "Compactar agora") e o texto que o manda. */
