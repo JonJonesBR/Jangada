@@ -176,6 +176,8 @@ interface AgentChat {
     val background: List<BackgroundTask> get() = emptyList()
     /** Para uma tarefa em segundo plano (ver [background]). Sem efeito se o agente não sabe parar tarefas. */
     fun stopBackground(taskId: String) {}
+    /** O agente está recarregando a conversa anterior (session/load): ainda não aceita turno; mensagens ficam na fila. */
+    val reloading: Boolean get() = false
     /** Dormindo: o agente foi fechado de propósito para liberar memória, e a próxima mensagem o acorda. */
     val asleep: Boolean get() = false
     /** Enviar uma mensagem agora retoma a mesma conversa (e não abre outra). */

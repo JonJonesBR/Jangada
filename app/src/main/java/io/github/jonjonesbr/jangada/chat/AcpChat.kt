@@ -83,6 +83,7 @@ class AcpChat(
     private var plan: ChatItem.Plan? = null
     private var ready = false
     private var loadingHistory = false
+    override val reloading: Boolean get() = loadingHistory
     private var canLoad = false
     private var canList = false
     private var imageSupport = false
@@ -256,6 +257,8 @@ class AcpChat(
         if (resume != null && canLoad) {
             loadingHistory = true
             sessionId = resume
+            // Mostra já o aviso "Recarregando conversa…" (com o replay ignorado, nada mais redesenha a tela).
+            changed()
             request("session/load", params.put("sessionId", resume)) { result, error ->
                 loadingHistory = false
                 result?.let { parseConfig(it) }

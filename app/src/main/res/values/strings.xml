@@ -150,6 +150,7 @@
     <string name="chat_cmd_compact">Summarize the conversation to free up room</string>
     <string name="chat_terminal">Terminal</string>
     <string name="chat_working">Working…</string>
+    <string name="chat_reloading">Reloading conversation…</string>
     <string name="chat_jump_end">Go to the latest message</string>
     <string name="chat_background_one">In the background: %1$s</string>
     <string name="chat_background_many">In the background (%1$d): %2$s</string>

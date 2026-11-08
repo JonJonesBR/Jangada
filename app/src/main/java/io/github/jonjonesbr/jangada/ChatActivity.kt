@@ -1036,11 +1036,13 @@ class ChatActivity : JangadaActivity() {
      */
     private fun updateStatus(chat: AgentChat) {
         val background = chat.background
-        status.visibility = if (chat.busy || background.isNotEmpty()) View.VISIBLE else View.GONE
+        status.visibility = if (chat.busy || chat.reloading || background.isNotEmpty()) View.VISIBLE else View.GONE
         status.isClickable = background.isNotEmpty()
         stopButton.visibility = if (chat.busy) View.VISIBLE else View.GONE
         val lines = mutableListOf<String>()
-        if (chat.busy) lines += getString(R.string.chat_working)
+        // Recarregando a conversa anterior: o agente ainda não aceita turno (a mensagem enviada espera na fila).
+        if (chat.reloading) lines += getString(R.string.chat_reloading)
+        else if (chat.busy) lines += getString(R.string.chat_working)
         if (background.size == 1) {
             val task = background[0]
             // Sem descrição nenhuma, o rótulo genérico: a faixa nunca fica "Em segundo plano: " vazio.
