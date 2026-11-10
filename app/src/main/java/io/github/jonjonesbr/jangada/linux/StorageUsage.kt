@@ -62,6 +62,9 @@ private val CLAUDE_VERSIONS_DIR: Path = Paths.get("root/.local/share/claude/vers
 private val CLAUDE_LINK: Path = Paths.get("root/.local/bin/claude")
 private const val CLAUDE_VERSIONS_PREFIX = "/root/.local/share/claude/versions/"
 
+/** Prefixo da linha que [CACHE_CLEAN_SCRIPT] imprime no fim, com os kB liberados. */
+const val CACHE_FREED_PREFIX = "JANGADA_FREED_KB="
+
 /**
  * Limpeza segura, rodada DENTRO do Debian (com bash, para enxergar o PATH). Apaga só o que os
  * programas baixam de novo sozinhos se precisarem: pacotes .deb, caches de download, log do
@@ -73,26 +76,38 @@ private const val CLAUDE_VERSIONS_PREFIX = "/root/.local/share/claude/versions/"
  * entradas .X11* ou .ICE*, nem segue links.
  * Nunca apaga ~/.npm/_npx, ~/.cache/ms-playwright, ~/.cache/puppeteer, o resto do ~/.cache,
  * agentes, conversas, logins, configurações nem projetos.
+ *
+ * Não varre o Linux (a tela não espera por isso). Quanto liberou é a soma do `du` de cada item
+ * antes de apagar (função `rmk`, espaço alocado, aproximado; o apt conta /var/cache/apt/archives).
+ * No fim o script imprime `JANGADA_FREED_KB=<kB>`, lido por TerminalService.cleanCaches.
  */
 val CACHE_CLEAN_SCRIPT: String = """
+freed=0
+# Apaga os alvos (sem seguir links) somando antes quanto ocupavam, em kB.
+rmk() { for t in "${'$'}@"; do [ -e "${'$'}t" ] || [ -L "${'$'}t" ] || continue; k=${'$'}(du -sk "${'$'}t" 2>/dev/null | cut -f1); freed=${'$'}((freed + ${'$'}{k:-0})); rm -rf "${'$'}t"; done; }
 for f in /etc/profile ~/.profile ~/.bashrc; do [ -f "${'$'}f" ] && . "${'$'}f"; done 2>/dev/null
+k=${'$'}(du -sk /var/cache/apt/archives 2>/dev/null | cut -f1)
+freed=${'$'}((freed + ${'$'}{k:-0}))
 apt-get clean >/dev/null 2>&1
-rm -rf ${CACHE_DIRS.joinToString(" ") { "/$it" }} 2>/dev/null
-find /root/.cache/chromium-headless -mindepth 1 -maxdepth 1 -name 'scoped_dir*' -mmin +60 -exec rm -rf {} + 2>/dev/null
+rmk ${CACHE_DIRS.joinToString(" ") { "/$it" }} 2>/dev/null
+for d in /root/.cache/chromium-headless/scoped_dir*; do
+  [ -e "${'$'}d" ] || continue
+  [ -n "${'$'}(find "${'$'}d" -maxdepth 0 -mmin +60 2>/dev/null)" ] && rmk "${'$'}d"
+done
 c=/tmp/claude-0
 if [ -d "${'$'}c" ] && [ ! -L "${'$'}c" ]; then
   for p in "${'$'}c"/*; do
     [ -d "${'$'}p" ] && [ ! -L "${'$'}p" ] || continue
     for u in "${'$'}p"/*; do
       [ -e "${'$'}u" ] || [ -L "${'$'}u" ] || continue
-      [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rm -rf "${'$'}u"
+      [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rmk "${'$'}u"
     done
   done
 fi
 for u in /tmp/* /tmp/.[!.]*; do
   [ -e "${'$'}u" ] || [ -L "${'$'}u" ] || continue
   case "${'$'}{u##*/}" in claude-0|.X11*|.ICE*) continue ;; esac
-  [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rm -rf "${'$'}u"
+  [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rmk "${'$'}u"
 done
 v=/root/.local/share/claude/versions
 cur=${'$'}(readlink -f "${'$'}(command -v claude 2>/dev/null)" 2>/dev/null)
@@ -111,9 +126,10 @@ case "${'$'}cur" in
         case "${'$'}t" in "${'$'}old"|"${'$'}old"/*|*"${'$'}old"|*"${'$'}old"/*) in_use=1; break ;; esac
       done
       [ "${'$'}in_use" = 1 ] && continue
-      rm -rf "${'$'}old"
+      rmk "${'$'}old"
     done ;;
 esac
+echo "$CACHE_FREED_PREFIX${'$'}freed"
 true
 """
 

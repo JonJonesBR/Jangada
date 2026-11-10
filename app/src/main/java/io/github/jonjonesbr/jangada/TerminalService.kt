@@ -37,6 +37,7 @@ import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.limitKindName
 import io.github.jonjonesbr.jangada.chat.PermissionOption
 import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
+import io.github.jonjonesbr.jangada.linux.CACHE_FREED_PREFIX
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Projects
@@ -669,11 +670,12 @@ class TerminalService : Service() {
     /**
      * Limpeza segura do Linux ([CACHE_CLEAN_SCRIPT]) numa thread: caches de download, temporários de
      * navegador e versões antigas do Claude Code. Não começa (devolve false) com outra limpeza ou uma
-     * tarefa de agente rodando ou na fila. [done] roda na thread principal.
+     * tarefa de agente rodando ou na fila. [done] roda na thread principal e recebe quantos kB o script
+     * disse ter liberado (linha JANGADA_FREED_KB; 0 se não veio).
      * Entra em primeiro plano como as tarefas de agente, para o Android não matar a limpeza ao sair da tela.
      * Só na thread principal.
      */
-    fun cleanCaches(done: () -> Unit): Boolean {
+    fun cleanCaches(done: (freedKb: Long) -> Unit): Boolean {
         if (cleaningCaches() || agentTaskBusy()) return false
         cacheCleanerRunning = true
         // Pedido em segundo plano (limpeza automática), o Android pode recusar o primeiro plano: sem a marca presa.
@@ -684,19 +686,25 @@ class TerminalService : Service() {
             return false
         }
         val worker = thread(start = false, name = "jangada-limpeza") {
+            var freedKb = 0L
             runCatching {
                 // As peças do app (PATH dos instaladores) antes do script. Sem mexer no ~/.claude.json:
                 // a limpeza não abre o Claude, e ele pode estar gravando o arquivo num chat aberto.
                 val linux = LinuxEnv(this)
                 linux.refreshIntegration(trustClaude = false)
-                linux.runBash(CACHE_CLEAN_SCRIPT) { }
+                linux.runBash(CACHE_CLEAN_SCRIPT) { line ->
+                    if (line.startsWith(CACHE_FREED_PREFIX)) {
+                        freedKb = line.removePrefix(CACHE_FREED_PREFIX).trim().toLongOrNull() ?: 0L
+                    }
+                }
             }
             // A marca cai antes do post: a fila da thread principal já pode andar.
             cacheCleanerRunning = false
+            val freed = freedKb
             main.post {
                 // Tarefas de agente pedidas durante a limpeza esperaram na fila (ver runAgentTask).
                 runNextQueued()
-                done()
+                done(freed)
                 updateNotification()
                 leaveForegroundIfIdle()
             }

@@ -249,13 +249,19 @@ class SettingsActivity : JangadaActivity() {
         info.totalMem
     }.getOrDefault(0L)
 
+    /** Último tamanho do Linux conhecido (null até a varredura terminar). Liberar espaço subtrai dele, sem nova varredura. */
+    private var lastLinuxBytes: Long? = null
+
     /** Tamanho do Linux (calculado em segundo plano, sem seguir links). */
     private fun showLinuxSize() {
         val label = findViewById<TextView>(R.id.settings_linux_size)
         thread(name = "linux-size") {
             val bytes = linuxBytes()
             runOnUiThread {
-                if (!isDestroyed) label.text = getString(R.string.settings_linux_size, (bytes / 1_048_576).toString())
+                if (!isDestroyed) {
+                    lastLinuxBytes = bytes
+                    label.text = getString(R.string.settings_linux_size, (bytes / 1_048_576).toString())
+                }
             }
         }
     }
@@ -272,21 +278,18 @@ class SettingsActivity : JangadaActivity() {
         total
     }.getOrDefault(0L)
 
-    /** Libera espaço pela mesma limpeza da tela inicial (no serviço) e mostra quanto liberou. */
+    /** Libera espaço pela mesma limpeza da tela inicial (no serviço) e mostra quanto liberou. Sem varredura. */
     private fun freeSpace() {
         val progress = AlertDialog.Builder(this).setMessage(R.string.settings_cleaning).setCancelable(false).show()
-        thread(name = "linux-cleanup-before") {
-            val before = linuxBytes()
-            runOnUiThread { CacheCleaner(before, progress).start() }
-        }
+        CacheCleaner(progress).start()
     }
 
     /**
      * Liga-se ao serviço e pede a limpeza. O bind dura até a limpeza acabar (senão o serviço
      * pode parar no meio). Se o serviço recusar (tarefa de agente ou outra limpeza), mostra
-     * [R.string.storage_clean_busy].
+     * [R.string.storage_clean_busy]. Ao acabar, o que liberou vem do próprio script.
      */
-    private inner class CacheCleaner(private val before: Long, private val progress: AlertDialog) : ServiceConnection {
+    private inner class CacheCleaner(private val progress: AlertDialog) : ServiceConnection {
         private var bound = false
         private var finished = false
 
@@ -299,35 +302,36 @@ class SettingsActivity : JangadaActivity() {
 
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             val service = (binder as? TerminalService.LocalBinder)?.service
-            val started = service?.cleanCaches { finish(busy = false) } == true
+            val started = service?.cleanCaches { freedKb -> finish(busy = false, freedKb = freedKb) } == true
             if (!started) finish(busy = true)
         }
 
         override fun onServiceDisconnected(name: ComponentName?) = finish(busy = true)
 
-        private fun finish(busy: Boolean) {
+        private fun finish(busy: Boolean, freedKb: Long = 0L) {
             if (finished) return
             finished = true
             if (bound) runCatching { applicationContext.unbindService(this) }
             bound = false
+            runCatching { progress.dismiss() }
+            if (isDestroyed) return
             if (busy) {
-                runCatching { progress.dismiss() }
-                if (!isDestroyed) Toast.makeText(this@SettingsActivity, R.string.storage_clean_busy, Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@SettingsActivity, R.string.storage_clean_busy, Toast.LENGTH_SHORT).show()
                 return
             }
-            thread(name = "linux-cleanup-after") {
-                val freed = (before - linuxBytes()).coerceAtLeast(0)
-                runOnUiThread {
-                    runCatching { progress.dismiss() }
-                    if (isDestroyed) return@runOnUiThread
-                    val message = if (freed < 1_048_576) getString(R.string.settings_nothing_to_clean)
-                    else getString(R.string.settings_cleaned, (freed / 1_048_576).toString())
-                    AlertDialog.Builder(this@SettingsActivity)
-                        .setMessage(message)
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show()
-                    showLinuxSize()
-                }
+            val freed = freedKb.coerceAtLeast(0L) * 1024
+            val message = if (freed < 1_048_576) getString(R.string.settings_nothing_to_clean)
+            else getString(R.string.settings_cleaned, (freed / 1_048_576).toString())
+            AlertDialog.Builder(this@SettingsActivity)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+            // O tamanho mostrado sai do último valor medido, menos o que o script liberou (sem nova varredura).
+            lastLinuxBytes?.let { before ->
+                val left = (before - freed).coerceAtLeast(0L)
+                lastLinuxBytes = left
+                findViewById<TextView>(R.id.settings_linux_size).text =
+                    getString(R.string.settings_linux_size, (left / 1_048_576).toString())
             }
         }
     }
