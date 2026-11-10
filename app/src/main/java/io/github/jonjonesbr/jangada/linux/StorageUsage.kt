@@ -1,5 +1,6 @@
 package io.github.jonjonesbr.jangada.linux
 
+import android.system.Os
 import java.io.File
 import java.io.IOException
 import java.nio.file.FileVisitResult
@@ -199,8 +200,30 @@ private fun isOldClaudeVersion(relative: Path, oldClaude: Set<String>): Boolean 
 }
 
 /**
- * Mede o rootfs numa passada só. Não segue links (walkFileTree sem FOLLOW_LINKS):
- * link e arquivo especial não contam. Devolve null se [cancelled] virar true,
+ * Espaço de um arquivo: [bytes] é o espaço alocado (st_blocks * 512), que não conta buraco de
+ * arquivo esparso. [inode] é (st_dev, st_ino) e só vem para arquivos com mais de um nome
+ * (st_nlink > 1), para contar cada hardlink uma vez; null quando não dá para ler o inode.
+ */
+private class FileSpace(val bytes: Long, val inode: Pair<Long, Long>?, val nlink: Long)
+
+/**
+ * Lê o espaço alocado com android.system.Os.lstat. Se Os não estiver disponível (JVM dos testes,
+ * que lança RuntimeException, NoClassDefFoundError ou UnsatisfiedLinkError) ou der ErrnoException,
+ * cai para o tamanho aparente [fallback], sem deduplicar.
+ */
+private fun fileSpace(file: Path, fallback: Long): FileSpace {
+    return try {
+        val st = Os.lstat(file.toString())
+        FileSpace(st.st_blocks * 512L, Pair(st.st_dev, st.st_ino), st.st_nlink)
+    } catch (e: Throwable) {
+        FileSpace(fallback, null, 1L)
+    }
+}
+
+/**
+ * Mede o rootfs numa passada só, pelo espaço alocado (não pelo tamanho aparente) e contando cada
+ * inode uma vez, para hardlinks não somarem de novo. Não segue links (walkFileTree sem
+ * FOLLOW_LINKS): link e arquivo especial não contam. Devolve null se [cancelled] virar true,
  * se o rootfs não existir ou se algo der errado.
  */
 fun measure(rootfs: File, cancelled: () -> Boolean): Breakdown? {
@@ -215,6 +238,8 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
     if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return null
     // Antes do walk: as versões antigas que a limpeza apagaria (a conta é uma estimativa; ver a tela).
     val oldClaude = oldClaudeVersions(installedClaudeVersions(root), currentClaudeVersion(root)).toSet()
+    // Inodes com mais de um nome já contados (só os de st_nlink > 1 entram aqui).
+    val seenInodes = HashSet<Pair<Long, Long>>()
     var linux = 0L
     var projects = 0L
     var conversations = 0L
@@ -236,7 +261,11 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
                 return FileVisitResult.TERMINATE
             }
             if (attrs.isRegularFile) {
-                val size = attrs.size()
+                val space = fileSpace(file, attrs.size())
+                // Hardlink já contado por outro nome: não soma de novo em nenhuma categoria.
+                val inode = space.inode
+                if (space.nlink > 1 && inode != null && !seenInodes.add(inode)) return FileVisitResult.CONTINUE
+                val size = space.bytes
                 linux += size
                 when (categoryOfPath(root.relativize(file), oldClaude)) {
                     Category.PROJECTS -> projects += size
