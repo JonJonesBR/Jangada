@@ -67,6 +67,10 @@ private const val CLAUDE_VERSIONS_PREFIX = "/root/.local/share/claude/versions/"
  * programas baixam de novo sozinhos se precisarem: pacotes .deb, caches de download, log do
  * Claude Code, pastas temporárias de navegador com mais de 60 minutos e versões antigas do
  * Claude Code (mantém a atual, a mais nova e as que algum processo está usando).
+ * Também apaga os itens parados de /tmp (ver [tmpUnitKey]) cujo item mais novo (de qualquer tipo) tem mais de
+ * 7 dias: a pasta da sessão em /tmp/claude-0/<projeto>/<sessão> e a entrada de 1º nível dos
+ * demais. Uma unidade com arquivo recente fica inteira. Nunca apaga /tmp, /tmp/claude-0,
+ * entradas .X11* ou .ICE*, nem segue links.
  * Nunca apaga ~/.npm/_npx, ~/.cache/ms-playwright, ~/.cache/puppeteer, o resto do ~/.cache,
  * agentes, conversas, logins, configurações nem projetos.
  */
@@ -75,6 +79,21 @@ for f in /etc/profile ~/.profile ~/.bashrc; do [ -f "${'$'}f" ] && . "${'$'}f"; 
 apt-get clean >/dev/null 2>&1
 rm -rf ${CACHE_DIRS.joinToString(" ") { "/$it" }} 2>/dev/null
 find /root/.cache/chromium-headless -mindepth 1 -maxdepth 1 -name 'scoped_dir*' -mmin +60 -exec rm -rf {} + 2>/dev/null
+c=/tmp/claude-0
+if [ -d "${'$'}c" ] && [ ! -L "${'$'}c" ]; then
+  for p in "${'$'}c"/*; do
+    [ -d "${'$'}p" ] && [ ! -L "${'$'}p" ] || continue
+    for u in "${'$'}p"/*; do
+      [ -e "${'$'}u" ] || [ -L "${'$'}u" ] || continue
+      [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rm -rf "${'$'}u"
+    done
+  done
+fi
+for u in /tmp/* /tmp/.[!.]*; do
+  [ -e "${'$'}u" ] || [ -L "${'$'}u" ] || continue
+  case "${'$'}{u##*/}" in claude-0|.X11*|.ICE*) continue ;; esac
+  [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rm -rf "${'$'}u"
+done
 v=/root/.local/share/claude/versions
 cur=${'$'}(readlink -f "${'$'}(command -v claude 2>/dev/null)" 2>/dev/null)
 case "${'$'}cur" in
@@ -183,6 +202,42 @@ fun topLevelKey(relative: Path): String {
     return "/" + (0 until n).joinToString("/") { relative.getName(it).toString() }
 }
 
+/** Idade a partir da qual um item de /tmp parado pode ser apagado: nenhum arquivo dentro dele mudou nesse prazo. */
+const val STALE_TMP_MILLIS = 7L * 24 * 3600 * 1000
+
+/** Pasta do Claude Code dentro de /tmp (saídas das tarefas, /tmp/claude-0/<projeto>/<sessão>). */
+private const val TMP_CLAUDE_DIR = "claude-0"
+
+/**
+ * Unidade de limpeza de /tmp para um caminho relativo ao rootfs, ou null se o caminho não é de uma
+ * unidade. Regra (a mesma do script [CACHE_CLEAN_SCRIPT]):
+ * - /tmp/claude-0/<projeto>/<sessão>[/...]: a pasta da sessão ("tmp/claude-0/projeto/sessão").
+ * - /tmp/claude-0/<projeto> sozinho (arquivo ali): null. Fica fora da limpeza, como o próprio /tmp/claude-0.
+ * - /tmp/claude-0 em si e /tmp em si: null.
+ * - qualquer outro item de /tmp: a entrada de 1º nível ("tmp/a" para tmp/a/b, ou o próprio arquivo tmp/a).
+ * - entradas .X11* e .ICE* de /tmp: null (nunca apagar).
+ */
+fun tmpUnitKey(relative: Path): String? {
+    if (relative.nameCount < 2 || relative.getName(0).toString() != "tmp") return null
+    val first = relative.getName(1).toString()
+    if (first.startsWith(".X11") || first.startsWith(".ICE")) return null
+    if (first == TMP_CLAUDE_DIR) {
+        if (relative.nameCount < 4) return null
+        return (0 until 4).joinToString("/") { relative.getName(it).toString() }
+    }
+    return (0 until 2).joinToString("/") { relative.getName(it).toString() }
+}
+
+/**
+ * Unidade parada: o item mais novo dela (arquivo, socket ou pasta) ([newestMillis]) é mais velho que [STALE_TMP_MILLIS] em
+ * relação a [nowMillis]. Unidade sem arquivo regular (newestMillis = Long.MIN_VALUE) é parada.
+ */
+fun isStaleTmpUnit(newestMillis: Long, nowMillis: Long): Boolean =
+    newestMillis < nowMillis - STALE_TMP_MILLIS
+
+/** Bytes e mtime mais novo de uma unidade de /tmp (ver [tmpUnitKey]). */
+private class TmpUnit(var bytes: Long = 0L, var newestMillis: Long = Long.MIN_VALUE)
+
 /**
  * As [n] maiores entradas do mapa, da maior para a menor. Empate de tamanho: ordem pelo nome
  * (para o resultado não mudar de uma medição para outra).
@@ -270,6 +325,8 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
     var caches = 0L
     // Bytes dos arquivos sem categoria (o "Linux e agentes"), por pasta de 2º nível.
     val otherByTop = HashMap<String, Long>()
+    // Arquivos de /tmp sem categoria, por unidade de limpeza (ver tmpUnitKey): paradas viram caches.
+    val tmpUnits = HashMap<String, TmpUnit>()
     var stopped = false
     Files.walkFileTree(root, object : SimpleFileVisitor<Path>() {
         override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
@@ -278,6 +335,11 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
                 return FileVisitResult.TERMINATE
             }
             if (dir.parent == root && dir.fileName.toString() in SKIPPED_TOP_DIRS) return FileVisitResult.SKIP_SUBTREE
+            // Pasta recente também mantém a unidade de /tmp viva (como o find do script, que olha qualquer tipo).
+            tmpUnitKey(root.relativize(dir))?.let { key ->
+                val info = tmpUnits.getOrPut(key) { TmpUnit() }
+                info.newestMillis = maxOf(info.newestMillis, attrs.lastModifiedTime().toMillis())
+            }
             return FileVisitResult.CONTINUE
         }
 
@@ -299,8 +361,15 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
                     Category.CONVERSATIONS -> conversations += size
                     Category.CACHES -> caches += size
                     null -> {
-                        val key = topLevelKey(relative)
-                        otherByTop[key] = (otherByTop[key] ?: 0L) + size
+                        val unit = tmpUnitKey(relative)
+                        if (unit != null) {
+                            val info = tmpUnits.getOrPut(unit) { TmpUnit() }
+                            info.bytes += size
+                            info.newestMillis = maxOf(info.newestMillis, attrs.lastModifiedTime().toMillis())
+                        } else {
+                            val key = topLevelKey(relative)
+                            otherByTop[key] = (otherByTop[key] ?: 0L) + size
+                        }
                     }
                 }
             }
@@ -312,6 +381,16 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
 
         override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult = FileVisitResult.CONTINUE
     })
+    // Unidades de /tmp: paradas vão para caches (a limpeza apaga); as outras seguem em "Linux e agentes".
+    val now = System.currentTimeMillis()
+    for ((unit, info) in tmpUnits) {
+        if (isStaleTmpUnit(info.newestMillis, now)) {
+            caches += info.bytes
+        } else {
+            val key = topLevelKey(Paths.get(unit))
+            otherByTop[key] = (otherByTop[key] ?: 0L) + info.bytes
+        }
+    }
     return if (stopped || cancelled()) null
     else Breakdown(linux, projects, conversations, caches, topDirs(otherByTop, TOP_DIRS_COUNT))
 }

@@ -152,6 +152,8 @@ class StorageUsageTest {
             "-mmin +60",
             "/root/.local/share/claude/versions",
             "readlink -f",
+            "-mtime -7",
+            "claude-0|.X11*|.ICE*",
         ).forEach { assertTrue("falta $it", script.contains(it)) }
     }
 
@@ -191,6 +193,61 @@ class StorageUsageTest {
     @Test
     fun rootfsInexistenteDevolveNulo() {
         assertNull(measure(File(tmp.root, "nao-existe")) { false })
+    }
+
+    @Test
+    fun unidadeDeTmp() {
+        // Arquivo direto em /tmp e entrada de 1º nível: a própria entrada.
+        assertEquals("tmp/a", tmpUnitKey(Paths.get("tmp/a/b")))
+        assertEquals("tmp/solto.txt", tmpUnitKey(Paths.get("tmp/solto.txt")))
+        // Pasta da sessão do Claude: profundidade 3 sob /tmp (claude-0/projeto/sessão).
+        assertEquals("tmp/claude-0/proj/sess", tmpUnitKey(Paths.get("tmp/claude-0/proj/sess/tasks/x")))
+        // Decisão: /tmp/claude-0/<projeto> sozinho (arquivo ali) não é unidade; fica fora da limpeza.
+        assertNull(tmpUnitKey(Paths.get("tmp/claude-0/proj")))
+        assertNull(tmpUnitKey(Paths.get("tmp/claude-0")))
+        assertNull(tmpUnitKey(Paths.get("tmp")))
+        assertNull(tmpUnitKey(Paths.get("root/x")))
+        assertNull(tmpUnitKey(Paths.get("tmp/.X11-unix/X0")))
+        assertNull(tmpUnitKey(Paths.get("tmp/.ICE-unix/123")))
+    }
+
+    @Test
+    fun paradoSo() {
+        val agora = 1_000_000_000_000L
+        assertTrue(isStaleTmpUnit(agora - STALE_TMP_MILLIS - 1, agora))
+        assertFalse(isStaleTmpUnit(agora - STALE_TMP_MILLIS + 1, agora))
+        // Unidade sem arquivo regular conta como parada.
+        assertTrue(isStaleTmpUnit(Long.MIN_VALUE, agora))
+    }
+
+    @Test
+    fun tmpParadoVaiParaCachesERecenteFica() {
+        val root = tmp.newFolder("rootfs")
+        val velho = System.currentTimeMillis() - 10L * 24 * 3600 * 1000
+        // Unidade inteira parada (1º nível).
+        write(root, "tmp/velho/a.bin", 30)
+        envelhecer(File(root, "tmp/velho"), velho)
+        // Unidade com arquivo recente: o arquivo velho dentro dela não é apagado, fica em "Linux e agentes".
+        write(root, "tmp/novo/b.bin", 40)
+        // Sessão do Claude parada, e outra sessão com um arquivo velho e um recente (fica inteira).
+        write(root, "tmp/claude-0/proj/sess1/tasks/x.bin", 50)
+        envelhecer(File(root, "tmp/claude-0/proj/sess1"), velho)
+        write(root, "tmp/claude-0/proj/sess2/antigo.bin", 8)
+        File(root, "tmp/claude-0/proj/sess2/antigo.bin").setLastModified(velho)
+        write(root, "tmp/claude-0/proj/sess2/novo.bin", 2)
+
+        val result = measure(root) { false }
+
+        requireNotNull(result)
+        assertEquals(30L + 50L, result.cachesBytes)
+        assertEquals(30L + 40L + 50L + 8L + 2L, result.linuxBytes)
+        assertTrue(result.topDirs.contains("/tmp/novo" to 40L))
+        assertTrue(result.topDirs.contains("/tmp/claude-0" to 10L))
+    }
+
+    /** Põe a data de [velho] na pasta e em tudo dentro dela (a pasta recente também mantém a unidade viva). */
+    private fun envelhecer(dir: File, velho: Long) {
+        dir.walkBottomUp().forEach { it.setLastModified(velho) }
     }
 
     private fun write(root: File, relative: String, size: Int) {
