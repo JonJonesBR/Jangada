@@ -164,10 +164,34 @@ data class Breakdown(
     val projectsBytes: Long,
     val conversationsBytes: Long,
     val cachesBytes: Long,
+    /** Maiores pastas do "Linux e agentes" (caminho com "/" na frente, bytes), da maior para a menor. */
+    val topDirs: List<Pair<String, Long>> = emptyList(),
 ) {
     val systemBytes: Long
         get() = (linuxBytes - projectsBytes - conversationsBytes - cachesBytes).coerceAtLeast(0)
 }
+
+/** Quantas pastas do "Linux e agentes" a tela mostra. */
+private const val TOP_DIRS_COUNT = 6
+
+/**
+ * Pasta de 2º nível de um caminho relativo ao rootfs: "root/.cache/x/y" vira "/root/.cache";
+ * arquivo direto no 1º nível ("bin") vira "/bin".
+ */
+fun topLevelKey(relative: Path): String {
+    val n = minOf(2, relative.nameCount)
+    return "/" + (0 until n).joinToString("/") { relative.getName(it).toString() }
+}
+
+/**
+ * As [n] maiores entradas do mapa, da maior para a menor. Empate de tamanho: ordem pelo nome
+ * (para o resultado não mudar de uma medição para outra).
+ */
+fun topDirs(map: Map<String, Long>, n: Int): List<Pair<String, Long>> =
+    map.entries
+        .map { it.key to it.value }
+        .sortedWith(compareByDescending<Pair<String, Long>> { it.second }.thenBy { it.first })
+        .take(n)
 
 /**
  * Categoria de um caminho relativo ao rootfs (ex.: "root/projetos/app/a.txt"), ou null.
@@ -244,6 +268,8 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
     var projects = 0L
     var conversations = 0L
     var caches = 0L
+    // Bytes dos arquivos sem categoria (o "Linux e agentes"), por pasta de 2º nível.
+    val otherByTop = HashMap<String, Long>()
     var stopped = false
     Files.walkFileTree(root, object : SimpleFileVisitor<Path>() {
         override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
@@ -267,11 +293,15 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
                 if (space.nlink > 1 && inode != null && !seenInodes.add(inode)) return FileVisitResult.CONTINUE
                 val size = space.bytes
                 linux += size
-                when (categoryOfPath(root.relativize(file), oldClaude)) {
+                val relative = root.relativize(file)
+                when (categoryOfPath(relative, oldClaude)) {
                     Category.PROJECTS -> projects += size
                     Category.CONVERSATIONS -> conversations += size
                     Category.CACHES -> caches += size
-                    null -> Unit
+                    null -> {
+                        val key = topLevelKey(relative)
+                        otherByTop[key] = (otherByTop[key] ?: 0L) + size
+                    }
                 }
             }
             return FileVisitResult.CONTINUE
@@ -283,5 +313,5 @@ private fun measureTree(root: Path, cancelled: () -> Boolean): Breakdown? {
         override fun postVisitDirectory(dir: Path, exc: IOException?): FileVisitResult = FileVisitResult.CONTINUE
     })
     return if (stopped || cancelled()) null
-    else Breakdown(linux, projects, conversations, caches)
+    else Breakdown(linux, projects, conversations, caches, topDirs(otherByTop, TOP_DIRS_COUNT))
 }

@@ -300,6 +300,12 @@ class HomeActivity : JangadaActivity() {
             return
         }
         fun size(bytes: Long) = Formatter.formatShortFileSize(this, bytes)
+        // As maiores pastas do "Linux e agentes" (só as com pelo menos 50 MB) vêm logo depois da linha do sistema.
+        val minTopBytes = 50L * 1024 * 1024
+        val topLines = breakdown.topDirs.filter { it.second >= minTopBytes }
+            .takeIf { it.isNotEmpty() }
+            ?.let { dirs -> listOf(getString(R.string.storage_top_dirs)) + dirs.map { (path, bytes) -> "  $path: ${size(bytes)}" } }
+            ?: emptyList()
         // Do maior para o menor.
         val lines = listOf(
             breakdown.systemBytes to R.string.storage_part_system,
@@ -307,7 +313,11 @@ class HomeActivity : JangadaActivity() {
             breakdown.conversationsBytes to R.string.storage_part_conversations,
             breakdown.cachesBytes to R.string.storage_part_caches,
         ).sortedByDescending { it.first }
-            .joinToString("\n") { (bytes, res) -> getString(res, size(bytes)) }
+            .flatMap { (bytes, res) ->
+                val line = getString(res, size(bytes))
+                if (res == R.string.storage_part_system) listOf(line) + topLines else listOf(line)
+            }
+            .joinToString("\n")
         val message = lines + "\n\n" + getString(R.string.storage_total, size(breakdown.linuxBytes))
         // Limpar só com caches para apagar e nenhum agente instalando, atualizando ou na fila.
         val svc = service

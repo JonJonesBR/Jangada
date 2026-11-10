@@ -10,11 +10,41 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.nio.file.Files
+import java.nio.file.Paths
 
 class StorageUsageTest {
 
     @get:Rule
     val tmp = TemporaryFolder()
+
+    @Test
+    fun chaveDeSegundoNivel() {
+        assertEquals("/root/.cache", topLevelKey(Paths.get("root/.cache/pip/x")))
+        assertEquals("/usr/lib", topLevelKey(Paths.get("usr/lib/libc.so")))
+        assertEquals("/var/lib", topLevelKey(Paths.get("var/lib/dpkg/status")))
+        // Arquivo direto no 1º nível agrupa pelo próprio nome.
+        assertEquals("/bin", topLevelKey(Paths.get("bin")))
+    }
+
+    @Test
+    fun maioresPastasOrdenadasECortadas() {
+        val map = mapOf("/usr/lib" to 300L, "/root/.cache" to 900L, "/var/lib" to 100L, "/opt" to 500L)
+        assertEquals(
+            listOf("/root/.cache" to 900L, "/opt" to 500L),
+            topDirs(map, 2),
+        )
+        assertEquals(4, topDirs(map, 6).size)
+        assertEquals(emptyList<Pair<String, Long>>(), topDirs(emptyMap(), 6))
+    }
+
+    @Test
+    fun empateOrdenaPeloNome() {
+        val map = mapOf("/var/lib" to 200L, "/bin" to 200L, "/usr/lib" to 200L, "/opt" to 50L)
+        assertEquals(
+            listOf("/bin" to 200L, "/usr/lib" to 200L, "/var/lib" to 200L),
+            topDirs(map, 3),
+        )
+    }
 
     @Test
     fun categoriaDeCadaPasta() {

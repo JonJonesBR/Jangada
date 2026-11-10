@@ -129,6 +129,7 @@
     <string name="storage_part_projects">Projetos (~/projetos): %1$s</string>
     <string name="storage_part_conversations">Conversas dos agentes: %1$s</string>
     <string name="storage_part_caches">Pode limpar (caches, temporários, versões antigas): %1$s</string>
+    <string name="storage_top_dirs">Maiores pastas do Linux e agentes:</string>
     <string name="storage_total">Total: %1$s</string>
     <string name="storage_measure_failed">Não deu para calcular o espaço agora.</string>
     <string name="storage_clean_caches">Liberar espaço</string>

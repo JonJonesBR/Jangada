@@ -131,6 +131,7 @@
     <string name="storage_part_projects">Projects (~/projetos): %1$s</string>
     <string name="storage_part_conversations">Agent conversations: %1$s</string>
     <string name="storage_part_caches">Can be cleared (caches, temp files, old versions): %1$s</string>
+    <string name="storage_top_dirs">Biggest folders in Linux and agents:</string>
     <string name="storage_total">Total: %1$s</string>
     <string name="storage_measure_failed">Couldn\'t measure the space right now.</string>
     <string name="storage_clean_caches">Free up space</string>
