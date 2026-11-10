@@ -54,6 +54,7 @@ class Sheet(private val activity: Activity) {
 
     private var titleText: CharSequence? = null
     private var messageText: CharSequence? = null
+    private var contentView: View? = null
     private val items = mutableListOf<Row>()
     private var onDismissAction: (() -> Unit)? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -61,6 +62,9 @@ class Sheet(private val activity: Activity) {
     fun title(text: CharSequence): Sheet = apply { titleText = text }
 
     fun message(text: CharSequence): Sheet = apply { messageText = text }
+
+    /** Uma view própria (ex.: uma barra) logo abaixo do título e acima da mensagem. Ela cuida das próprias margens. */
+    fun content(view: View): Sheet = apply { contentView = view }
 
     fun row(row: Row): Sheet = apply { items += row }
 
@@ -202,6 +206,9 @@ class Sheet(private val activity: Activity) {
                 setPadding(dp(16), 0, dp(16), dp(4))
                 if (Build.VERSION.SDK_INT >= 28) isAccessibilityHeading = true
             })
+        }
+        contentView?.let { v ->
+            root.addView(v, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         messageText?.let { m ->
             root.addView(TextView(activity).apply {

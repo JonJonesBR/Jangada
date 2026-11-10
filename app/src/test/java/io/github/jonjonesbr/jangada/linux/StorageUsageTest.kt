@@ -245,6 +245,34 @@ class StorageUsageTest {
         assertTrue(result.topDirs.contains("/tmp/claude-0" to 10L))
     }
 
+    @Test
+    fun fatiasDaBarraSomamUm() {
+        val b = Breakdown(linuxBytes = 1000, projectsBytes = 100, conversationsBytes = 200, cachesBytes = 300)
+        // Linux e agentes = 1000 - 100 - 200 - 300 = 400.
+        val shares = barShares(b).toMap()
+        assertEquals(4, shares.size)
+        assertEquals(0.4f, shares.getValue(SpaceSegment.SYSTEM), 1e-5f)
+        assertEquals(0.2f, shares.getValue(SpaceSegment.CONVERSATIONS), 1e-5f)
+        assertEquals(0.1f, shares.getValue(SpaceSegment.PROJECTS), 1e-5f)
+        assertEquals(0.3f, shares.getValue(SpaceSegment.CACHES), 1e-5f)
+        assertEquals(1f, shares.values.sum(), 1e-5f)
+    }
+
+    @Test
+    fun fatiasSemBytesNaoDividemPorZero() {
+        assertTrue(barShares(Breakdown(0, 0, 0, 0)).isEmpty())
+        assertTrue(barShares(Breakdown(linuxBytes = -5, projectsBytes = 0, conversationsBytes = 0, cachesBytes = 0)).isEmpty())
+    }
+
+    @Test
+    fun segmentoZeroSomDaBarra() {
+        // Sem projetos e sem caches: só Linux e agentes e conversas, somando 1.
+        val b = Breakdown(linuxBytes = 600, projectsBytes = 0, conversationsBytes = 200, cachesBytes = 0)
+        val shares = barShares(b)
+        assertEquals(listOf(SpaceSegment.SYSTEM, SpaceSegment.CONVERSATIONS), shares.map { it.first })
+        assertEquals(1f, shares.sumOf { it.second.toDouble() }.toFloat(), 1e-5f)
+    }
+
     /** Põe a data de [velho] na pasta e em tudo dentro dela (a pasta recente também mantém a unidade viva). */
     private fun envelhecer(dir: File, velho: Long) {
         dir.walkBottomUp().forEach { it.setLastModified(velho) }

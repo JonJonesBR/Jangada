@@ -27,4 +27,7 @@
     <!-- Âmbar para TEXTO nas telas do app (no tema claro, com contraste suficiente). key_active fica para fundos e para o terminal. -->
     <color name="accent_text">#8F5200</color>
     <color name="input_bg">#FFFFFF</color>
+    <!-- Partes da barra de espaço (painel Espaço no Linux): projetos em azul e conversas em roxo. -->
+    <color name="storage_projects">#2F6D9A</color>
+    <color name="storage_conversations">#6A4C93</color>
 </resources>

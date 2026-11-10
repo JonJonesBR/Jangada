@@ -190,6 +190,25 @@ data class Breakdown(
         get() = (linuxBytes - projectsBytes - conversationsBytes - cachesBytes).coerceAtLeast(0)
 }
 
+/** Partes da barra de espaço, na ordem em que aparecem na legenda. */
+enum class SpaceSegment { SYSTEM, CONVERSATIONS, PROJECTS, CACHES }
+
+/**
+ * Fração (0 a 1) de cada parte na barra. As frações somam 1 (ou a lista é vazia, se não há bytes
+ * nenhum); parte com 0 bytes não entra. Pura: a tela só põe cada fração como peso.
+ */
+fun barShares(b: Breakdown): List<Pair<SpaceSegment, Float>> {
+    val parts = listOf(
+        SpaceSegment.SYSTEM to b.systemBytes.coerceAtLeast(0L),
+        SpaceSegment.CONVERSATIONS to b.conversationsBytes.coerceAtLeast(0L),
+        SpaceSegment.PROJECTS to b.projectsBytes.coerceAtLeast(0L),
+        SpaceSegment.CACHES to b.cachesBytes.coerceAtLeast(0L),
+    )
+    val total = parts.sumOf { it.second }
+    if (total <= 0L) return emptyList()
+    return parts.filter { it.second > 0L }.map { (segment, bytes) -> segment to bytes.toFloat() / total }
+}
+
 /** Quantas pastas do "Linux e agentes" a tela mostra. */
 private const val TOP_DIRS_COUNT = 6
 

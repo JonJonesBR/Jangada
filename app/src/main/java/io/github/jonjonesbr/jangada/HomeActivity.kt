@@ -55,6 +55,7 @@ import io.github.jonjonesbr.jangada.linux.measure
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.SpaceBar
 import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
@@ -257,20 +258,30 @@ class HomeActivity : JangadaActivity() {
     /** Espaço livre do celular (o Linux fica na memória interna). Abaixo de 1 GiB, aviso em vermelho. */
     private fun renderSpace() {
         val view = findViewById<TextView>(R.id.storage_space)
-        val stat = runCatching { StatFs(linux.rootfs.path) }.getOrNull()
+        val stat = phoneStat()
         if (stat == null) {
             view.visibility = View.GONE
             return
         }
+        val (text, low) = spaceLine(stat)
+        view.text = text
+        view.setTextColor(getColor(if (low) R.color.setup_error else R.color.setup_muted))
+        view.visibility = View.VISIBLE
+    }
+
+    /** Estatística do armazenamento onde fica o Linux, ou null se não dá para ler. */
+    private fun phoneStat(): StatFs? = runCatching { StatFs(linux.rootfs.path) }.getOrNull()
+
+    /** Texto do espaço livre do celular, e se está abaixo de 1 GiB (aviso). Usado pelo cartão e pelo painel de espaço. */
+    private fun spaceLine(stat: StatFs): Pair<String, Boolean> {
         val free = stat.availableBytes
         val low = free < LOW_SPACE_BYTES
-        view.text = getString(
+        val text = getString(
             if (low) R.string.storage_space_low else R.string.storage_space,
             Formatter.formatShortFileSize(this, free),
             Formatter.formatShortFileSize(this, stat.totalBytes),
         )
-        view.setTextColor(getColor(if (low) R.color.setup_error else R.color.setup_muted))
-        view.visibility = View.VISIBLE
+        return text to low
     }
 
     /** Painel de espera; o cálculo roda em outra thread e, pronto, troca o painel pelo resultado. */
@@ -306,25 +317,20 @@ class HomeActivity : JangadaActivity() {
             .takeIf { it.isNotEmpty() }
             ?.let { dirs -> listOf(getString(R.string.storage_top_dirs)) + dirs.map { (path, bytes) -> "  $path: ${size(bytes)}" } }
             ?: emptyList()
-        // Do maior para o menor.
-        val lines = listOf(
-            breakdown.systemBytes to R.string.storage_part_system,
-            breakdown.projectsBytes to R.string.storage_part_projects,
-            breakdown.conversationsBytes to R.string.storage_part_conversations,
-            breakdown.cachesBytes to R.string.storage_part_caches,
-        ).sortedByDescending { it.first }
-            .flatMap { (bytes, res) ->
-                val line = getString(res, size(bytes))
-                if (res == R.string.storage_part_system) listOf(line) + topLines else listOf(line)
-            }
-            .joinToString("\n")
-        val message = lines + "\n\n" + getString(R.string.storage_total, size(breakdown.linuxBytes))
+        // Barra e legenda no topo (SpaceBar); abaixo, as maiores pastas, o total e o espaço livre do celular.
+        val blocks = buildList<String> {
+            if (topLines.isNotEmpty()) add(topLines.joinToString("\n"))
+            add(getString(R.string.storage_total, size(breakdown.linuxBytes)))
+            phoneStat()?.let { add(spaceLine(it).first) }
+        }
+        val message = blocks.joinToString("\n\n")
         // Limpar só com caches para apagar e nenhum agente instalando, atualizando ou na fila.
         val svc = service
         val busy = svc == null || svc.agentTaskBusy() || svc.cleaningCaches()
         val cleanable = breakdown.cachesBytes > 0 && !busy
-        Sheet(this)
-            .title(title)
+        val sheet = Sheet(this).title(title)
+        SpaceBar.build(this, breakdown) { bytes -> size(bytes) }?.let { sheet.content(it) }
+        sheet
             .message(message)
             .row(
                 Sheet.Row(
