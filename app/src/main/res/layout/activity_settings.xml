@@ -316,6 +316,20 @@
                 android:textColor="@color/setup_muted"
                 android:textSize="14sp" />
 
+            <Switch
+                android:id="@+id/settings_auto_clean"
+                style="@style/SettingsOption"
+                android:text="@string/settings_auto_clean" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_auto_clean_hint"
+                android:textColor="@color/setup_muted"
+                android:textSize="13sp" />
+
             <Button
                 android:id="@+id/settings_cleanup"
                 style="?android:attr/borderlessButtonStyle"

@@ -125,6 +125,16 @@ class AppSettings(context: Context) {
     fun autoCompactFor(key: String): String =
         AutoCompact.effectiveAutoCompact(autoCompact, jobPrefs.getString(key, null))
 
+    /** Limpeza automática dos caches (uma vez por dia, ver TerminalService.maybeAutoClean). */
+    var autoClean: Boolean
+        get() = prefs.getBoolean(KEY_AUTO_CLEAN, true)
+        set(value) = prefs.edit().putBoolean(KEY_AUTO_CLEAN, value).apply()
+
+    /** Quando a última limpeza automática começou (millis; 0 = nunca). */
+    var lastAutoCleanAt: Long
+        get() = prefs.getLong(KEY_LAST_AUTO_CLEAN, 0L)
+        set(value) = prefs.edit().putLong(KEY_LAST_AUTO_CLEAN, value).apply()
+
     /** Tamanho do texto do chat: um de [CHAT_TEXT_SCALES]; outro valor guardado volta a 1f. */
     var chatTextScale: Float
         get() = prefs.getFloat(KEY_CHAT_TEXT_SCALE, 1f).takeIf { it in CHAT_TEXT_SCALES } ?: 1f
@@ -164,5 +174,7 @@ class AppSettings(context: Context) {
         private const val KEY_MAX_AGENTS = "max_agents"
         private const val KEY_SLEEP_AFTER = "sleep_after_minutes"
         private const val KEY_AUTO_COMPACT = "auto_compact"
+        private const val KEY_AUTO_CLEAN = "auto_clean"
+        private const val KEY_LAST_AUTO_CLEAN = "last_auto_clean_at"
     }
 }

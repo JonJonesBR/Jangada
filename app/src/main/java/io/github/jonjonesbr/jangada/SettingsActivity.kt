@@ -229,6 +229,7 @@ class SettingsActivity : JangadaActivity() {
         findViewById<View>(R.id.settings_api_keys).setOnClickListener {
             startActivity(Intent(this, ApiKeysActivity::class.java))
         }
+        bindSwitch(R.id.settings_auto_clean, settings.autoClean) { settings.autoClean = it }
         findViewById<View>(R.id.settings_cleanup).setOnClickListener { freeSpace() }
         findViewById<View>(R.id.settings_repair).setOnClickListener { repairLinux() }
         findViewById<View>(R.id.settings_reinstall).setOnClickListener { confirmReinstall() }

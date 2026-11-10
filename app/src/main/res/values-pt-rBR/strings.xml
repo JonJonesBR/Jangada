@@ -128,12 +128,12 @@
     <string name="storage_part_system">Linux e agentes: %1$s</string>
     <string name="storage_part_projects">Projetos (~/projetos): %1$s</string>
     <string name="storage_part_conversations">Conversas dos agentes: %1$s</string>
-    <string name="storage_part_caches">Pode limpar (caches, temporários, versões antigas): %1$s</string>
+    <string name="storage_part_caches">Pode limpar (caches, versões antigas, arquivos de /tmp parados há mais de 7 dias): %1$s</string>
     <string name="storage_top_dirs">Maiores pastas do Linux e agentes:</string>
     <string name="storage_total">Total: %1$s</string>
     <string name="storage_measure_failed">Não deu para calcular o espaço agora.</string>
     <string name="storage_clean_caches">Liberar espaço</string>
-    <string name="storage_clean_caches_desc">Apaga só o que os programas baixam de novo sozinhos se precisarem: caches de download, arquivos temporários de navegador e versões antigas do Claude Code. Não mexe em navegadores de teste, agentes, conversas, logins, configurações nem projetos.</string>
+    <string name="storage_clean_caches_desc">Apaga só o que pode voltar sem prejuízo: caches de download, arquivos temporários de navegador, versões antigas do Claude Code e arquivos temporários (/tmp) parados há mais de 7 dias. Não mexe em navegadores de teste, agentes, conversas, logins, configurações nem projetos.</string>
     <string name="storage_cleaning">Limpando os caches…</string>
     <string name="storage_clean_busy">Indisponível agora: espere terminar a instalação, atualização ou limpeza em andamento.</string>
     <string name="storage_clean_nothing">Não há caches para limpar agora.</string>
@@ -414,6 +414,8 @@
 
     <string name="settings_cleanup">Liberar espaço (caches e versões antigas)</string>
     <string name="settings_cleaning">Liberando espaço…</string>
+    <string name="settings_auto_clean">Limpar sozinho uma vez por dia</string>
+    <string name="settings_auto_clean_hint">Apaga caches e arquivos temporários parados há mais de 7 dias, no máximo uma vez por dia, quando nada está instalando.</string>
     <string name="settings_cleaned">Pronto: %1$s MB liberados. Agentes, logins, conversas e projetos não foram tocados.</string>
 
     <string name="settings_appearance">Aparência</string>

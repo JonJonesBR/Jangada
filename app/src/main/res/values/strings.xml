@@ -130,12 +130,12 @@
     <string name="storage_part_system">Linux and agents: %1$s</string>
     <string name="storage_part_projects">Projects (~/projetos): %1$s</string>
     <string name="storage_part_conversations">Agent conversations: %1$s</string>
-    <string name="storage_part_caches">Can be cleared (caches, temp files, old versions): %1$s</string>
+    <string name="storage_part_caches">Can be cleared (caches, old versions, /tmp files stale for over 7 days): %1$s</string>
     <string name="storage_top_dirs">Biggest folders in Linux and agents:</string>
     <string name="storage_total">Total: %1$s</string>
     <string name="storage_measure_failed">Couldn\'t measure the space right now.</string>
     <string name="storage_clean_caches">Free up space</string>
-    <string name="storage_clean_caches_desc">Deletes only what programs download again on their own if they need it: download caches, leftover browser temp folders and old Claude Code versions. Doesn\'t touch test browsers, agents, conversations, logins, settings or projects.</string>
+    <string name="storage_clean_caches_desc">Deletes only what can come back without harm: download caches, leftover browser temp folders, old Claude Code versions and temp files (/tmp) stale for over 7 days. Doesn\'t touch test browsers, agents, conversations, logins, settings or projects.</string>
     <string name="storage_cleaning">Clearing caches…</string>
     <string name="storage_clean_busy">Not available now: wait for the running install, update or cleanup to finish.</string>
     <string name="storage_clean_nothing">There are no caches to clear right now.</string>
@@ -416,6 +416,8 @@
 
     <string name="settings_cleanup">Free up space (caches and old versions)</string>
     <string name="settings_cleaning">Freeing up space…</string>
+    <string name="settings_auto_clean">Clear automatically once a day</string>
+    <string name="settings_auto_clean_hint">Deletes caches and temporary files untouched for more than 7 days, at most once a day, when nothing is being installed.</string>
     <string name="settings_cleaned">Done: %1$s MB freed. Agents, logins, conversations and projects were not touched.</string>
 
     <string name="settings_appearance">Appearance</string>

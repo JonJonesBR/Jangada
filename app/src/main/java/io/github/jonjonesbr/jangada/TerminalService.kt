@@ -379,6 +379,7 @@ class TerminalService : Service() {
             }
         }
         watchNetworkDns()
+        scheduleAutoClean()
     }
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -406,12 +407,14 @@ class TerminalService : Service() {
         }
         // Iniciado pelas telas: só vai ao primeiro plano se houver trabalho.
         started = true
+        scheduleAutoClean()
         if (hasWork()) goForeground()
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
         memoryWatch.stop()
+        main.removeCallbacks(autoCleanCheck)
         tearDownSessions().forEach { it.stop() }
         linkWatcher?.stopWatching()
         wakeLock?.let { if (it.isHeld) it.release() }
@@ -673,7 +676,13 @@ class TerminalService : Service() {
     fun cleanCaches(done: () -> Unit): Boolean {
         if (cleaningCaches() || agentTaskBusy()) return false
         cacheCleanerRunning = true
-        goForeground()
+        // Pedido em segundo plano (limpeza automática), o Android pode recusar o primeiro plano: sem a marca presa.
+        try {
+            goForeground()
+        } catch (e: RuntimeException) {
+            cacheCleanerRunning = false
+            return false
+        }
         val worker = thread(start = false, name = "jangada-limpeza") {
             runCatching {
                 // As peças do app (PATH dos instaladores) antes do script. Sem mexer no ~/.claude.json:
@@ -695,6 +704,35 @@ class TerminalService : Service() {
         cacheCleaner = worker
         worker.start()
         return true
+    }
+
+    /** Checagem da limpeza automática (ver [maybeAutoClean]). Só a thread principal mexe. */
+    private val autoCleanCheck = Runnable { maybeAutoClean() }
+
+    /** Agenda a checagem da limpeza automática daqui a pouco (sem competir com a abertura do app). */
+    private fun scheduleAutoClean() {
+        main.removeCallbacks(autoCleanCheck)
+        main.postDelayed(autoCleanCheck, AUTO_CLEAN_DELAY_MS)
+    }
+
+    /**
+     * Limpeza automática: no máximo uma vez a cada [AUTO_CLEAN_INTERVAL_MS], com o Linux instalado, sem
+     * instalação do Linux, limpeza, nem tarefa de agente rodando ou na fila (as mesmas condições do botão
+     * Liberar espaço, ver [agentTaskBusy]). Sem aviso: cleanCaches só põe o serviço em primeiro plano
+     * enquanto limpa. Só na thread principal.
+     */
+    private fun maybeAutoClean() {
+        val settings = AppSettings(this)
+        if (!settings.autoClean) return
+        if (!runCatching { LinuxEnv(this).isReady }.getOrDefault(false)) return
+        if (Setup.state is Setup.State.Running || cleaningCaches() || agentTaskBusy()) return
+        val now = System.currentTimeMillis()
+        val last = settings.lastAutoCleanAt
+        // Relógio que voltou (last no futuro) também conta como vencido, em vez de travar a limpeza.
+        if (last in 1..now && now - last < AUTO_CLEAN_INTERVAL_MS) return
+        // Grava antes de começar: se a limpeza falhar, não tenta de novo em loop.
+        settings.lastAutoCleanAt = now
+        cleanCaches { }
     }
 
     /** Ids dos agentes na fila; a tela compara com o que desenhou para saber se precisa redesenhar. */
@@ -1409,6 +1447,9 @@ class TerminalService : Service() {
         /** Limite de links abertos direto na tela: [MAX_DIRECT_LINKS] a cada [DIRECT_LINK_WINDOW_MS]. */
         private const val MAX_DIRECT_LINKS = 3
         private const val DIRECT_LINK_WINDOW_MS = 30_000L
+        /** Limpeza automática: no máximo uma por dia, checada 2 min depois de o serviço ser pedido. */
+        private const val AUTO_CLEAN_INTERVAL_MS = 24L * 60 * 60 * 1000
+        private const val AUTO_CLEAN_DELAY_MS = 2L * 60 * 1000
         const val DEFAULT_TITLE = "Terminal"
         const val CLAUDE = "claude-code"
 
