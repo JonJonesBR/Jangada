@@ -1,0 +1,1 @@
+Space: the panel shows a bar, the biggest folders and the phone's free space; Free up space also deletes what has been idle for over 7 days in /tmp, runs by itself once a day (can be turned off in Settings) and is much faster. OpenCode: Accounts and keys panel. ACP chat: reopening a conversation no longer duplicates the history.

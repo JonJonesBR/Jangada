@@ -1,5 +1,14 @@
 # Novidades
 
+## 1.16.0
+
+- Espaço no Linux: o painel ganhou uma barra com Linux e agentes, conversas, projetos e o que pode limpar, uma lista das maiores pastas (a partir de 50 MB) e o espaço livre do celular. As legendas ficaram curtas.
+- Liberar espaço: também apaga o que está parado há mais de 7 dias em /tmp (entradas inteiras sem nenhum arquivo, socket ou pasta mexido nesse prazo; nunca /tmp/claude-0 em si, .X11 e .ICE). As saídas de tarefas antigas do Claude Code chegaram a ocupar 17 GB.
+- Limpeza automática: no máximo uma vez por dia, com o Linux instalado e nada instalando, atualizando ou limpando. Dá para desligar nos Ajustes ("Limpar sozinho uma vez por dia").
+- Liberar espaço nos Ajustes ficou muito mais rápido: o Debian não é mais varrido três vezes; o próprio script informa quanto liberou.
+- Chat do OpenCode: painel Contas e chaves (adicionar chave, remover, voltar ao plano free).
+- Chat ACP: reabrir uma conversa que já está na tela não refaz nem duplica o histórico, e uma faixa avisa "Recarregando conversa…" enquanto o agente recarrega a sessão.
+
 ## 1.15.0
 
 - Limites do plano: quando o limite de 5 horas ou o semanal passa de 90%, chega um aviso (uma vez por período). O cartão do Claude e o do Codex na tela inicial mostram o uso, em vermelho a partir de 80%.

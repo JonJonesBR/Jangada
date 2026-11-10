@@ -1,0 +1,1 @@
+Espaço: o painel mostra uma barra, as maiores pastas e o espaço livre; Liberar espaço apaga também o que está parado há mais de 7 dias em /tmp e roda sozinho uma vez por dia (dá para desligar nos Ajustes) e ficou bem mais rápido. OpenCode: painel Contas e chaves. Chat ACP: reabrir conversa não duplica o histórico.
