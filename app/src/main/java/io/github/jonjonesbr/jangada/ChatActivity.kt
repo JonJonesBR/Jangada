@@ -3355,6 +3355,8 @@ class ChatActivity : JangadaActivity() {
         val table = StringBuilder()
         var inCode = false
         var language = ""
+        // Tamanho da cerca que abriu o bloco: ````md com ``` dentro só fecha com 4 crases ou mais.
+        var fence = 0
         fun flushTable() {
             if (table.isEmpty()) return
             if (buffer.isNotBlank()) parts += Part(buffer.toString(), isCode = false)
@@ -3368,14 +3370,18 @@ class ChatActivity : JangadaActivity() {
                 continue
             }
             flushTable()
-            if (line.trimStart().startsWith("```")) {
+            val ticks = line.trimStart().takeWhile { it == '`' }.length
+            // Dentro do bloco, só fecha uma cerca do mesmo tamanho ou maior, sem nada depois.
+            val closes = inCode && ticks >= fence && line.trim().length == ticks
+            if (if (inCode) closes else ticks >= 3) {
                 if (inCode) {
                     parts += Part(buffer.toString(), isCode = true, language = language)
                 } else if (buffer.isNotBlank()) {
                     parts += Part(buffer.toString(), isCode = false)
                 }
                 buffer.clear()
-                language = if (inCode) "" else line.trimStart().removePrefix("```").trim()
+                language = if (inCode) "" else line.trimStart().drop(ticks).trim()
+                fence = if (inCode) 0 else ticks
                 inCode = !inCode
                 continue
             }

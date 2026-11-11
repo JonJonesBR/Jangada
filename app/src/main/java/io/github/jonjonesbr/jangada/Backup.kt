@@ -67,7 +67,9 @@ object Backup {
         val source = context.contentResolver.openInputStream(uri)
             ?: throw IOException(context.getString(R.string.backup_error_open_backup))
         source.use { input ->
-            val process = linux.startProcess("cd /root && tar -xzf -", login = false, secrets = false)
+            // ~/celular é o link para o armazenamento do celular (LinuxEnv.linkPhoneDir): um backup com
+            // "celular" não o troca nem escreve através dele. Ancorado: pastas "celular" dos projetos voltam.
+            val process = linux.startProcess("cd /root && tar -xzf - --anchored --exclude=./celular --exclude=celular", login = false, secrets = false)
             try {
                 val errors = StringBuilder()
                 val stderr = thread { runCatching { errors.append(process.errorStream.bufferedReader().readText()) } }

@@ -143,7 +143,10 @@ class TarExtractor(root: File, private val log: (String) -> Unit = {}) {
         if (fileName == OPAQUE_WHITEOUT) {
             if (Fs.isDir(dir)) Files.list(dir).use { s -> s.forEach { Fs.deleteTree(it) } }
         } else {
-            Fs.deleteTree(dir.resolve(fileName.removePrefix(WHITEOUT)))
+            // ".wh.." e ".wh..." apontariam para a própria pasta ou para a de cima: são ignorados.
+            val name = fileName.removePrefix(WHITEOUT)
+            if (name.isEmpty() || name == "." || name == ".." || '/' in name) return
+            Fs.deleteTree(dir.resolve(name))
         }
     }
 

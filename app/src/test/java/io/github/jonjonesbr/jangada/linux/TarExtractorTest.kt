@@ -90,6 +90,15 @@ class TarExtractorTest {
     }
 
     @Test
+    fun whiteoutDePontoNaoApagaAPastaNemAdeCima() {
+        TarExtractor(root).extract(Tar().file("a/b/c.txt", "c").file("a/irma.txt", "i").bytes())
+        TarExtractor(root).extract(Tar().file("a/b/.wh...", "").file("a/b/.wh..", "").bytes())
+
+        assertTrue(File(root, "a/b/c.txt").exists())
+        assertTrue(File(root, "a/irma.txt").exists())
+    }
+
+    @Test
     fun whiteoutOpacoEsvaziaAPasta() {
         TarExtractor(root).extract(Tar().file("dir/a.txt", "a").file("dir/b.txt", "b").bytes())
         TarExtractor(root).extract(Tar().file("dir/.wh..wh..opq", "").file("dir/c.txt", "c").bytes())

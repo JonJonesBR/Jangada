@@ -23,7 +23,8 @@ object Markdown {
             val line = raw.trimEnd()
             val start = out.length
             when {
-                line.startsWith("#") -> {
+                // Título só com "# " (até 6 níveis): "#hashtag", "#1" e "#include" ficam como texto.
+                HEADING.matches(line) -> {
                     val level = line.takeWhile { it == '#' }.length
                     appendInline(out, line.drop(level).trim(), codeBackground)
                     out.setSpan(StyleSpan(Typeface.BOLD), start, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -104,6 +105,7 @@ object Markdown {
         return -1
     }
 
+    private val HEADING = Regex("""^#{1,6}(\s.*)?$""")
     private val BULLET = Regex("""^\s*[-*+]\s+.*""")
     private val BULLET_PREFIX = Regex("""^\s*[-*+]\s+""")
 }
