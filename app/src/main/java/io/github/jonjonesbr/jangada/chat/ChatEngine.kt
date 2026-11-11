@@ -198,6 +198,7 @@ class ChatEngine(
     /** Interrompe o que o Claude está fazendo (como o Esc no terminal). */
     override fun interrupt() {
         if (!running) return
+        if (forceStopIfStuck()) return
         // Interrompido pelo usuário: o fim desse turno não gera aviso.
         silentTurn = true
         // O CLI ainda manda o "result" do turno cancelado; o que for enviado até lá espera por ele.
@@ -551,6 +552,21 @@ class ChatEngine(
             }
         }
         changed()
+    }
+
+    override fun onHandleFailure(json: JSONObject) {
+        when (json.optString("type")) {
+            // Fim do turno que falhou no meio: o turno termina (sem isso, "Trabalhando…" para sempre).
+            "result" -> {
+                endStreaming()
+                cancelling = false
+                changed()
+                sendQueued()
+            }
+            // Pedido do CLI (permissão): responde erro, para ele não esperar uma resposta que não vem.
+            "control_request" -> send(JSONObject().put("type", "control_response").put("response",
+                JSONObject().put("subtype", "error").put("request_id", json.optString("request_id")).put("error", "falha no app")))
+        }
     }
 
     private fun handleControlRequest(json: JSONObject) {

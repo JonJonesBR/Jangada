@@ -1291,8 +1291,8 @@ class TerminalService : Service() {
      * só se o pedido tem a opção correspondente.
      */
     private fun permissionActions(key: String, pending: ChatItem.Permission): List<Notification.Action> {
-        // Pergunta: só o aviso abre o chat (a resposta é nos campos do cartão).
-        if (pending.questions.isNotEmpty()) return emptyList()
+        // Pergunta e plano: o aviso só abre o chat (a resposta é nos campos do cartão; o plano se lê antes de aprovar).
+        if (pending.questions.isNotEmpty() || pending.toolName == ChatEngine.PLAN_TOOL) return emptyList()
         val actions = mutableListOf<Notification.Action>()
         val requestId = pending.requestId.toString()
         if (pending.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) {

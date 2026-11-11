@@ -913,8 +913,15 @@ class ChatActivity : JangadaActivity() {
         }
         freshError?.let { error -> messages += error.text.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty() }
         freshPermission?.let { request ->
-            val what = listOf(request.title, request.summary).filter { it.isNotBlank() }.joinToString(": ")
-            messages += getString(R.string.chat_announce_permission, what)
+            messages += when {
+                // Pergunta e plano não são "pedido de permissão"; o plano inteiro não é lido (cortaria as falas seguintes).
+                request.questions.isNotEmpty() -> getString(R.string.chat_question_wants, agentName)
+                request.toolName == ChatEngine.PLAN_TOOL -> getString(R.string.chat_plan_wants, agentName)
+                else -> {
+                    val what = listOf(request.title, request.summary.take(ANNOUNCE_MAX)).filter { it.isNotBlank() }.joinToString(": ")
+                    getString(R.string.chat_announce_permission, what)
+                }
+            }
         }
         // Uma só fala: dois anúncios seguidos fariam o segundo cortar o primeiro.
         val text = messages.filter { it.isNotBlank() }.joinToString(". ")
@@ -1117,6 +1124,10 @@ class ChatActivity : JangadaActivity() {
         if (more > 0) permissionMore.text = resources.getQuantityString(R.plurals.chat_permission_more, more, more)
         // Pergunta: a resposta é pelo cartão (campos e opções), não pelo Permitir da faixa.
         permissionAllow.visibility = if (first.questions.isEmpty() && first.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) View.VISIBLE else View.GONE
+        // Plano: os mesmos nomes do cartão (Aprovar plano / Continuar planejando).
+        val plan = first.toolName == ChatEngine.PLAN_TOOL
+        permissionAllow.text = getString(if (plan) R.string.chat_plan_approve else R.string.chat_allow)
+        permissionDeny.text = getString(if (plan) R.string.chat_plan_keep else R.string.chat_deny)
         permissionDeny.visibility = if (first.options.any { it.kind == PermissionOption.Kind.REJECT_ONCE }) View.VISIBLE else View.GONE
     }
 
@@ -3479,6 +3490,8 @@ class ChatActivity : JangadaActivity() {
         /** Texto que a tela envia ao agente assim que o chat deste trabalho estiver ligado (ex.: pedir o commit). */
         const val EXTRA_SEND = "send_text"
         private const val STATE_PENDING_SEND = "pending_send"
+        /** Tamanho máximo do pedido lido no anúncio do leitor de tela. */
+        private const val ANNOUNCE_MAX = 120
 
         /**
          * Anexos ainda não enviados de cada trabalho (pela chatKey), guardados quando a tela salva o estado

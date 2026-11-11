@@ -115,6 +115,9 @@ class AcpChat(
     fun start(resume: String? = null, previous: AgentChat? = null) {
         if (running) return
         contextUsage = null
+        // Processo novo: há agentes que numeram as ações de novo ("call_1"); uma ação nova não pode
+        // atualizar a antiga de mesmo id (as antigas já foram encerradas em settleItems).
+        tools.clear()
         // A conversa pedida já é a deste chat: se o agente falhar ao subir, o próximo envio tenta
         // recarregar a mesma, em vez de abrir uma nova sem aviso (como no ChatEngine).
         if (resume != null) sessionId = resume
@@ -523,6 +526,7 @@ class AcpChat(
             }
             return
         }
+        if (forceStopIfStuck()) return
         // Interrompido pelo usuário: o fim desse turno não gera aviso.
         silentTurn = true
         // Pronto e ocupado = há um session/prompt em aberto; o que for enviado até a resposta dele espera.
@@ -704,6 +708,14 @@ class AcpChat(
                 val callback = pending.remove(json.optInt("id")) ?: return
                 callback(json.optJSONObject("result") ?: if (json.has("result")) JSONObject() else null, json.optJSONObject("error"))
             }
+        }
+    }
+
+    override fun onHandleFailure(json: JSONObject) {
+        // Pedido do agente (permissão) que falhou no meio: responde erro, para ele não esperar para sempre.
+        if (json.optString("method").isNotEmpty() && json.has("id") && !json.isNull("id")) {
+            send(JSONObject().put("jsonrpc", "2.0").put("id", json.get("id"))
+                .put("error", JSONObject().put("code", -32603).put("message", "Internal error")))
         }
     }
 

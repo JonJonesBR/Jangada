@@ -530,6 +530,7 @@
     <string name="chat_acp_agent_stopped">O agente parou antes de responder.</string>
     <string name="chat_acp_init_timeout">O agente não respondeu ao iniciar. Feche o trabalho e abra de novo; se continuar, reinstale o agente na tela inicial.</string>
     <string name="chat_acp_session_timeout">O agente não abriu a conversa em 5 minutos e foi parado. Mande uma mensagem para tentar de novo.</string>
+    <string name="chat_force_stopped">O agente não respondeu ao Parar e foi encerrado. Mande uma mensagem para continuar a conversa.</string>
     <string name="chat_login_timeout">O login demorou demais. Tente de novo.</string>
     <string name="chat_prepare_retry">Tentar de novo</string>
     <string name="chat_prepare_details">Detalhes</string>

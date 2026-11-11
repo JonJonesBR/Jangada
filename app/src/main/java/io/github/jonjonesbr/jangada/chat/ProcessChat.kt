@@ -95,6 +95,24 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * não descarta a fila (o que estiver nela foi enviado depois de Parar) mesmo com erro.
      */
     protected var cancelling = false
+        set(value) {
+            // Hora do primeiro Parar do turno (ver forceStopIfStuck).
+            if (value && !field) cancelAtMs = SystemClock.elapsedRealtime()
+            field = value
+        }
+    private var cancelAtMs = 0L
+
+    /**
+     * Parar tocado de novo com o primeiro sem efeito há [FORCE_STOP_MS] (o agente travou e o fim do
+     * turno não chega): encerra o agente, com aviso. A conversa continua na próxima mensagem, que o
+     * religa nela. Devolve true se encerrou. Só na thread principal.
+     */
+    protected fun forceStopIfStuck(): Boolean {
+        if (!cancelling || SystemClock.elapsedRealtime() - cancelAtMs < FORCE_STOP_MS) return false
+        add(ChatItem.Info(context.getString(R.string.chat_force_stopped)))
+        stop()
+        return true
+    }
 
     /** Últimas linhas de erro do agente, mostradas se ele fechar sozinho. */
     private val stderrTail = ArrayDeque<String>()
@@ -215,6 +233,12 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     /** Uma mensagem do agente, já como JSON. Roda na thread principal. */
     protected abstract fun handle(json: JSONObject)
 
+    /**
+     * [handle] lançou exceção com [json]: o motor fecha o que ela deveria fechar (o turno, ou responde
+     * erro a um pedido do agente), para nada esperar para sempre. Na thread principal.
+     */
+    protected open fun onHandleFailure(json: JSONObject) {}
+
     /** Limpezas próprias de cada chat quando o agente para, por qualquer motivo (thread principal). */
     protected open fun onStopped() {}
 
@@ -250,7 +274,11 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                         // o tempo parado recomeça, para não dormir no meio do que ele faz.
                         idleSinceMs = SystemClock.elapsedRealtime()
                         // Mensagem fora do esperado (agente de terceiros) não derruba o app; no log só o tipo do erro.
-                        runCatching { handle(json) }.onFailure { Log.w("JangadaChat", "mensagem ignorada: ${it.javaClass.simpleName}") }
+                        runCatching { handle(json) }.onFailure {
+                            Log.w("JangadaChat", "mensagem ignorada: ${it.javaClass.simpleName}")
+                            // O que a mensagem deveria fechar (fim do turno, resposta a um pedido) não fica pendurado.
+                            runCatching { onHandleFailure(json) }
+                        }
                     }
                 }
             }
@@ -428,5 +456,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     private companion object {
         const val THROTTLE_MS = 150L
         const val STDERR_LINES = 12
+        /** Espera do primeiro Parar antes de um segundo toque encerrar o agente. */
+        const val FORCE_STOP_MS = 5_000L
     }
 }

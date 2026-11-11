@@ -5,6 +5,7 @@ import android.content.ContentResolver
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.Parcelable
 import android.widget.Toast
 import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
@@ -59,11 +60,15 @@ class ShareActivity : JangadaActivity() {
     @Suppress("DEPRECATION")
     private fun readShared() {
         text = intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()?.takeIf { it.isNotBlank() }
-        val received: List<Uri> = when (intent.action) {
-            Intent.ACTION_SEND -> listOfNotNull(intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM))
-            Intent.ACTION_SEND_MULTIPLE -> intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)?.filterNotNull().orEmpty()
-            else -> emptyList()
-        }
+        // Lido como Parcelable e filtrado: um app que manda outro tipo (ou um extra que não abre) não derruba
+        // o Jangada inteiro, com os agentes rodando; o que não é Uri é ignorado.
+        val received: List<Uri> = runCatching {
+            when (intent.action) {
+                Intent.ACTION_SEND -> listOfNotNull(intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri)
+                Intent.ACTION_SEND_MULTIPLE -> intent.getParcelableArrayListExtra<Parcelable>(Intent.EXTRA_STREAM).orEmpty().filterIsInstance<Uri>()
+                else -> emptyList()
+            }
+        }.getOrDefault(emptyList())
         val accepted = received.filter { it.scheme == ContentResolver.SCHEME_CONTENT }
         uris = accepted.take(MAX_SHARED_ITEMS)
         if (accepted.size > MAX_SHARED_ITEMS) {
