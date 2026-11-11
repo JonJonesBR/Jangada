@@ -298,6 +298,12 @@ class ChatActivity : JangadaActivity() {
             intent.getStringExtra(EXTRA_SEND)
         }
         intent.removeExtra(EXTRA_SEND)
+        // Tela recriada (idioma, tamanho da fonte, o Android a fechou em segundo plano): os anexos voltam.
+        val kept = keptAttachments.remove(chatKey)
+        if (savedInstanceState != null && !kept.isNullOrEmpty()) {
+            pendingAttachments += kept
+            renderAttachments()
+        }
         findViewById<View>(R.id.chat_home).setOnClickListener { goHome() }
         sendButton.setOnClickListener { send() }
         findViewById<View>(R.id.chat_attach).setOnClickListener { pickAttachment() }
@@ -393,6 +399,9 @@ class ChatActivity : JangadaActivity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         outState.putString(STATE_PENDING_SEND, pendingSend)
+        // As imagens em base64 não cabem no Bundle: os anexos ficam guardados no processo (ver keptAttachments).
+        if (pendingAttachments.isNotEmpty()) keptAttachments[chatKey] = pendingAttachments.toList()
+        else keptAttachments.remove(chatKey)
     }
 
     override fun onResume() {
@@ -443,6 +452,8 @@ class ChatActivity : JangadaActivity() {
     override fun onDestroy() {
         // Nada que esperava a tela (instalação, por exemplo) roda depois que ela sai.
         handler.removeCallbacksAndMessages(null)
+        // Saiu de vez (não vai ser recriada): os anexos guardados não voltam, e a memória é liberada.
+        if (isFinishing) keptAttachments.remove(chatKey)
         super.onDestroy()
     }
 
@@ -3468,6 +3479,12 @@ class ChatActivity : JangadaActivity() {
         /** Texto que a tela envia ao agente assim que o chat deste trabalho estiver ligado (ex.: pedir o commit). */
         const val EXTRA_SEND = "send_text"
         private const val STATE_PENDING_SEND = "pending_send"
+
+        /**
+         * Anexos ainda não enviados de cada trabalho (pela chatKey), guardados quando a tela salva o estado
+         * e devolvidos quando ela é recriada. Só a thread principal mexe.
+         */
+        private val keptAttachments = HashMap<String, List<Attachment>>()
         private val MODELS = arrayOf("", "opus", "sonnet", "haiku")
         private val EFFORTS = arrayOf("", "low", "medium", "high", "xhigh", "max")
     }

@@ -37,7 +37,8 @@ object FakeSysData {
         for ((name, real, content) in entries(cpus)) {
             if (isReadable(real)) continue
             val file = File(dir, name)
-            file.writeText(content)
+            // Sem espaço ou sem permissão: fica sem esse substituto, em vez de derrubar o app (roda na thread principal).
+            if (runCatching { file.writeText(content) }.isFailure) continue
             result += "--bind=${file.absolutePath}:$real"
         }
         return result
