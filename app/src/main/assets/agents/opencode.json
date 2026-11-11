@@ -19,5 +19,5 @@
   "acp": {
     "command": "opencode acp"
   },
-  "uninstall": "rm -rf ~/.opencode"
+  "uninstall": "rm -rf ~/.opencode/bin; rmdir ~/.opencode 2>/dev/null; true"
 }

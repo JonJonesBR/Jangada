@@ -77,6 +77,18 @@ class OpenCodeAuthTest {
             listOf(Account("Anthropic", "Anthropic", true)),
             OpenCodeAuth.parseListed(listOf("JANGADA_ACCOUNTS_TEXT", "Anthropic  Anthropic  stored")),
         )
+        // O bash -i avisa antes da marca no celular: a marca vale em qualquer linha.
+        assertEquals(
+            listOf(Account("google", "Minha", true)),
+            OpenCodeAuth.parseListed(
+                listOf(
+                    "bash: cannot set terminal process group (1): Inappropriate ioctl for device",
+                    "bash: no job control in this shell",
+                    "JANGADA_ACCOUNTS_SQL",
+                    "google|Minha|1",
+                ),
+            ),
+        )
         // Sem marca (o script falhou no meio), a lista não se entende: nula, não vazia.
         assertNull(OpenCodeAuth.parseListed(listOf("google|Minha|1")))
         assertNull(OpenCodeAuth.parseListed(emptyList()))

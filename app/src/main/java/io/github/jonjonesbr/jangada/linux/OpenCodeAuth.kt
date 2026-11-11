@@ -64,7 +64,8 @@ object OpenCodeAuth {
      * e a lista fica nula (ver [list]).
      */
     fun parseListed(lines: List<String>): List<Account>? {
-        val first = lines.indexOfFirst { it.isNotBlank() }
+        // A marca pode não ser a primeira linha: o bash -i do runBash avisa antes ("no job control").
+        val first = lines.indexOfFirst { it.trim() == MARK_SQL || it.trim() == MARK_TEXT }
         if (first < 0) return null
         val rest = lines.drop(first + 1)
         return when (lines[first].trim()) {
@@ -109,9 +110,12 @@ object OpenCodeAuth {
      * tem a chave: a consulta nunca a lê.
      */
     fun listScript(): String = listOf(
-        "if command -v sqlite3 >/dev/null 2>&1 && [ -f $DB ]; then",
+        // Consulta que falha (banco travado pelo opencode aberto, tabela diferente) cai no auth list, em vez
+        // de virar "nenhuma conta" (e o "voltar ao plano free" dizer que removeu tudo).
+        "if command -v sqlite3 >/dev/null 2>&1 && [ -f $DB ] &&",
+        "  rows=${'$'}(sqlite3 -cmd '.timeout 3000' $DB \"select integration_id||'|'||coalesce(label,'')||'|'||coalesce(active,1) from credential\" 2>/dev/null); then",
         "  echo $MARK_SQL",
-        "  sqlite3 $DB \"select integration_id||'|'||coalesce(label,'')||'|'||coalesce(active,1) from credential\" 2>/dev/null",
+        "  [ -n \"${'$'}rows\" ] && printf '%s\\n' \"${'$'}rows\"",
         "else",
         "  echo $MARK_TEXT",
         "  opencode auth list --standalone </dev/null 2>/dev/null",
@@ -180,7 +184,7 @@ object OpenCodeAuth {
     private fun loggedIn(linux: LinuxEnv, id: String): Boolean? = try {
         val lines = ArrayList<String>()
         linux.runBash(listScript()) { lines += it }
-        if (lines.firstOrNull { it.isNotBlank() }?.trim() != MARK_SQL) null
+        if (lines.none { it.trim() == MARK_SQL }) null
         else parseListed(lines)?.any { it.integration == id }
     } catch (e: IOException) {
         null
