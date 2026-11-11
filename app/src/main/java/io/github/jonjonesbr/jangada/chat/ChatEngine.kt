@@ -227,8 +227,13 @@ class ChatEngine(
     private fun refuse(item: ChatItem.Permission, reply: Boolean) {
         item.chosen = item.options.firstOrNull { it.kind == PermissionOption.Kind.REJECT_ONCE }
             ?: PermissionOption("deny", "", PermissionOption.Kind.REJECT_ONCE)
-        if (reply) respondPermission(item.requestId as String, allow = false, input = item.input)
+        if (reply) respondPermission(item.requestId as String, allow = false, input = item.input, denyMessage = denyMessageFor(item))
     }
+
+    /** Mensagem de recusa: no plano, pede ao modelo que continue planejando (não a padrão). */
+    private fun denyMessageFor(item: ChatItem.Permission): String =
+        if (item.toolName == PLAN_TOOL) context.getString(R.string.chat_plan_keep_message)
+        else context.getString(R.string.chat_denied_message)
 
     /** Responde a um pedido de permissão. */
     override fun answer(item: ChatItem.Permission, option: PermissionOption) {
@@ -240,16 +245,37 @@ class ChatEngine(
         }
         item.chosen = option
         val allow = option.allows
-        if (option.kind == PermissionOption.Kind.ALLOW_ALWAYS) alwaysAllowed += permissionKey(item.toolName, item.input)
-        respondPermission(item.requestId as String, allow, item.input)
+        // Perguntas e plano nunca viram "sempre permitir": cada um é uma decisão própria.
+        if (option.kind == PermissionOption.Kind.ALLOW_ALWAYS && item.toolName != QUESTION_TOOL && item.toolName != PLAN_TOOL) {
+            alwaysAllowed += permissionKey(item.toolName, item.input)
+        }
+        respondPermission(item.requestId as String, allow, item.input, denyMessageFor(item))
         changed()
     }
 
-    private fun respondPermission(requestId: String, allow: Boolean, input: JSONObject) {
+    /** Responde a um AskUserQuestion: allow com as respostas dentro de updatedInput. */
+    fun answerQuestions(item: ChatItem.Permission, answers: Map<String, String>) {
+        if (item.chosen != null) return
+        if (!running) {
+            add(ChatItem.Info(context.getString(R.string.chat_permission_agent_stopped)))
+            return
+        }
+        item.chosen = item.options.first { it.kind == PermissionOption.Kind.ALLOW_ONCE }
+        item.answers = answers
+        respondPermission(item.requestId as String, true, answersInput(item.input, answers))
+        changed()
+    }
+
+    private fun respondPermission(
+        requestId: String,
+        allow: Boolean,
+        input: JSONObject,
+        denyMessage: String = context.getString(R.string.chat_denied_message),
+    ) {
         val response = if (allow) {
             JSONObject().put("behavior", "allow").put("updatedInput", input)
         } else {
-            JSONObject().put("behavior", "deny").put("message", context.getString(R.string.chat_denied_message))
+            JSONObject().put("behavior", "deny").put("message", denyMessage)
         }
         send(
             JSONObject().put("type", "control_response").put(
@@ -538,6 +564,36 @@ class ChatEngine(
         }
         val toolName = request.optString("tool_name")
         val input = request.optJSONObject("input") ?: JSONObject()
+        // Perguntas e plano têm cartão próprio; nunca são aprovados sozinhos.
+        if (toolName == QUESTION_TOOL) {
+            val questions = parseQuestions(input)
+            if (questions.isNotEmpty()) {
+                add(
+                    ChatItem.Permission(
+                        requestId, context.getString(R.string.chat_question_title), summary = "",
+                        options = listOf(
+                            PermissionOption("allow", "", PermissionOption.Kind.ALLOW_ONCE),
+                            PermissionOption("deny", "", PermissionOption.Kind.REJECT_ONCE),
+                        ),
+                        input = input, toolName = toolName, questions = questions,
+                    ),
+                )
+                return
+            }
+        }
+        if (toolName == PLAN_TOOL) {
+            add(
+                ChatItem.Permission(
+                    requestId, context.getString(R.string.chat_plan_title), summary = input.optString("plan"),
+                    options = listOf(
+                        PermissionOption("allow", "", PermissionOption.Kind.ALLOW_ONCE),
+                        PermissionOption("deny", "", PermissionOption.Kind.REJECT_ONCE),
+                    ),
+                    input = input, toolName = toolName, markdown = true,
+                ),
+            )
+            return
+        }
         if (permissionKey(toolName, input) in alwaysAllowed) {
             respondPermission(requestId, allow = true, input = input)
             return
@@ -594,6 +650,40 @@ class ChatEngine(
         /** Ferramenta de lista de tarefas do Claude Code: vira um [ChatItem.Plan], não um cartão. */
         const val TODO_TOOL = "TodoWrite"
 
+        /** Pergunta do agente com opções (cartão de perguntas). */
+        const val QUESTION_TOOL = "AskUserQuestion"
+        /** Plano para aprovar (cartão de plano, em Markdown). */
+        const val PLAN_TOOL = "ExitPlanMode"
+
+        /**
+         * Perguntas do AskUserQuestion ({"questions":[{"question","header","multiSelect","options":[{"label","description"}]}]}).
+         * Ignora pergunta sem texto ou sem opções, e opção sem rótulo. Array ausente: lista vazia.
+         */
+        fun parseQuestions(input: JSONObject): List<Question> {
+            val array = input.optJSONArray("questions") ?: return emptyList()
+            return (0 until array.length()).mapNotNull { i ->
+                val question = array.optJSONObject(i) ?: return@mapNotNull null
+                val text = question.optString("question")
+                if (text.isEmpty()) return@mapNotNull null
+                val optionsArray = question.optJSONArray("options") ?: return@mapNotNull null
+                val options = (0 until optionsArray.length()).mapNotNull { j ->
+                    val option = optionsArray.optJSONObject(j) ?: return@mapNotNull null
+                    val label = option.optString("label")
+                    if (label.isEmpty()) null else QuestionOption(label, option.optString("description"))
+                }
+                if (options.isEmpty()) return@mapNotNull null
+                Question(text, question.optString("header"), options, question.optBoolean("multiSelect"))
+            }
+        }
+
+        /** Cópia do input original com o campo "answers" (pergunta → resposta); o original não muda. */
+        fun answersInput(input: JSONObject, answers: Map<String, String>): JSONObject {
+            val copy = JSONObject(input.toString())
+            val map = JSONObject()
+            for ((question, answer) in answers) map.put(question, answer)
+            return copy.put("answers", map)
+        }
+
         /**
          * Tarefas do TodoWrite ({"todos":[{"content","status","activeForm"}]}) como entradas
          * de plano. Status: pending, in_progress ou completed (os mesmos do ACP).
@@ -645,11 +735,18 @@ object ToolText {
         "WebSearch" -> R.string.tool_web_search
         "TodoWrite" -> R.string.tool_todo
         "Task", "Agent" -> R.string.tool_agent
+        "AskUserQuestion" -> R.string.tool_question
+        "ExitPlanMode" -> R.string.tool_plan
         else -> null
     }
 
     fun summary(name: String, input: JSONObject?, limit: Int = 400): String {
         input ?: return ""
+        if (name == ChatEngine.PLAN_TOOL) input.optString("plan").takeIf { it.isNotEmpty() }?.let { return it.take(limit) }
+        if (name == ChatEngine.QUESTION_TOOL) {
+            val texts = ChatEngine.parseQuestions(input).map { it.text }
+            if (texts.isNotEmpty()) return texts.joinToString("\n").take(limit)
+        }
         for (key in listOf("command", "file_path", "path", "url", "query", "pattern", "description", "prompt")) {
             val value = input.optString(key)
             if (value.isNotEmpty()) return value.take(limit)

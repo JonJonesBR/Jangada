@@ -1104,7 +1104,8 @@ class ChatActivity : JangadaActivity() {
         val more = pending.size - 1
         permissionMore.visibility = if (more > 0) View.VISIBLE else View.GONE
         if (more > 0) permissionMore.text = resources.getQuantityString(R.plurals.chat_permission_more, more, more)
-        permissionAllow.visibility = if (first.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) View.VISIBLE else View.GONE
+        // Pergunta: a resposta é pelo cartão (campos e opções), não pelo Permitir da faixa.
+        permissionAllow.visibility = if (first.questions.isEmpty() && first.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) View.VISIBLE else View.GONE
         permissionDeny.visibility = if (first.options.any { it.kind == PermissionOption.Kind.REJECT_ONCE }) View.VISIBLE else View.GONE
     }
 
@@ -2619,7 +2620,15 @@ class ChatActivity : JangadaActivity() {
     }
 
     /** Texto do botão. "Sempre permitir" diz o que libera; só o Claude Code (com ferramenta) muda. */
-    private fun optionLabel(item: ChatItem.Permission, option: PermissionOption): String = when (option.kind) {
+    private fun optionLabel(item: ChatItem.Permission, option: PermissionOption): String = when {
+        item.toolName == ChatEngine.PLAN_TOOL && option.kind == PermissionOption.Kind.ALLOW_ONCE -> getString(R.string.chat_plan_approve)
+        item.toolName == ChatEngine.PLAN_TOOL && option.kind == PermissionOption.Kind.REJECT_ONCE -> getString(R.string.chat_plan_keep)
+        item.questions.isNotEmpty() && option.kind == PermissionOption.Kind.ALLOW_ONCE -> getString(R.string.chat_question_answer)
+        item.questions.isNotEmpty() && option.kind == PermissionOption.Kind.REJECT_ONCE -> getString(R.string.chat_question_skip)
+        else -> optionLabelDefault(item, option)
+    }
+
+    private fun optionLabelDefault(item: ChatItem.Permission, option: PermissionOption): String = when (option.kind) {
         PermissionOption.Kind.ALLOW_ONCE -> getString(R.string.chat_allow)
         PermissionOption.Kind.ALLOW_ALWAYS -> when {
             ChatEngine.isShellTool(item.toolName) -> getString(R.string.chat_allow_always_command)
@@ -2923,25 +2932,38 @@ class ChatActivity : JangadaActivity() {
         }
 
         private fun permissionCard(item: ChatItem.Permission): View {
+            if (item.questions.isNotEmpty()) return questionCard(item)
             val card = LinearLayout(this@ChatActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundResource(R.drawable.card_bg)
                 setPadding(dp(14), dp(12), dp(14), dp(10))
             }
             card.addView(TextView(this@ChatActivity).apply {
-                text = getString(R.string.chat_wants_agent, agentName, item.title)
+                text = if (item.toolName == ChatEngine.PLAN_TOOL) {
+                    getString(R.string.chat_plan_wants, agentName)
+                } else {
+                    getString(R.string.chat_wants_agent, agentName, item.title)
+                }
                 setTextColor(getColor(R.color.setup_text))
                 textSize = 15f * chatScale
                 setTypeface(typeface, Typeface.BOLD)
             })
             if (item.summary.isNotEmpty()) {
                 card.addView(TextView(this@ChatActivity).apply {
-                    text = item.summary
-                    typeface = Typeface.MONOSPACE
-                    textSize = 12f * chatScale
-                    maxLines = 8
+                    // Plano em Markdown (sem monospace); comando ou caminho continuam em monospace.
+                    if (item.markdown) {
+                        text = Markdown.render(item.summary, getColor(R.color.code_bg))
+                        textSize = 14f * chatScale
+                        maxLines = 25
+                        setTextColor(getColor(R.color.setup_text))
+                    } else {
+                        text = item.summary
+                        typeface = Typeface.MONOSPACE
+                        textSize = 12f * chatScale
+                        maxLines = 8
+                        setTextColor(getColor(R.color.setup_muted))
+                    }
                     ellipsize = TextUtils.TruncateAt.END
-                    setTextColor(getColor(R.color.setup_muted))
                     setPadding(0, dp(6), 0, dp(4))
                     // Texto cortado (reticências na última linha): tocar mostra o pedido inteiro.
                     setOnClickListener {
@@ -2990,6 +3012,179 @@ class ChatActivity : JangadaActivity() {
                 })
             }
             return card
+        }
+
+        /**
+         * Cartão das perguntas do AskUserQuestion. Todo o estado (opções marcadas e texto livre) fica
+         * em [ChatItem.Permission.selected] e [ChatItem.Permission.otherText]: a lista redesenha a qualquer
+         * momento, então a tela nunca guarda seleção só na View.
+         */
+        private fun questionCard(item: ChatItem.Permission): View {
+            val card = LinearLayout(this@ChatActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                setPadding(dp(14), dp(12), dp(14), dp(10))
+            }
+            card.addView(TextView(this@ChatActivity).apply {
+                text = getString(R.string.chat_question_wants, agentName)
+                setTextColor(getColor(R.color.setup_text))
+                textSize = 15f * chatScale
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            val chosen = item.chosen
+            val answers = item.answers
+            if (chosen != null && !chosen.allows) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(R.string.chat_question_skipped)
+                    setTextColor(getColor(R.color.setup_error))
+                    textSize = 13f * chatScale
+                    setPadding(0, dp(4), 0, 0)
+                })
+                return card
+            }
+            if (chosen != null) {
+                // Já respondida: pergunta e resposta, sem as opções.
+                for (question in item.questions) {
+                    card.addView(TextView(this@ChatActivity).apply {
+                        text = question.text + "\n→ " + answers?.get(question.text).orEmpty()
+                        setTextColor(getColor(R.color.setup_text))
+                        textSize = 14f * chatScale
+                        setPadding(0, dp(6), 0, dp(2))
+                    })
+                }
+                return card
+            }
+            item.questions.forEachIndexed { q, question ->
+                if (question.header.isNotEmpty()) {
+                    card.addView(TextView(this@ChatActivity).apply {
+                        text = question.header
+                        setTextColor(getColor(R.color.setup_muted))
+                        textSize = 12f * chatScale
+                        setPadding(0, dp(8), 0, 0)
+                    })
+                }
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = question.text
+                    setTextColor(getColor(R.color.setup_text))
+                    textSize = 15f * chatScale
+                    setPadding(0, dp(4), 0, dp(2))
+                })
+                val marked = item.selected[q].orEmpty()
+                val otherText = item.otherText[q]
+                question.options.forEachIndexed { o, option ->
+                    val on = marked.contains(o)
+                    val mark = when {
+                        question.multiSelect -> if (on) "☑ " else "☐ "
+                        else -> if (on) "◉ " else "○ "
+                    }
+                    card.addView(questionRow(mark + option.label, option.description, on, option.label) {
+                        if (question.multiSelect) {
+                            val set = item.selected.getOrPut(q) { HashSet() }
+                            if (!set.add(o)) set.remove(o)
+                        } else {
+                            item.selected[q] = mutableSetOf(o)
+                            item.otherText.remove(q)
+                        }
+                        this@ChatAdapter.notifyDataSetChanged()
+                    })
+                }
+                if (otherText != null) {
+                    val mark = if (question.multiSelect) "☑ " else "◉ "
+                    card.addView(questionRow(mark + otherText, "", true, otherText) { editOther(item, q, question.multiSelect) })
+                }
+                card.addView(questionRow(getString(R.string.chat_question_other), "", false, getString(R.string.chat_question_other)) {
+                    editOther(item, q, question.multiSelect)
+                })
+            }
+            val buttons = LinearLayout(this@ChatActivity).apply { orientation = LinearLayout.VERTICAL }
+            val answer = Button(this@ChatActivity).apply {
+                text = getString(R.string.chat_question_answer)
+                isAllCaps = false
+                textSize = 14f * chatScale
+                backgroundTintList = ColorStateList.valueOf(getColor(R.color.key_active))
+                setTextColor(getColor(R.color.setup_on_accent))
+                setOnClickListener { sendQuestionAnswers(item) }
+            }
+            val skip = Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
+                text = getString(R.string.chat_question_skip)
+                isAllCaps = false
+                textSize = 14f * chatScale
+                setTextColor(getColor(R.color.setup_error))
+                setOnClickListener { engine?.answer(item, item.options.first { it.kind == PermissionOption.Kind.REJECT_ONCE }) }
+            }
+            buttons.addView(answer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            buttons.addView(skip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            card.addView(buttons)
+            return card
+        }
+
+        /** Uma opção do cartão de perguntas: linha clicável com a marca, o rótulo e a descrição (se houver). */
+        private fun questionRow(label: String, description: String, on: Boolean, spoken: String, onClick: () -> Unit) =
+            LinearLayout(this@ChatActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(selectableBackground)
+                setPadding(dp(4), dp(6), dp(4), dp(6))
+                isClickable = true
+                isFocusable = true
+                contentDescription = getString(
+                    if (on) R.string.chat_question_selected else R.string.chat_question_not_selected,
+                    spoken,
+                )
+                addView(TextView(this@ChatActivity).apply {
+                    text = label
+                    setTextColor(getColor(R.color.setup_text))
+                    textSize = 14f * chatScale
+                })
+                if (description.isNotEmpty()) {
+                    addView(TextView(this@ChatActivity).apply {
+                        text = description
+                        setTextColor(getColor(R.color.setup_muted))
+                        textSize = 12f * chatScale
+                    })
+                }
+                setOnClickListener { onClick() }
+            }
+
+        /** Abre o campo de "Outra resposta" da pergunta [q], preenchido com o texto atual. */
+        private fun editOther(item: ChatItem.Permission, q: Int, multiSelect: Boolean) {
+            val field = EditText(this@ChatActivity).apply {
+                setText(item.otherText[q].orEmpty())
+                inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            }
+            val content = LinearLayout(this@ChatActivity).apply {
+                setPadding(dp(20), dp(8), dp(20), 0)
+                addView(field)
+            }
+            AlertDialog.Builder(this@ChatActivity)
+                .setTitle(R.string.chat_question_other)
+                .setView(content)
+                .setPositiveButton(android.R.string.ok) { _, _ ->
+                    val text = field.text.toString().trim()
+                    if (text.isEmpty()) return@setPositiveButton
+                    item.otherText[q] = text
+                    if (!multiSelect) item.selected.remove(q)
+                    this@ChatAdapter.notifyDataSetChanged()
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+        }
+
+        /** Responder: junta as escolhas de cada pergunta; se faltar alguma, avisa e não envia. */
+        private fun sendQuestionAnswers(item: ChatItem.Permission) {
+            val answers = LinkedHashMap<String, String>()
+            for ((q, question) in item.questions.withIndex()) {
+                val parts = mutableListOf<String>()
+                question.options.forEachIndexed { o, option ->
+                    if (item.selected[q]?.contains(o) == true) parts += option.label
+                }
+                item.otherText[q]?.let { parts += it }
+                if (parts.isEmpty()) {
+                    Toast.makeText(this@ChatActivity, R.string.chat_question_missing, Toast.LENGTH_SHORT).show()
+                    return
+                }
+                answers[question.text] = parts.joinToString(", ")
+            }
+            (engine as? ChatEngine)?.answerQuestions(item, answers)
         }
 
         /** Trecho de edição (linhas "- " em vermelho e "+ " em verde) com o fundo dos blocos de código. */

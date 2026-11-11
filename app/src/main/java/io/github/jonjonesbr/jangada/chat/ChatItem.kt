@@ -32,8 +32,18 @@ sealed class ChatItem {
         val toolName: String = "",
         val detail: String = "",
         val diff: String? = null,
+        /** Perguntas do AskUserQuestion (cartão próprio, em vez do de permissão). */
+        val questions: List<Question> = emptyList(),
+        /** O resumo é Markdown (plano do ExitPlanMode). */
+        val markdown: Boolean = false,
     ) : ChatItem() {
         var chosen: PermissionOption? = null
+        /** Respostas enviadas (pergunta → resposta); null enquanto não respondeu. */
+        var answers: Map<String, String>? = null
+        /** Estado da tela (só na thread principal): pergunta → índices das opções marcadas. */
+        val selected: MutableMap<Int, MutableSet<Int>> = HashMap()
+        /** Estado da tela (só na thread principal): pergunta → texto de "Outra resposta". */
+        val otherText: MutableMap<Int, String> = HashMap()
     }
 
     /**
@@ -96,6 +106,11 @@ class PermissionOption(val id: String, val label: String, val kind: Kind) {
 }
 
 class PlanEntry(val text: String, val status: String)
+
+/** Uma pergunta do AskUserQuestion; [multiSelect] permite marcar mais de uma opção. */
+class Question(val text: String, val header: String, val options: List<QuestionOption>, val multiSelect: Boolean)
+
+class QuestionOption(val label: String, val description: String)
 
 /** Quanto da janela de contexto a conversa ocupa: tokens usados e tamanho da janela. */
 class ContextUsage(val used: Long, val size: Long) {

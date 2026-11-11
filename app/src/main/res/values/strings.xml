@@ -226,6 +226,19 @@
     <string name="chat_allow_always_tool">Always allow %1$s in this conversation</string>
     <string name="chat_deny_always">Always deny</string>
     <string name="chat_wants_agent">%1$s wants to: %2$s</string>
+    <string name="chat_question_title">Question</string>
+    <string name="chat_question_wants">%1$s has a question</string>
+    <string name="chat_question_answer">Answer</string>
+    <string name="chat_question_skip">Skip</string>
+    <string name="chat_question_skipped">Skipped</string>
+    <string name="chat_question_other">Other answer…</string>
+    <string name="chat_question_missing">Answer every question first.</string>
+    <string name="chat_question_selected">%1$s, selected</string>
+    <string name="chat_question_not_selected">%1$s, not selected</string>
+    <string name="chat_plan_title">Plan</string>
+    <string name="chat_plan_wants">%1$s proposes a plan</string>
+    <string name="chat_plan_approve">Approve plan</string>
+    <string name="chat_plan_keep">Keep planning</string>
     <string name="chat_permission_full">Full request</string>
     <string name="chat_tool_output">Action result</string>
     <string name="chat_tool_output_description">%1$s. Tap to see the result.</string>
@@ -473,6 +486,7 @@
 
     <!-- Chat: mensagens e nomes das ferramentas -->
     <string name="chat_denied_message">The user denied this action.</string>
+    <string name="chat_plan_keep_message">The user wants to keep planning. Ask what should change in the plan before continuing.</string>
     <string name="chat_claude_login_hint">%1$s\n\nLog in from the Terminal (button at the top) and come back to the chat.</string>
     <string name="chat_error_max_turns">The agent reached the turn limit for this reply. Send a message to continue.</string>
     <string name="chat_acp_no_init">The agent didn’t answer the start request: %1$s</string>
@@ -496,6 +510,8 @@
     <string name="tool_web_search">Search the web</string>
     <string name="tool_todo">Task list</string>
     <string name="tool_agent">Subagent</string>
+    <string name="tool_question">Question</string>
+    <string name="tool_plan">Plan</string>
 
     <!-- Instalação de agentes e créditos -->
     <string name="task_error">ERROR: %1$s</string>

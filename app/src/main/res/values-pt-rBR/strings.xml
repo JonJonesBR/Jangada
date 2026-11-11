@@ -224,6 +224,19 @@
     <string name="chat_allow_always_tool">Sempre permitir %1$s nesta conversa</string>
     <string name="chat_deny_always">Recusar sempre</string>
     <string name="chat_wants_agent">O %1$s quer: %2$s</string>
+    <string name="chat_question_title">Pergunta</string>
+    <string name="chat_question_wants">%1$s tem uma pergunta</string>
+    <string name="chat_question_answer">Responder</string>
+    <string name="chat_question_skip">Pular</string>
+    <string name="chat_question_skipped">Pulada</string>
+    <string name="chat_question_other">Outra resposta…</string>
+    <string name="chat_question_missing">Responda todas as perguntas antes.</string>
+    <string name="chat_question_selected">%1$s, marcada</string>
+    <string name="chat_question_not_selected">%1$s, não marcada</string>
+    <string name="chat_plan_title">Plano</string>
+    <string name="chat_plan_wants">%1$s propõe um plano</string>
+    <string name="chat_plan_approve">Aprovar plano</string>
+    <string name="chat_plan_keep">Continuar planejando</string>
     <string name="chat_permission_full">Pedido completo</string>
     <string name="chat_tool_output">Resultado da ação</string>
     <string name="chat_tool_output_description">%1$s. Toque para ver o resultado.</string>
@@ -471,6 +484,7 @@
 
     <!-- Chat: mensagens e nomes das ferramentas -->
     <string name="chat_denied_message">O usuário recusou esta ação.</string>
+    <string name="chat_plan_keep_message">O usuário quer continuar planejando. Pergunte o que deve mudar no plano antes de seguir.</string>
     <string name="chat_claude_login_hint">%1$s\n\nFaça login pelo Terminal (botão no topo) e volte para o chat.</string>
     <string name="chat_error_max_turns">O agente chegou ao limite de passos desta resposta. Mande uma mensagem para continuar.</string>
     <string name="chat_acp_no_init">O agente não respondeu ao início: %1$s</string>
@@ -494,6 +508,8 @@
     <string name="tool_web_search">Pesquisar na web</string>
     <string name="tool_todo">Lista de tarefas</string>
     <string name="tool_agent">Subagente</string>
+    <string name="tool_question">Pergunta</string>
+    <string name="tool_plan">Plano</string>
 
     <!-- Instalação de agentes e créditos -->
     <string name="task_error">ERRO: %1$s</string>
