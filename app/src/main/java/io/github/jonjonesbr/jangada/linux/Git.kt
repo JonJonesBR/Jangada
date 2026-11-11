@@ -33,6 +33,8 @@ object Git {
     /** Comandos só de leitura: ganham tempo limite (ver [run]). Os que mudam o repositório nunca são cortados. */
     private val READ_ONLY = setOf("status", "diff", "rev-parse", "rev-list", "symbolic-ref", "ls-files", "log", "show")
     private const val READ_TIMEOUT_S = 120
+    /** Código de saída do `timeout` quando o comando passou do limite. */
+    const val TIMED_OUT = 124
 
     /** Maior nome de branch aceito vindo do git. */
     private const val MAX_BRANCH = 200

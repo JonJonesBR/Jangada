@@ -56,6 +56,8 @@ class ChangesActivity : JangadaActivity() {
         val remote: String? = null,
         /** A branch tem upstream (só então o git conta os commits à frente). */
         val hasUpstream: Boolean = false,
+        /** O git status passou do tempo limite (ver Git.run): é repositório, mas não deu para ler. */
+        val timedOut: Boolean = false,
     )
 
     private lateinit var linux: LinuxEnv
@@ -177,6 +179,7 @@ class ChangesActivity : JangadaActivity() {
         if (!Fs.exists(File(hostDir, ".git").toPath())) return State(false, null, false, emptyList(), null)
         val branch = Workspace.gitBranch(linux.rootfs, hostDir)
         val status = Git.status(linux, cwd)
+        if (status.code == Git.TIMED_OUT) return State(false, branch, false, emptyList(), null, timedOut = true)
         if (status.code != 0) return State(false, branch, false, emptyList(), null)
         // Saída cortada: a última entrada pode ter vindo pela metade.
         val parsed = Git.parseStatus(status.output).let { if (status.cut) it.dropLast(1) else it }
@@ -214,7 +217,7 @@ class ChangesActivity : JangadaActivity() {
             remoteRow.visibility = View.GONE
             list.visibility = View.GONE
             commitBar.visibility = View.GONE
-            empty.text = getString(R.string.changes_not_repo)
+            empty.text = getString(if (read.timedOut) R.string.changes_status_timeout else R.string.changes_not_repo)
             empty.visibility = View.VISIBLE
             adapter.notifyDataSetChanged()
             updateCommit()

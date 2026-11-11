@@ -88,15 +88,18 @@ object Projects {
     }
 
     /**
-     * O endereço traz senha ou token (`https://usuario:token@host/...`)? O git gravaria o token em texto
-     * puro no .git/config, que os agentes leem: é recusado, e o login vai pelo gh/glab ou por SSH.
-     * Só usuário (`ssh://git@host/...`) não conta.
+     * O endereço traz senha ou token? O git gravaria o token em texto puro no .git/config, que os
+     * agentes leem: é recusado, e o login vai pelo gh/glab ou por SSH. Em http(s), qualquer coisa antes
+     * do "@" conta (o GitHub aceita o token no lugar do usuário: `https://ghp_xxx@github.com/...`).
+     * Nos outros esquemas só `usuario:senha@`; o usuário sozinho (`ssh://git@host/...`) vale.
      */
     fun hasPassword(url: String): Boolean {
         val prefix = SCHEME_PREFIX.find(url)?.value ?: return false
         val end = url.indexOf('/', prefix.length).let { if (it < 0) url.length else it }
         val at = url.lastIndexOf('@', end - 1)
-        return at >= prefix.length && ':' in url.substring(prefix.length, at)
+        if (at < prefix.length) return false
+        val web = prefix.equals("http://", ignoreCase = true) || prefix.equals("https://", ignoreCase = true)
+        return web || ':' in url.substring(prefix.length, at)
     }
 
     /**

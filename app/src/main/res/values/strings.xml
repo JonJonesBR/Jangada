@@ -637,6 +637,7 @@
     </plurals>
     <string name="changes_none">Nothing to commit</string>
     <string name="changes_not_repo">This folder is not a git repository</string>
+    <string name="changes_status_timeout">Git took more than 2 minutes to read this folder. Tap ↻ to try again, or check it in the terminal.</string>
     <string name="changes_message_hint">Commit message</string>
     <string name="changes_commit">Commit</string>
     <string name="changes_committed">Committed %1$s</string>

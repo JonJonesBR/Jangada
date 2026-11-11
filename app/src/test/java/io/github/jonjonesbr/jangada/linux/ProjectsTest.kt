@@ -29,7 +29,9 @@ class ProjectsTest {
         // Senha ou token no endereço iria para o .git/config: recusado. Só usuário passa.
         assertFalse(Projects.isCloneUrl("https://usuario:token@github.com/a/b.git"))
         assertTrue(Projects.hasPassword("https://usuario:token@github.com/a/b.git"))
-        assertFalse(Projects.hasPassword("https://usuario@github.com/a/b.git"))
+        assertTrue(Projects.hasPassword("https://ghp_xxx@github.com/a/b.git"))
+        assertTrue(Projects.hasPassword("https://usuario@github.com/a/b.git"))
+        assertTrue(Projects.hasPassword("ssh://git:senha@github.com/a/b.git"))
         assertFalse(Projects.hasPassword("ssh://git@github.com/a/b.git"))
         assertFalse(Projects.hasPassword("git@github.com:a/b.git"))
         assertFalse(Projects.hasPassword("https://github.com/a:b@c"))
