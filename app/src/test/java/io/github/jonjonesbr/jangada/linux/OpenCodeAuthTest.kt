@@ -138,6 +138,6 @@ class OpenCodeAuthTest {
     fun scriptDeListaNaoLeAChave() {
         // A coluna value do SQLite guarda a chave: a consulta não pode citá-la.
         assertFalse(OpenCodeAuth.listScript().contains("value"))
-        assertTrue(OpenCodeAuth.listScript().contains("integration_id||'|'||label||'|'||active"))
+        assertTrue(OpenCodeAuth.listScript().contains("integration_id||'|'||coalesce(label,'')||'|'||coalesce(active,1)"))
     }
 }

@@ -2315,6 +2315,8 @@ class ChatActivity : JangadaActivity() {
             hint = getString(R.string.opencode_auth_key_hint)
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setSingleLine(true)
+            // A chave não vai para o gerenciador de senhas do Android.
+            importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
         }
         val content = LinearLayout(this).apply {
             setPadding(dpToPx(20), dpToPx(8), dpToPx(20), 0)
@@ -2388,12 +2390,14 @@ class ChatActivity : JangadaActivity() {
             return
         }
         openCodeBusy = true
-        openCodeToast(busy)
+        // O login leva de 16 s a 1 min: um aviso que fica na tela até acabar (um Toast some em 3 s).
+        val progress = AlertDialog.Builder(this).setMessage(busy).setCancelable(false).show()
         thread(name = "opencode-auth") {
             // Um erro inesperado não derruba o app: o resultado vira null.
             val result = runCatching { work() }.getOrNull()
             onUi {
                 openCodeBusy = false
+                runCatching { progress.dismiss() }
                 then(result)
             }
         }

@@ -111,7 +111,7 @@ object OpenCodeAuth {
     fun listScript(): String = listOf(
         "if command -v sqlite3 >/dev/null 2>&1 && [ -f $DB ]; then",
         "  echo $MARK_SQL",
-        "  sqlite3 $DB \"select integration_id||'|'||label||'|'||active from credential\" 2>/dev/null",
+        "  sqlite3 $DB \"select integration_id||'|'||coalesce(label,'')||'|'||coalesce(active,1) from credential\" 2>/dev/null",
         "else",
         "  echo $MARK_TEXT",
         "  opencode auth list --standalone </dev/null 2>/dev/null",
@@ -152,21 +152,38 @@ object OpenCodeAuth {
     }
 
     /**
-     * Conecta a integração [id] com a chave [key]. Verdadeiro se o login saiu com código 0. A chave vai
+     * Conecta a integração [id] com a chave [key]. Verdadeiro se o login saiu com código 0 e, com SQLite, a conta apareceu. A chave vai
      * pela entrada padrão do processo; nada dela é guardado, mostrado ou escrito em log. Fora da
      * thread principal.
      */
     fun login(linux: LinuxEnv, id: String, key: String): Boolean {
         if (!isValidIntegration(id) || !isValidKey(key)) return false
-        return try {
-            val process = linux.startProcess(loginScript(id), secrets = false)
+        var process: Process? = null
+        val exited = try {
+            process = linux.startProcess(loginScript(id), secrets = false)
             process.outputStream.use { it.write("$key\n".toByteArray(Charsets.UTF_8)) }
             // Saída descartada: o terminal do login mostra a chave mascarada e o resultado; não é guardada.
             process.inputStream.bufferedReader().use { it.readText() }
             process.waitFor() == 0
         } catch (e: IOException) {
+            // O script morreu cedo (a escrita falhou): não fica processo para trás.
+            process?.destroy()
             false
         }
+        if (!exited) return false
+        // Saiu com 0, mas a chave pode não ter chegado (o campo abriu depois da digitação): confere no SQLite,
+        // que traz o id. A lista de texto traz só o nome mostrado, e sem lista vale o código de saída.
+        return loggedIn(linux, id) ?: true
+    }
+
+    /** A integração [id] aparece no SQLite do OpenCode? null se não deu para saber (sem sqlite3, erro). */
+    private fun loggedIn(linux: LinuxEnv, id: String): Boolean? = try {
+        val lines = ArrayList<String>()
+        linux.runBash(listScript()) { lines += it }
+        if (lines.firstOrNull { it.isNotBlank() }?.trim() != MARK_SQL) null
+        else parseListed(lines)?.any { it.integration == id }
+    } catch (e: IOException) {
+        null
     }
 
     /** Remove a conta [account]. Verdadeiro se o logout saiu com código 0. Fora da thread principal. */
