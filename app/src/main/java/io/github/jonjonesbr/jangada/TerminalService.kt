@@ -736,7 +736,7 @@ class TerminalService : Service() {
         if (Setup.state is Setup.State.Running || cleaningCaches() || agentTaskBusy()) return
         // Com terminal aberto ou agente rodando, algo pode estar usando os caches ou o /tmp agora
         // (npm install, um navegador de teste): a automática espera; o botão Liberar espaço continua valendo.
-        if (sessions.isNotEmpty() || chats.values.any { it.chat.running }) return
+        if (liveSessions() > 0 || chats.values.any { it.chat.running } || foregroundHolds > 0) return
         val now = System.currentTimeMillis()
         val last = settings.lastAutoCleanAt
         // Relógio que voltou (last no futuro) também conta como vencido, em vez de travar a limpeza.
@@ -901,9 +901,41 @@ class TerminalService : Service() {
         tasks.values.any { it.state == AgentTask.State.RUNNING } || clones.values.any { it.state == CloneTask.State.RUNNING }
 
     /** Há algo que mantenha o serviço em primeiro plano (sessão, chat, instalação ou Linux)? */
+    /**
+     * Abas de terminal com o processo vivo. Uma aba encerrada (exit) continua na tela até ser fechada,
+     * mas não segura o primeiro plano, o WakeLock nem a limpeza automática.
+     */
+    private fun liveSessions() = sessions.count { it.isRunning }
+
     private fun hasWork() =
-        sessions.isNotEmpty() || chats.isNotEmpty() || hasRunningTasks() || taskQueue.isNotEmpty() ||
-            cleaningCaches() || Setup.state is Setup.State.Running
+        liveSessions() > 0 || chats.isNotEmpty() || hasRunningTasks() || taskQueue.isNotEmpty() ||
+            cleaningCaches() || Setup.state is Setup.State.Running || foregroundHolds > 0
+
+    /** Tarefas das telas que pediram o primeiro plano (backup, restauração). Só a thread principal mexe. */
+    private var foregroundHolds = 0
+
+    /**
+     * Segura o serviço em primeiro plano enquanto uma tela faz algo longo fora dele (exportar ou restaurar
+     * backup): sem isso, ao sair do app, o Android pode matar o processo no meio do tar. Cada chamada que
+     * devolve true pede um [releaseForeground]. Só na thread principal.
+     */
+    fun holdForeground(): Boolean {
+        try {
+            goForeground()
+        } catch (e: RuntimeException) {
+            return false
+        }
+        foregroundHolds++
+        updateNotification()
+        return true
+    }
+
+    /** Fim de uma tarefa de [holdForeground]: o serviço sai do primeiro plano se não sobrou nada. */
+    fun releaseForeground() {
+        if (foregroundHolds > 0) foregroundHolds--
+        updateNotification()
+        leaveForegroundIfIdle()
+    }
 
     private fun leaveForegroundIfIdle() {
         if (!hasWork()) leaveForeground()
@@ -1077,7 +1109,7 @@ class TerminalService : Service() {
             Intent(this, TerminalService::class.java).setAction(ACTION_EXIT),
             PendingIntent.FLAG_IMMUTABLE,
         )
-        val count = sessions.size + chats.size
+        val count = liveSessions() + chats.size
         val running = tasks.values.firstOrNull { it.state == AgentTask.State.RUNNING }
         val cloning = clones.values.firstOrNull { it.state == CloneTask.State.RUNNING }
         val setup = Setup.state as? Setup.State.Running
@@ -1097,6 +1129,7 @@ class TerminalService : Service() {
                 running.recipe.name,
             )
             cleaningCaches() -> getString(R.string.storage_cleaning)
+            foregroundHolds > 0 && count == 0 -> getString(R.string.service_backup)
             else -> resources.getQuantityString(R.plurals.service_sessions, count, count)
         }
         return Notification.Builder(this, CHANNEL_SESSIONS)
@@ -1393,6 +1426,11 @@ class TerminalService : Service() {
         }
         override fun onSessionFinished(finishedSession: TerminalSession) {
             screenClient?.onSessionFinished(finishedSession)
+            // A aba fica, mas o processo acabou: o aviso conta de novo e o serviço pode sair do primeiro plano.
+            main.post {
+                sessionsChanged()
+                leaveForegroundIfIdle()
+            }
         }
         override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {
             screenClient?.onCopyTextToClipboard(session, text)

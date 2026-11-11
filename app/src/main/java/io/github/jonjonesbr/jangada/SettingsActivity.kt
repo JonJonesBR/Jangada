@@ -395,17 +395,72 @@ class SettingsActivity : JangadaActivity() {
         }
     }
 
-    /** Roda backup/restauração em segundo plano com um aviso de progresso (se a tela ainda existir). */
+    /**
+     * Roda backup/restauração em segundo plano com um aviso de progresso (se a tela ainda existir).
+     * Enquanto roda, o serviço fica em primeiro plano ([ForegroundHold]): sair do app não mata o tar no meio.
+     */
     private fun runBackupTask(workingText: Int, work: () -> String) {
         val progress = if (isDestroyed) null else AlertDialog.Builder(this).setMessage(workingText).setCancelable(false).show()
-        thread(name = "backup") {
-            val message = runCatching(work).getOrElse { getString(R.string.backup_failed, it.message ?: it.javaClass.simpleName) }
-            runOnUiThread {
-                progress?.let { runCatching { it.dismiss() } }
-                if (isDestroyed) return@runOnUiThread
-                AlertDialog.Builder(this).setMessage(message).setPositiveButton(android.R.string.ok, null).show()
-                showLinuxSize()
+        ForegroundHold { release ->
+            thread(name = "backup") {
+                val message = runCatching(work).getOrElse { getString(R.string.backup_failed, it.message ?: it.javaClass.simpleName) }
+                runOnUiThread {
+                    // Solta o serviço mesmo com a tela destruída (runOnUiThread roda assim mesmo).
+                    release()
+                    progress?.let { runCatching { it.dismiss() } }
+                    if (isDestroyed) return@runOnUiThread
+                    AlertDialog.Builder(this).setMessage(message).setPositiveButton(android.R.string.ok, null).show()
+                    showLinuxSize()
+                }
             }
+        }.start()
+    }
+
+    /**
+     * Liga-se ao serviço (pelo contexto do app, para o bind sobreviver à tela) e o segura em primeiro plano
+     * ([TerminalService.holdForeground]) antes de chamar [then], na thread principal. [then] recebe a função
+     * que solta o serviço e desfaz o bind (uma vez só). Sem serviço, [then] roda assim mesmo, sem primeiro plano.
+     */
+    private inner class ForegroundHold(private val then: (release: () -> Unit) -> Unit) : ServiceConnection {
+        private var bound = false
+        private var started = false
+        private var service: TerminalService? = null
+        private var held = false
+        private var released = false
+
+        fun start() {
+            bound = runCatching {
+                applicationContext.bindService(Intent(applicationContext, TerminalService::class.java), this, Context.BIND_AUTO_CREATE)
+            }.getOrDefault(false)
+            if (!bound) begin()
+        }
+
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+            service = (binder as? TerminalService.LocalBinder)?.service
+            held = service?.holdForeground() == true
+            begin()
+        }
+
+        // O processo do serviço caiu: a tarefa segue (ou já caiu junto); só não há o que soltar.
+        override fun onServiceDisconnected(name: ComponentName?) {
+            service = null
+            held = false
+            begin()
+        }
+
+        private fun begin() {
+            if (started) return
+            started = true
+            then(::release)
+        }
+
+        private fun release() {
+            if (released) return
+            released = true
+            if (held) service?.releaseForeground()
+            held = false
+            if (bound) runCatching { applicationContext.unbindService(this) }
+            bound = false
         }
     }
 

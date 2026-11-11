@@ -609,6 +609,7 @@
     <string name="task_notify_text">Tap to open Jangada.</string>
     <string name="service_setup_progress">Installing Linux… %1$d%%</string>
     <string name="service_setup">Installing Linux…</string>
+    <string name="service_backup">Backup in progress…</string>
     <string name="setup_notify_done">Linux is ready</string>
     <string name="setup_notify_failed">Linux installation stopped</string>
     <string name="share_linux_missing">Set up Linux in Jangada first.</string>
