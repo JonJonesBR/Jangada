@@ -20,11 +20,14 @@ object ChatHistory {
     fun list(linux: LinuxEnv, cwd: String, limit: Int = 50): List<Conversation> =
         (dir(linux, cwd).listFiles() ?: emptyArray())
             .filter { it.name.endsWith(".jsonl") && it.length() > 0 }
-            .sortedByDescending { it.lastModified() }
+            // A data é lida uma vez: o Claude pode gravar no arquivo durante a ordenação, e uma
+            // comparação que muda no meio faz o TimSort lançar IllegalArgumentException.
+            .map { it to it.lastModified() }
+            .sortedByDescending { it.second }
             .take(limit)
-            .mapNotNull { file ->
+            .mapNotNull { (file, modified) ->
                 val title = title(file) ?: return@mapNotNull null
-                Conversation(file.name.removeSuffix(".jsonl"), title, file.lastModified())
+                Conversation(file.name.removeSuffix(".jsonl"), title, modified)
             }
 
     /** Arquivo da conversa [id], se existir. */

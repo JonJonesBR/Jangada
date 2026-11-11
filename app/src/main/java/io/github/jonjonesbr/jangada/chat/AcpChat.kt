@@ -113,8 +113,13 @@ class AcpChat(
     fun start(resume: String? = null, previous: AgentChat? = null) {
         if (running) return
         contextUsage = null
+        // A conversa pedida já é a deste chat: se o agente falhar ao subir, o próximo envio tenta
+        // recarregar a mesma, em vez de abrir uma nova sem aviso (como no ChatEngine).
+        if (resume != null) sessionId = resume
         if (resume != null && items.isEmpty() && previous != null && previous.sessionId == resume) {
             items += previous.items.toList()
+            // O plano copiado continua sendo o da conversa: o próximo "plan" o atualiza, sem outro cartão.
+            plan = items.lastOrNull { it is ChatItem.Plan } as? ChatItem.Plan
         }
         skipReplay = resume != null && items.isNotEmpty()
         launch(interactive = true) {

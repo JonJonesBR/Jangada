@@ -166,6 +166,8 @@
     <string name="chat_allow">Permitir</string>
     <string name="chat_deny">Recusar</string>
     <string name="chat_copied">Copiado</string>
+    <string name="chat_copy_failed">Grande demais para copiar.</string>
+    <string name="chat_history_asleep">%1$s não está rodando. Mande uma mensagem para acordar e abra o Histórico de novo.</string>
     <string name="chat_session">Chat</string>
     <string name="agent_chat">Chat</string>
     <string name="agent_terminal">Terminal</string>

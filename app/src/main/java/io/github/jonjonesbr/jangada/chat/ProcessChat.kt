@@ -249,7 +249,8 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                         // O agente falou (até sem turno nosso, como o fim de um comando em segundo plano):
                         // o tempo parado recomeça, para não dormir no meio do que ele faz.
                         idleSinceMs = SystemClock.elapsedRealtime()
-                        handle(json)
+                        // Mensagem fora do esperado (agente de terceiros) não derruba o app; no log só o tipo do erro.
+                        runCatching { handle(json) }.onFailure { Log.w("JangadaChat", "mensagem ignorada: ${it.javaClass.simpleName}") }
                     }
                 }
             }
@@ -343,6 +344,9 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                 item.chosen = PermissionOption("", "", PermissionOption.Kind.REJECT_ONCE)
             } else if (item is ChatItem.Assistant) {
                 item.streaming = false
+            } else if (item is ChatItem.Tool) {
+                // Ação que não terminou não fica com "…" para sempre.
+                item.done = true
             }
         }
     }

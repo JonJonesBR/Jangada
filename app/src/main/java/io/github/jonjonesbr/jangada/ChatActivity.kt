@@ -1606,9 +1606,13 @@ class ChatActivity : JangadaActivity() {
         if (isClaude) {
             val cwd = chatCwd
             thread(name = "chat-history") {
-                val found = ChatHistory.list(linux, cwd)
+                // Falha de leitura (pasta sumiu, sem permissão) vira lista vazia, sem derrubar o app.
+                val found = runCatching { ChatHistory.list(linux, cwd) }.getOrDefault(emptyList())
                 runOnUiThread { if (!isDestroyed) showHistoryDialog(found, canDelete = true) }
             }
+        } else if (chat is AcpChat && chat.supportsHistory && !chat.running) {
+            // Dormindo ou parado: quem lista as conversas é o próprio agente.
+            Toast.makeText(this, getString(R.string.chat_history_asleep, agentName), Toast.LENGTH_LONG).show()
         } else if (chat is AcpChat && chat.supportsHistory) {
             chat.listSessions { sessions ->
                 if (isDestroyed) return@listSessions
@@ -2607,8 +2611,11 @@ class ChatActivity : JangadaActivity() {
     }
 
     private fun copy(text: String) {
-        getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(agentName, text))
-        Toast.makeText(this, R.string.chat_copied, Toast.LENGTH_SHORT).show()
+        // Texto enorme (resposta de centenas de KB) pode estourar o limite do Binder: avisa em vez de cair.
+        val copied = runCatching {
+            getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(agentName, text))
+        }.isSuccess
+        Toast.makeText(this, if (copied) R.string.chat_copied else R.string.chat_copy_failed, Toast.LENGTH_SHORT).show()
     }
 
     private fun dp(value: Int) =

@@ -168,6 +168,8 @@
     <string name="chat_allow">Allow</string>
     <string name="chat_deny">Deny</string>
     <string name="chat_copied">Copied</string>
+    <string name="chat_copy_failed">Too long to copy.</string>
+    <string name="chat_history_asleep">%1$s is not running. Send a message to wake it, then open History again.</string>
     <string name="chat_session">Chat</string>
     <string name="agent_chat">Chat</string>
     <string name="agent_terminal">Terminal</string>
