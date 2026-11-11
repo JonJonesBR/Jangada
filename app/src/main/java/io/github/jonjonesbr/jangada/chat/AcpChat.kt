@@ -97,6 +97,8 @@ class AcpChat(
     private var loginTimeout: Runnable? = null
     /** Tempo limite da resposta ao initialize (ver INIT_TIMEOUT_MS). */
     private var initTimeout: Runnable? = null
+    /** Tempo limite do session/load ou session/new (ver SESSION_TIMEOUT_MS). */
+    private var sessionTimeout: Runnable? = null
     /** O agente fechou sozinho e [onExited] já mostrou o motivo (vale só até o fim de [onStopped]). */
     private var exitShown = false
 
@@ -188,6 +190,8 @@ class AcpChat(
 
     /** Mostra o cartão de login (uma vez) com os jeitos de entrar. */
     private fun requireLogin(resume: String?) {
+        // O login espera a pessoa: o tempo limite da conversa não vale.
+        clearSessionTimeout()
         resumeAfterLogin = resume
         if (loginCard?.state == ChatItem.Login.State.WAITING) return
         val options = authOptions.ifEmpty {
@@ -250,6 +254,28 @@ class AcpChat(
         initTimeout = null
     }
 
+    /**
+     * Agente que não responde ao abrir ou recarregar a conversa: sem isso, "Recarregando conversa…"
+     * ficaria na tela para sempre, sem o Parar. Cancelado quando fica pronto, no login e no stop.
+     */
+    private fun armSessionTimeout() {
+        clearSessionTimeout()
+        val timeout = Runnable {
+            sessionTimeout = null
+            if (ready) return@Runnable
+            add(ChatItem.Info(context.getString(R.string.chat_acp_session_timeout), isError = true))
+            stop()
+            attention(ChatAttention.FAILED)
+        }
+        sessionTimeout = timeout
+        main.postDelayed(timeout, SESSION_TIMEOUT_MS)
+    }
+
+    private fun clearSessionTimeout() {
+        sessionTimeout?.let { main.removeCallbacks(it) }
+        sessionTimeout = null
+    }
+
     /** Comando para entrar pela tela de terminal (método "terminal" do agente). */
     fun terminalLoginScript(option: AuthOption): String {
         val exports = option.env.entries.joinToString("") { (k, v) -> "export $k=${io.github.jonjonesbr.jangada.agents.AgentRecipe.q(v)}; " }
@@ -258,6 +284,7 @@ class AcpChat(
     }
 
     private fun openSession(resume: String?) {
+        armSessionTimeout()
         val params = JSONObject().put("cwd", cwd).put("mcpServers", JSONArray())
         if (resume != null && canLoad) {
             loadingHistory = true
@@ -314,6 +341,7 @@ class AcpChat(
     }
 
     private fun becomeReady() {
+        clearSessionTimeout()
         ready = true
         changed()
         refreshLimits()
@@ -640,6 +668,7 @@ class AcpChat(
         thoughtDraft = null
         clearLoginTimeout()
         clearInitTimeout()
+        clearSessionTimeout()
         for (callback in waiting) callback(null, stoppedError())
         exitShown = false
         loginCard?.takeIf { it.state == ChatItem.Login.State.WORKING }?.let {
@@ -875,6 +904,8 @@ class AcpChat(
          * Python) num celular com pouca memória; folga maior, porque parar um agente lento custa mais.
          */
         const val INIT_TIMEOUT_MS = 120_000L
+        /** Abrir ou recarregar a conversa: mais folga que o início (o replay de uma conversa longa demora). */
+        const val SESSION_TIMEOUT_MS = 300_000L
         /** Campo interno que marca a falha "o agente parou" (não vem do agente). */
         const val STOPPED = "jangadaStopped"
     }

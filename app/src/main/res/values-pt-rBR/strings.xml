@@ -528,6 +528,7 @@
     <string name="chat_permission_agent_stopped">O agente parou; envie uma mensagem para retomar.</string>
     <string name="chat_acp_agent_stopped">O agente parou antes de responder.</string>
     <string name="chat_acp_init_timeout">O agente não respondeu ao iniciar. Feche o trabalho e abra de novo; se continuar, reinstale o agente na tela inicial.</string>
+    <string name="chat_acp_session_timeout">O agente não abriu a conversa em 5 minutos e foi parado. Mande uma mensagem para tentar de novo.</string>
     <string name="chat_login_timeout">O login demorou demais. Tente de novo.</string>
     <string name="chat_prepare_retry">Tentar de novo</string>
     <string name="chat_prepare_details">Detalhes</string>
@@ -742,6 +743,8 @@
     <string name="opencode_auth_removing">Removendo…</string>
     <string name="opencode_auth_removed">Conta removida. Abra uma Nova conversa para aplicar.</string>
     <string name="opencode_auth_remove_failed">Não foi possível remover a conta.</string>
+    <string name="opencode_auth_remove_no_label">Esta conta não tem nome, e o OpenCode só a remove pelo terminal. O terminal abre com o comando; escolha a conta lá.</string>
+    <string name="opencode_auth_open_terminal">Abrir terminal</string>
     <string name="opencode_auth_add">Adicionar chave</string>
     <string name="opencode_auth_add_desc">Conecte um provedor com a sua chave de API</string>
     <string name="opencode_auth_pick_title">Provedor</string>

@@ -2348,6 +2348,21 @@ class ChatActivity : JangadaActivity() {
     /** Confirma a remoção de uma conta; a conta sai só com o OK. */
     private fun confirmRemoveOpenCodeAccount(account: OpenCodeAuth.Account) {
         val name = account.label.ifBlank { OpenCodeAuth.displayName(account.integration) }
+        if (account.label.isBlank()) {
+            // Sem rótulo, o logout do OpenCode pergunta qual conta no terminal: remove por lá.
+            AlertDialog.Builder(this)
+                .setTitle(getString(R.string.opencode_auth_remove_title, name))
+                .setMessage(R.string.opencode_auth_remove_no_label)
+                .setPositiveButton(R.string.opencode_auth_open_terminal) { _, _ ->
+                    val svc = service ?: return@setPositiveButton
+                    if (busyBlocks()) return@setPositiveButton
+                    Toast.makeText(this, getString(R.string.login_come_back), Toast.LENGTH_LONG).show()
+                    openTerminal(svc, "opencode auth logout ${AgentRecipe.q(account.integration)}", login = true)
+                }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.opencode_auth_remove_title, name))
             .setMessage(R.string.opencode_auth_remove_message)
