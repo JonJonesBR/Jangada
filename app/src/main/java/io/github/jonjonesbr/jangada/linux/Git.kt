@@ -30,6 +30,10 @@ object Git {
     /** Tamanho máximo da saída guardada; o resto é descartado. */
     private const val MAX_OUTPUT = 200 * 1024
 
+    /** Comandos só de leitura: ganham tempo limite (ver [run]). Os que mudam o repositório nunca são cortados. */
+    private val READ_ONLY = setOf("status", "diff", "rev-parse", "rev-list", "symbolic-ref", "ls-files", "log", "show")
+    private const val READ_TIMEOUT_S = 120
+
     /** Maior nome de branch aceito vindo do git. */
     private const val MAX_BRANCH = 200
 
@@ -49,8 +53,10 @@ object Git {
         val out = StringBuilder()
         var cut = false
         return try {
+            // Leitura que trava (repositório enorme, proot lento) não deixa a tela girando para sempre: sai com 124.
+            val limit = if (args.firstOrNull { !it.startsWith("-") } in READ_ONLY) "timeout -k 5 $READ_TIMEOUT_S " else ""
             val command = "cd ${AgentRecipe.q(cwd)} && GIT_PAGER=cat GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8 " +
-                "git -c color.ui=false -c core.quotepath=false " +
+                "${limit}git -c color.ui=false -c core.quotepath=false " +
                 args.joinToString(" ") { AgentRecipe.q(it) }
             val code = linux.run(command) { line ->
                 if (!cut) {
