@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada
 
 import android.content.Context
 import android.content.res.Configuration
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 
 /**
@@ -19,6 +20,29 @@ open class JangadaActivity : ComponentActivity() {
             createdWithTheme = themeGeneration
             recreate()
         }
+    }
+
+    /**
+     * Tema do sistema: as telas declaram uiMode em configChanges (não são recriadas sozinhas), então a
+     * troca claro/escuro do Android com a tela aberta a redesenha aqui. Com tema fixo, nada muda.
+     */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val theme = AppSettings(this).appTheme
+        if (theme == AppSettings.THEME_LIGHT || theme == AppSettings.THEME_DARK) return
+        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (night != createdNight) {
+            createdNight = night
+            recreate()
+        }
+    }
+
+    /** Modo noturno com que a tela foi desenhada (ver [onConfigurationChanged]). */
+    private var createdNight = -1
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        createdNight = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
     }
 
     override fun attachBaseContext(newBase: Context) {
