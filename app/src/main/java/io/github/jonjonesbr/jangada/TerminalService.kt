@@ -726,7 +726,7 @@ class TerminalService : Service() {
     /**
      * Limpeza automática: no máximo uma vez a cada [AUTO_CLEAN_INTERVAL_MS], com o Linux instalado, sem
      * instalação do Linux, limpeza, nem tarefa de agente rodando ou na fila (as mesmas condições do botão
-     * Liberar espaço, ver [agentTaskBusy]). Sem aviso: cleanCaches só põe o serviço em primeiro plano
+     * Liberar espaço, ver [agentTaskBusy]), e também sem terminal aberto nem agente rodando. Sem aviso: cleanCaches só põe o serviço em primeiro plano
      * enquanto limpa. Só na thread principal.
      */
     private fun maybeAutoClean() {
@@ -734,6 +734,9 @@ class TerminalService : Service() {
         if (!settings.autoClean) return
         if (!runCatching { LinuxEnv(this).isReady }.getOrDefault(false)) return
         if (Setup.state is Setup.State.Running || cleaningCaches() || agentTaskBusy()) return
+        // Com terminal aberto ou agente rodando, algo pode estar usando os caches ou o /tmp agora
+        // (npm install, um navegador de teste): a automática espera; o botão Liberar espaço continua valendo.
+        if (sessions.isNotEmpty() || chats.values.any { it.chat.running }) return
         val now = System.currentTimeMillis()
         val last = settings.lastAutoCleanAt
         // Relógio que voltou (last no futuro) também conta como vencido, em vez de travar a limpeza.

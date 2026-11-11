@@ -430,7 +430,7 @@
     <string name="settings_cleanup">Liberar espaço (caches e versões antigas)</string>
     <string name="settings_cleaning">Liberando espaço…</string>
     <string name="settings_auto_clean">Limpar sozinho uma vez por dia</string>
-    <string name="settings_auto_clean_hint">Apaga caches e arquivos temporários parados há mais de 7 dias, no máximo uma vez por dia, quando nada está instalando.</string>
+    <string name="settings_auto_clean_hint">Apaga caches e arquivos temporários parados há mais de 7 dias, no máximo uma vez por dia, sem agente, terminal ou instalação rodando.</string>
     <string name="settings_cleaned">Pronto: %1$s MB liberados. Agentes, logins, conversas e projetos não foram tocados.</string>
 
     <string name="settings_appearance">Aparência</string>

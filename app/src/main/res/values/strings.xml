@@ -432,7 +432,7 @@
     <string name="settings_cleanup">Free up space (caches and old versions)</string>
     <string name="settings_cleaning">Freeing up space…</string>
     <string name="settings_auto_clean">Clear automatically once a day</string>
-    <string name="settings_auto_clean_hint">Deletes caches and temporary files untouched for more than 7 days, at most once a day, when nothing is being installed.</string>
+    <string name="settings_auto_clean_hint">Deletes caches and temporary files untouched for more than 7 days, at most once a day, when no agent, terminal or install is running.</string>
     <string name="settings_cleaned">Done: %1$s MB freed. Agents, logins, conversations and projects were not touched.</string>
 
     <string name="settings_appearance">Appearance</string>

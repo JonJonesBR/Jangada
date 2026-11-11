@@ -67,10 +67,10 @@ const val CACHE_FREED_PREFIX = "JANGADA_FREED_KB="
 /**
  * Limpeza segura, rodada DENTRO do Debian (com bash, para enxergar o PATH). Apaga só o que os
  * programas baixam de novo sozinhos se precisarem: pacotes .deb, caches de download, log do
- * Claude Code, pastas temporárias de navegador com mais de 60 minutos e versões antigas do
+ * Claude Code, pastas temporárias de navegador sem nada mexido há 60 minutos e versões antigas do
  * Claude Code (mantém a atual, a mais nova e as que algum processo está usando).
  * Também apaga os itens parados de /tmp (ver [tmpUnitKey]) cujo item mais novo (de qualquer tipo) tem mais de
- * 7 dias: a pasta da sessão em /tmp/claude-0/<projeto>/<sessão> e a entrada de 1º nível dos
+ * 7 dias (um find que falha mantém o item): a pasta da sessão em /tmp/claude-0/<projeto>/<sessão> e a entrada de 1º nível dos
  * demais. Uma unidade com arquivo recente fica inteira. Nunca apaga /tmp, /tmp/claude-0,
  * entradas .X11* ou .ICE*, nem segue links.
  * Nunca apaga ~/.npm/_npx, ~/.cache/ms-playwright, ~/.cache/puppeteer, o resto do ~/.cache,
@@ -91,7 +91,8 @@ apt-get clean >/dev/null 2>&1
 rmk ${CACHE_DIRS.joinToString(" ") { "/$it" }} 2>/dev/null
 for d in /root/.cache/chromium-headless/scoped_dir*; do
   [ -e "${'$'}d" ] || continue
-  [ -n "${'$'}(find "${'$'}d" -maxdepth 0 -mmin +60 2>/dev/null)" ] && rmk "${'$'}d"
+  out=${'$'}(find "${'$'}d" -mmin -60 -print -quit 2>/dev/null) || continue
+  [ -z "${'$'}out" ] && rmk "${'$'}d"
 done
 c=/tmp/claude-0
 if [ -d "${'$'}c" ] && [ ! -L "${'$'}c" ]; then
@@ -99,14 +100,16 @@ if [ -d "${'$'}c" ] && [ ! -L "${'$'}c" ]; then
     [ -d "${'$'}p" ] && [ ! -L "${'$'}p" ] || continue
     for u in "${'$'}p"/*; do
       [ -e "${'$'}u" ] || [ -L "${'$'}u" ] || continue
-      [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rmk "${'$'}u"
+      out=${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null) || continue
+      [ -z "${'$'}out" ] && rmk "${'$'}u"
     done
   done
 fi
 for u in /tmp/* /tmp/.[!.]*; do
   [ -e "${'$'}u" ] || [ -L "${'$'}u" ] || continue
   case "${'$'}{u##*/}" in claude-0|.X11*|.ICE*) continue ;; esac
-  [ -z "${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null)" ] && rmk "${'$'}u"
+  out=${'$'}(find "${'$'}u" -mtime -7 -print -quit 2>/dev/null) || continue
+  [ -z "${'$'}out" ] && rmk "${'$'}u"
 done
 v=/root/.local/share/claude/versions
 cur=${'$'}(readlink -f "${'$'}(command -v claude 2>/dev/null)" 2>/dev/null)
