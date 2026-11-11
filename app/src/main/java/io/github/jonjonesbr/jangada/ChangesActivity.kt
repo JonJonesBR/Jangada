@@ -480,7 +480,9 @@ class ChangesActivity : JangadaActivity() {
         dialog.setOnShowListener {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
                 val url = field.text.toString().trim()
-                if (!Projects.isCloneUrl(url)) {
+                if (Projects.hasPassword(url)) {
+                    field.error = getString(R.string.clone_url_password)
+                } else if (!Projects.isCloneUrl(url)) {
                     field.error = getString(R.string.clone_url_invalid)
                 } else {
                     dialog.dismiss()

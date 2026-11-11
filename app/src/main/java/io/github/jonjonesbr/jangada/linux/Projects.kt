@@ -77,6 +77,7 @@ object Projects {
      */
     fun isCloneUrl(url: String): Boolean {
         if (url.isEmpty() || url.length > CLONE_URL_MAX || url.startsWith("-")) return false
+        if (hasPassword(url)) return false
         if (url.any { it.isWhitespace() || it.isISOControl() }) return false
         val scheme = SCHEMES.firstOrNull { url.startsWith(it) }
         if (scheme != null) {
@@ -84,6 +85,18 @@ object Projects {
             return rest.isNotEmpty() && !rest.startsWith("-")
         }
         return SCP_URL.matches(url)
+    }
+
+    /**
+     * O endereço traz senha ou token (`https://usuario:token@host/...`)? O git gravaria o token em texto
+     * puro no .git/config, que os agentes leem: é recusado, e o login vai pelo gh/glab ou por SSH.
+     * Só usuário (`ssh://git@host/...`) não conta.
+     */
+    fun hasPassword(url: String): Boolean {
+        val prefix = SCHEME_PREFIX.find(url)?.value ?: return false
+        val end = url.indexOf('/', prefix.length).let { if (it < 0) url.length else it }
+        val at = url.lastIndexOf('@', end - 1)
+        return at >= prefix.length && ':' in url.substring(prefix.length, at)
     }
 
     /**

@@ -317,6 +317,7 @@
     <string name="clone_explain">Cole o endereço do repositório (https ou ssh). Ele é copiado para uma pasta nova em ~/projetos.</string>
     <string name="clone_url_hint">https://github.com/usuario/repositorio</string>
     <string name="clone_url_invalid">Use um endereço https://, ssh:// ou usuario@host:caminho</string>
+    <string name="clone_url_password">Não ponha senha nem token no endereço: ficariam gravados em texto no repositório. Entre pelo gh ou glab, ou use SSH.</string>
     <string name="clone_progress_title">Clonando %1$s</string>
     <string name="clone_running">Clonando %1$s</string>
     <string name="clone_cancel">Cancelar</string>

@@ -91,6 +91,7 @@ fun Activity.askCloneRepo(rootfs: File, onOk: (url: String, folder: String) -> U
             val url = urlField.text.toString().trim()
             val name = nameField.text.toString().trim()
             when {
+                Projects.hasPassword(url) -> urlField.error = getString(R.string.clone_url_password)
                 !Projects.isCloneUrl(url) -> urlField.error = getString(R.string.clone_url_invalid)
                 !Workspace.isValidName(name) -> nameField.error = getString(R.string.chat_folder_invalid)
                 // Só confere caminhos (sem ler nada). Um link com esse nome conta como existente.
