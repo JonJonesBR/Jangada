@@ -68,10 +68,12 @@ class ServiceForegroundTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             assertTrue("o terminal não pôs o serviço em primeiro plano", waitFor(30_000) { serviceNotice() != null })
             Thread.sleep(3_000) // o bash da aba subir
-            val device = UiDevice.getInstance(instrumentation)
-            device.executeShellCommand("input text exit")
-            device.executeShellCommand("input keyevent 66")
-            device.pressHome()
+            // "exit" escrito direto na sessão, como o teclado faria (o foco do teclado no emulador não é garantido).
+            val svc = (serviceRule.bindService(Intent(context, TerminalService::class.java)) as TerminalService.LocalBinder).service
+            var tabs = 0
+            instrumentation.runOnMainSync { tabs = svc.sessions.size; svc.sessions.forEach { it.write("exit\r") } }
+            assertTrue("o terminal abriu $tabs abas, e não uma", tabs == 1)
+            UiDevice.getInstance(instrumentation).pressHome()
             assertTrue("com a única aba encerrada, o aviso do serviço continuou", waitFor(20_000) { serviceNotice() == null })
         }
     }
