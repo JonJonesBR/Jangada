@@ -2143,44 +2143,44 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Tira o trabalho isolado: antes, fecha as sessões de terminal e os chats (de todos os
-     * agentes, rodando ou parados) dessa pasta; quando todos saírem, remove o worktree e a branch.
-     * Os avisos de saída chegam na thread principal: o contador não precisa de trava.
+     * Tira o trabalho isolado: o serviço trava a pasta e fecha as sessões de terminal e os chats
+     * (de todos os agentes, rodando ou parados) dela (closeFolder, no máximo 5 s de espera);
+     * depois, remove o worktree e a branch. A pasta fica travada até o git terminar, para nenhum
+     * chat reabrir nela no meio. Pasta já ocupada (tela Projetos mexendo nela): avisa e desiste.
      */
     private fun removeWorktree(svc: TerminalService, job: WorktreeJob, force: Boolean) {
-        svc.sessionFolder.filterValues { it == job.folder }.keys.toList().forEach { svc.closeSession(it) }
-        val slots = svc.chats.values.filter { it.folder == job.folder }
-        if (slots.isEmpty()) {
-            removeFromGit(job, force)
-            return
-        }
-        var waiting = slots.size
-        for (slot in slots) {
-            svc.closeChat(slot.agentId, slot.folder) {
-                waiting--
-                if (waiting == 0) removeFromGit(job, force)
-            }
+        val started = svc.closeFolder(job.folder) { removeFromGit(svc, job, force) }
+        if (!started) {
+            removingWorktree = false
+            setPreparing(false)
+            Toast.makeText(this, R.string.projects_folder_busy, Toast.LENGTH_LONG).show()
         }
     }
 
     /**
-     * `git worktree remove` e `git branch -d` (ou -D) no repositório base; ao fim, abre o chat
-     * dele. Se a remoção falha, mostra o erro e oferece reabrir o trabalho na pasta.
+     * `git worktree remove` e `git branch -d` (ou -D) no repositório base; ao fim, solta a pasta
+     * (sempre, mesmo com a tela fechada) e abre o chat do base. Se a remoção falha, mostra o erro
+     * e oferece reabrir o trabalho na pasta.
      */
-    private fun removeFromGit(job: WorktreeJob, force: Boolean) {
+    private fun removeFromGit(svc: TerminalService, job: WorktreeJob, force: Boolean) {
         val basePath = Workspace.path(job.base)
         val removeArgs = listOfNotNull("worktree", "remove", if (force) "--force" else null, Workspace.path(job.folder))
         thread(name = "chat-worktree-remove") {
-            val removed = Git.run(linux, basePath, *removeArgs.toTypedArray())
-            if (removed.code != 0) {
-                onUi { showRemoveFailed(job, removed) }
-                return@thread
-            }
+            val removed = runCatching { Git.run(linux, basePath, *removeArgs.toTypedArray()) }
             val branch = job.branch
-            val deleted = if (branch == null) null else Git.run(linux, basePath, "branch", if (force) "-D" else "-d", branch)
-            onUi {
+            val deleted = removed.getOrNull()?.takeIf { it.code == 0 }?.let {
+                if (branch == null) null else runCatching { Git.run(linux, basePath, "branch", if (force) "-D" else "-d", branch) }.getOrNull()
+            }
+            runOnUiThread {
+                svc.releaseFolder(job.folder)
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                val result = removed.getOrNull()
+                if (result == null || result.code != 0) {
+                    showRemoveFailed(job, result)
+                    return@runOnUiThread
+                }
                 removingWorktree = false
-                if (deleted != null && deleted.code != 0) {
+                if (branch != null && (deleted == null || deleted.code != 0)) {
                     Toast.makeText(this, getString(R.string.chat_worktree_branch_kept, branch), Toast.LENGTH_LONG).show()
                 }
                 openJobScreen(agentId, job.base)
@@ -2192,9 +2192,10 @@ class ChatActivity : JangadaActivity() {
      * O worktree não saiu, mas os chats da pasta já foram fechados: a tela não pode ficar sem
      * chat e sem saída. Mostra o erro e oferece reabrir o trabalho aqui ou ir para o base.
      */
-    private fun showRemoveFailed(job: WorktreeJob, result: Git.Result) {
+    private fun showRemoveFailed(job: WorktreeJob, result: Git.Result?) {
         removingWorktree = false
-        val body = getString(R.string.chat_worktree_remove_failed) + "\n\n" + result.shown.ifBlank { getString(R.string.git_failed_title) }
+        val shown = result?.shown.orEmpty()
+        val body = getString(R.string.chat_worktree_remove_failed) + "\n\n" + shown.ifBlank { getString(R.string.git_failed_title) }
         AlertDialog.Builder(this)
             .setTitle(R.string.chat_worktree_title)
             .setMessage(body)

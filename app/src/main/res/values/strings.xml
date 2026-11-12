@@ -826,7 +826,7 @@
     <string name="projects_copy_notify_done">%1$s is ready</string>
     <string name="projects_copy_notify_done_text">Copy of %1$s. Tap to see the projects</string>
     <string name="projects_copy_notify_failed">Could not copy to %1$s</string>
-    <string name="projects_folder_busy">This project is being deleted or renamed. Try again in a moment.</string>
+    <string name="projects_folder_busy">This project is busy (being deleted, renamed, copied or closed). Try again in a moment.</string>
     <plurals name="projects_dirty_files">
         <item quantity="one">%1$d file not committed; it will be lost too</item>
         <item quantity="other">%1$d files not committed; they will be lost too</item>

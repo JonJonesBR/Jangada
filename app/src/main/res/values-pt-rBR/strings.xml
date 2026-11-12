@@ -822,7 +822,7 @@
     <string name="projects_copy_notify_done">%1$s está pronto</string>
     <string name="projects_copy_notify_done_text">Cópia de %1$s. Toque para ver os projetos</string>
     <string name="projects_copy_notify_failed">Não deu para copiar para %1$s</string>
-    <string name="projects_folder_busy">Este projeto está sendo excluído ou renomeado. Tente de novo daqui a pouco.</string>
+    <string name="projects_folder_busy">Este projeto está ocupado (sendo excluído, renomeado, copiado ou fechado). Tente de novo daqui a pouco.</string>
     <plurals name="projects_dirty_files">
         <item quantity="one">%1$d arquivo sem commit; ele também será perdido</item>
         <item quantity="other">%1$d arquivos sem commit; eles também serão perdidos</item>
