@@ -53,8 +53,15 @@ class ServiceForegroundTest {
         return condition()
     }
 
+    /** Cada teste começa sem chats e sem abas de terminal (os testes de antes deixam abas abertas). */
     @Before
-    fun semChats() = ChatUi.closeAllChats()
+    fun semTrabalhos() {
+        ChatUi.closeAllChats()
+        val svc = (serviceRule.bindService(Intent(context, TerminalService::class.java)) as TerminalService.LocalBinder).service
+        instrumentation.runOnMainSync { svc.sessions.map { it.mHandle }.forEach(svc::closeSession) }
+        serviceRule.unbindService()
+        assertTrue("sobrou o aviso do serviço antes do teste", waitFor(10_000) { serviceNotice() == null })
+    }
 
     @Test
     fun abaEncerradaSoltaOAviso() {

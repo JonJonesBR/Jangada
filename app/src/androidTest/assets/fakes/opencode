@@ -26,6 +26,13 @@ reply() { emit '{"jsonrpc":"2.0","id":'"$1"',"result":'"$2"'}'; }
 update() { emit '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fs-1","update":'"$1"'}}'; }
 chunk() { update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"'"$1"'"}}'; }
 PID_=; MODE=; PERM=
+# Diagnóstico (o chat ACP não recebia nada no emulador): para onde vão a entrada e a saída, e o
+# estado do processo nos primeiros ~30 s (T = parado por sinal; S com wchan = esperando leitura).
+echo "FD0 $(readlink /proc/$$/fd/0) FD1 $(readlink /proc/$$/fd/1) FLAGS $-" >> "$LOG"
+me=$$
+( for i in 1 2 3 4 5 6; do sleep 5; [ -r /proc/$me/stat ] || break
+    st=$(cut -d' ' -f3 /proc/$me/stat 2>/dev/null); wc=$(cat /proc/$me/wchan 2>/dev/null)
+    pos=$(grep -m1 pos /proc/$me/fdinfo/0 2>/dev/null); echo "HB st=$st wchan=$wc $pos" >> "$LOG"; done ) </dev/null >/dev/null 2>&1 &
 # Leitura comum, sem "read -t": sob o proot do emulador o read com tempo limite não entregava as linhas.
 # O "lento" responde por um temporizador em segundo plano, que desiste se o turno foi cancelado.
 while IFS= read -r line; do
@@ -60,3 +67,4 @@ while IFS= read -r line; do
       reply "$PID_" '{"stopReason":"end_turn"}'; PID_=; MODE= ;;
   esac
 done
+echo "EOF rc=$?" >> "$LOG"

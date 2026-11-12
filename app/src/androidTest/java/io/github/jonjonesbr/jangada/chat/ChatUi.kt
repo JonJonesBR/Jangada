@@ -16,6 +16,7 @@ import io.github.jonjonesbr.jangada.TerminalService
 import io.github.jonjonesbr.jangada.linux.LinuxFixture
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -94,23 +95,41 @@ object ChatUi {
             .joinToString(" | ")
     }.getOrDefault("(não deu para ler a tela)")
 
-    /** Mensagem de falha: o que faltou, o que estava na tela e o log do falso [fake]. */
-    private fun failure(what: String, fake: String) =
-        "$what\nNa tela: ${screenTexts()}\nLog do $fake falso:\n${LinuxFixture.fakeLog(fake)}"
+    /** Pasta do emulador (do shell, sobrevive à desinstalação do app) que o CI junta ao relatório. */
+    private const val SHOTS = "/data/local/tmp/jangada-falhas"
+    private var shots = 0
+
+    /** Tira uma captura da tela agora, para o relatório (só dados dos falsos aparecem nela). */
+    private fun screenshot(what: String) = runCatching {
+        val name = "%02d-%s.png".format(++shots, what.replace(Regex("[^A-Za-z0-9]+"), "-").take(40))
+        // Pelo shell: o app não escreve em /data/local/tmp. O comando não passa por um sh (sem aspas nem &&):
+        // um por vez; ler a saída até o fim espera cada um acabar.
+        for (cmd in listOf("mkdir -p $SHOTS", "screencap -p $SHOTS/$name")) {
+            instrumentation.uiAutomation.executeShellCommand(cmd)
+                .let { pfd -> java.io.FileInputStream(pfd.fileDescriptor).use { it.readBytes() }; pfd.close() }
+        }
+    }
+
+    /** Mensagem de falha: o que faltou, o que estava na tela e o log do falso [fake]; guarda uma captura da tela. */
+    private fun failure(what: String, fake: String): String {
+        val text = "$what\nNa tela: ${screenTexts()}\nLog do $fake falso:\n${LinuxFixture.fakeLog(fake)}"
+        screenshot(what)
+        return text
+    }
 
     /** Espera um texto (trecho) aparecer na tela; falha com a tela e o log do falso [fake] se não aparecer. */
     fun waitText(text: String, fake: String, timeoutMs: Long = 60_000): UiObject2 {
         val found = device.wait(Until.findObject(By.textContains(text)), timeoutMs)
-        assertNotNull(failure("\"$text\" não apareceu.", fake), found)
-        return found
+        if (found == null) fail(failure("\"$text\" não apareceu.", fake))
+        return found!!
     }
 
     /** Toca no botão (ou linha) com o texto exato do recurso [res]. */
     fun tap(res: Int, fake: String, timeoutMs: Long = 30_000) {
         val text = context.getString(res)
         val found = device.wait(Until.findObject(By.text(text)), timeoutMs)
-        assertNotNull(failure("\"$text\" não apareceu.", fake), found)
-        found.click()
+        if (found == null) fail(failure("\"$text\" não apareceu.", fake))
+        found!!.click()
     }
 
     /** Espera o log do falso [fake] conter [piece] (o app manda as respostas fora da thread da tela). */
