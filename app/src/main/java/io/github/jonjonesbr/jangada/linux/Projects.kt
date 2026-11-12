@@ -265,6 +265,17 @@ object Projects {
         else -> null
     }
 
+    /**
+     * Explicação de um `git pull --ff-only` recusado: a branch daqui e a do remoto se separaram, ou
+     * há mudanças sem commit que o pull sobrescreveria. Null se a saída não é nenhum desses casos.
+     */
+    fun pullHint(output: String): Int? = when {
+        output.contains("Not possible to fast-forward", ignoreCase = true) ||
+            output.contains("diverg", ignoreCase = true) -> R.string.remote_pull_diverged
+        output.contains("would be overwritten", ignoreCase = true) -> R.string.remote_pull_dirty
+        else -> null
+    }
+
     private fun q(text: String) = AgentRecipe.q(text)
 
     /** Prefixo das branches dos trabalhos isolados (ver Worktrees.create). */

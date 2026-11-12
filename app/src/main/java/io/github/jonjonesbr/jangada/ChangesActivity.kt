@@ -287,6 +287,11 @@ class ChangesActivity : JangadaActivity() {
             ) {
                 if (hasHead) push() else Toast.makeText(this, R.string.remote_push_no_commit, Toast.LENGTH_SHORT).show()
             },
+            Sheet.Row(
+                title = getString(R.string.remote_pull),
+                description = getString(R.string.remote_pull_desc),
+                icon = "⇣",
+            ) { pull() },
             Sheet.Row(title = getString(R.string.remote_change), icon = "✎") { askRemoteUrl(current) },
             Sheet.Row(
                 title = getString(R.string.remote_unlink),
@@ -541,6 +546,35 @@ class ChangesActivity : JangadaActivity() {
                     val hint = Projects.authHint(out.output)?.let { getString(it) }
                     val body = listOfNotNull(hint, out.shown.takeIf { it.isNotBlank() }).joinToString("\n\n")
                     showText(R.string.remote_push_failed, body.ifBlank { getString(R.string.remote_push_failed) })
+                }
+                load()
+            }
+        }
+    }
+
+    /**
+     * `git pull --ff-only` numa thread, como o [push]: só avança a branch, nunca junta sozinho.
+     * Se a branch daqui e a do remoto se separaram, a explicação diz para pedir ao agente.
+     */
+    private fun pull() {
+        if (remoteBusy) return
+        remoteBusy = true
+        val progress = busyDialog(getString(R.string.remote_pulling))
+        pushDialog = progress
+        thread(name = "changes-pull") {
+            val out = runCatching { Git.run(linux, cwd, *Projects.SAFE_NETWORK, "pull", "--ff-only") }
+                .getOrElse { Git.Result(-1, it.message ?: "") }
+            runOnUiThread {
+                runCatching { progress.dismiss() }
+                if (pushDialog === progress) pushDialog = null
+                remoteBusy = false
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (out.code == 0) {
+                    Toast.makeText(this, R.string.remote_pulled, Toast.LENGTH_SHORT).show()
+                } else {
+                    val hint = (Projects.authHint(out.output) ?: Projects.pullHint(out.output))?.let { getString(it) }
+                    val body = listOfNotNull(hint, out.shown.takeIf { it.isNotBlank() }).joinToString("\n\n")
+                    showText(R.string.remote_pull_failed, body.ifBlank { getString(R.string.remote_pull_failed) })
                 }
                 load()
             }

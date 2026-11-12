@@ -657,6 +657,13 @@
     <string name="remote_push">Enviar (git push)</string>
     <string name="remote_push_desc">Envia os commits desta branch para o repositório remoto</string>
     <string name="remote_push_no_commit">Faça um commit antes</string>
+    <string name="remote_pull">Atualizar do remoto (git pull)</string>
+    <string name="remote_pull_desc">Traz os commits novos da branch do remoto, só se esta branch puder apenas avançar</string>
+    <string name="remote_pulling">Atualizando…</string>
+    <string name="remote_pulled">Em dia com o remoto</string>
+    <string name="remote_pull_failed">Não deu para atualizar</string>
+    <string name="remote_pull_diverged">Esta branch e a do remoto têm commits diferentes, então o git não junta sozinho. Peça ao agente para fazer merge ou rebase.</string>
+    <string name="remote_pull_dirty">Há mudanças sem commit que a atualização sobrescreveria. Faça o commit antes e atualize depois.</string>
     <string name="remote_change">Trocar o endereço</string>
     <string name="remote_unlink">Desvincular</string>
     <string name="remote_unlink_desc">Remove só o vínculo (origin); nada é apagado no site</string>

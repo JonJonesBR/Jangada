@@ -297,4 +297,14 @@ class ProjectsTest {
         }
         assertEquals("$label: erro de sintaxe\n${saida.readText()}\n--- script ---\n$script", 0, process.exitValue())
     }
+    @Test
+    fun dicaDoPull() {
+        assertEquals(R.string.remote_pull_diverged, Projects.pullHint("fatal: Not possible to fast-forward, aborting."))
+        assertEquals(R.string.remote_pull_diverged, Projects.pullHint("hint: You have divergent branches"))
+        assertEquals(
+            R.string.remote_pull_dirty,
+            Projects.pullHint("error: Your local changes to the following files would be overwritten by merge:"),
+        )
+        assertNull(Projects.pullHint("Already up to date."))
+    }
 }

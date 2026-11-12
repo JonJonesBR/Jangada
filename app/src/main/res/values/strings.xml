@@ -659,6 +659,13 @@
     <string name="remote_push">Push (git push)</string>
     <string name="remote_push_desc">Sends the commits of this branch to the remote repository</string>
     <string name="remote_push_no_commit">Make a commit first</string>
+    <string name="remote_pull">Update from remote (git pull)</string>
+    <string name="remote_pull_desc">Brings the new commits of the remote branch, only if this branch can just move forward</string>
+    <string name="remote_pulling">Updating…</string>
+    <string name="remote_pulled">Up to date with the remote</string>
+    <string name="remote_pull_failed">Update failed</string>
+    <string name="remote_pull_diverged">This branch and the remote one have different commits, so git won\'t merge them on its own. Ask the agent to merge or rebase.</string>
+    <string name="remote_pull_dirty">There are uncommitted changes that the update would overwrite. Commit them first, then update.</string>
     <string name="remote_change">Change address</string>
     <string name="remote_unlink">Unlink</string>
     <string name="remote_unlink_desc">Removes only the link (origin); nothing is deleted on the site</string>
