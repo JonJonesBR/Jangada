@@ -134,11 +134,13 @@ object ChatUi {
 
     /** Espera o log do falso [fake] conter [piece] (o app manda as respostas fora da thread da tela). */
     fun waitLog(fake: String, piece: String, timeoutMs: Long = 20_000): String {
+        // O JSONObject do Android escreve a barra escapada ("session\/load"): o log volta com "/".
+        fun read() = LinuxFixture.fakeLog(fake).replace("\\/", "/")
         val end = System.currentTimeMillis() + timeoutMs
-        var log = LinuxFixture.fakeLog(fake)
+        var log = read()
         while (!log.contains(piece) && System.currentTimeMillis() < end) {
             Thread.sleep(250)
-            log = LinuxFixture.fakeLog(fake)
+            log = read()
         }
         return log
     }
