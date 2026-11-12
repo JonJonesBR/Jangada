@@ -9,6 +9,8 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.os.IBinder
 import android.text.InputFilter
+import android.text.format.DateUtils
+import android.text.format.Formatter
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -22,14 +24,17 @@ import android.widget.Toast
 import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
+import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.ProjectOps
+import io.github.jonjonesbr.jangada.linux.ProjectSize
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
+import java.io.File
 import kotlin.concurrent.thread
 
 /**
@@ -59,6 +64,15 @@ class ProjectsActivity : JangadaActivity() {
 
     /** A primeira leitura de ~/projetos já chegou (antes disso, a lista vazia não é mostrada). */
     private var loaded = false
+
+    /** Tamanho medido de cada projeto (chave: nome). Só a thread principal mexe; não é apagado ao recarregar. */
+    private val sizes = HashMap<String, ProjectSize.Sizes>()
+
+    /** Geração da medição: cada nova medição (ou sair da tela) soma 1 e a antiga para sozinha. Só a principal escreve. */
+    @Volatile private var measuring = 0
+
+    /** O painel de um projeto está sendo preparado (contando as conversas). Só a principal mexe. */
+    private var actionsPending = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -110,6 +124,8 @@ class ProjectsActivity : JangadaActivity() {
     }
 
     override fun onStop() {
+        // Para a medição em andamento (a thread vê a geração mudada e para).
+        measuring++
         service = null
         // Desfaz o bind sempre que foi feito, mesmo se a conexão ainda não chegou.
         if (bound) {
@@ -152,6 +168,31 @@ class ProjectsActivity : JangadaActivity() {
                 listing = items
                 loaded = true
                 render()
+                measureAll(items)
+            }
+        }
+    }
+
+    /**
+     * Mede o tamanho de cada projeto, um de cada vez, numa thread. Uma nova leitura (ou sair da tela)
+     * troca a geração e esta medição para. Erro numa medida não derruba nada: o projeto fica sem tamanho.
+     */
+    private fun measureAll(items: List<Workspace.Folder>) {
+        val gen = ++measuring
+        thread(name = "jangada-projects-size") {
+            for (item in items) {
+                if (measuring != gen || isDestroyed) return@thread
+                val size = runCatching {
+                    ProjectSize.measure(Workspace.hostPath(linux.rootfs, Workspace.path(item.name)).toPath()) {
+                        measuring != gen || isDestroyed
+                    }
+                }.getOrNull() ?: continue
+                runOnUiThread {
+                    if (!isDestroyed && measuring == gen) {
+                        sizes[item.name] = size
+                        render()
+                    }
+                }
             }
         }
     }
@@ -179,6 +220,9 @@ class ProjectsActivity : JangadaActivity() {
         setOnClickListener { openActions(item) }
         addView(label(item.name, 16f, R.color.setup_text, bold = true, top = 0))
         Workspace.describe(this@ProjectsActivity, item)?.let { addView(label(it, 14f, R.color.setup_muted)) }
+        sizes[item.name]?.let {
+            addView(label(Formatter.formatShortFileSize(this@ProjectsActivity, it.total), 14f, R.color.setup_muted))
+        }
         if (open) addView(label(getString(R.string.projects_open_work), 14f, R.color.setup_done))
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             .apply { topMargin = dp(10) }
@@ -189,35 +233,147 @@ class ProjectsActivity : JangadaActivity() {
      * ou repositório com trabalhos ligados); Excluir, idem. A razão aparece na linha desligada.
      */
     private fun openActions(item: Workspace.Folder) {
+        // As conversas do Claude são contadas fora da principal; o painel abre quando a contagem chega.
+        // Dois toques seguidos não abrem dois painéis.
+        if (actionsPending) return
+        actionsPending = true
+        thread(name = "jangada-projects-info") {
+            val convs = runCatching { ProjectSize.claudeConversations(Projects.claudeHistoryDir(linux, item.name)) }.getOrNull()
+            runOnUiThread {
+                actionsPending = false
+                if (!isDestroyed) showActions(item, convs)
+            }
+        }
+    }
+
+    private fun showActions(item: Workspace.Folder, convs: ProjectSize.Conversations?) {
         val name = item.name
         // Só os dois motivos que valem para renomear: outros (nome em uso, nome inválido) aparecem no diálogo.
         val renameBlock = ProjectOps.renameRefusal(name, "${name}x", listing)
             ?.takeIf { it == ProjectOps.Refusal.IS_WORKTREE || it == ProjectOps.Refusal.HAS_WORKTREES }
         val deleteBlock = ProjectOps.deleteRefusal(name, listing)
         val copyBlock = ProjectOps.duplicateRefusal(name, listing)
-        Sheet(this).title(name)
-            .rows(
-                listOf(
-                    Sheet.Row(
-                        getString(R.string.projects_rename),
-                        renameBlock?.let { blockReason(it, name, renaming = true) },
-                        enabled = renameBlock == null,
-                    ) { askRename(item) },
-                    Sheet.Row(
-                        getString(R.string.projects_copy),
-                        if (copyBlock == ProjectOps.Refusal.IS_WORKTREE) getString(R.string.projects_copy_worktree)
-                        else copyBlock?.let { getString(R.string.projects_gone) } ?: getString(R.string.projects_copy_desc),
-                        enabled = copyBlock == null,
-                    ) { askCopy(item) },
-                    Sheet.Row(
-                        getString(R.string.projects_delete),
-                        deleteBlock?.let { blockReason(it, name, renaming = false) },
-                        enabled = deleteBlock == null,
-                        destructive = true,
-                    ) { askDelete(item) },
+        val sheet = Sheet(this).title(name)
+        sizes[name]?.let { s ->
+            sheet.message(
+                getString(
+                    R.string.projects_size_detail,
+                    Formatter.formatShortFileSize(this, s.total),
+                    Formatter.formatShortFileSize(this, s.git),
+                    Formatter.formatShortFileSize(this, s.deps),
                 ),
             )
+        }
+        val rows = mutableListOf(
+            Sheet.Row(
+                getString(R.string.projects_rename),
+                renameBlock?.let { blockReason(it, name, renaming = true) },
+                enabled = renameBlock == null,
+            ) { askRename(item) },
+            Sheet.Row(
+                getString(R.string.projects_copy),
+                if (copyBlock == ProjectOps.Refusal.IS_WORKTREE) getString(R.string.projects_copy_worktree)
+                else copyBlock?.let { getString(R.string.projects_gone) } ?: getString(R.string.projects_copy_desc),
+                enabled = copyBlock == null,
+            ) { askCopy(item) },
+        )
+        if (convs != null && convs.count > 0) {
+            rows += Sheet.Row(
+                getString(R.string.projects_conversations),
+                resources.getQuantityString(
+                    R.plurals.projects_conversations_desc,
+                    convs.count,
+                    convs.count,
+                    Formatter.formatShortFileSize(this, convs.bytes),
+                ),
+            ) { openConversations(item, convs) }
+        }
+        rows += Sheet.Row(
+            getString(R.string.projects_delete),
+            deleteBlock?.let { blockReason(it, name, renaming = false) },
+            enabled = deleteBlock == null,
+            destructive = true,
+        ) { askDelete(item) }
+        sheet.rows(rows).show()
+    }
+
+    /**
+     * Painel com as conversas do Claude do projeto (até 50, as mais recentes). Tocar abre a conversa
+     * no chat. Por último, apaga as paradas há mais de 30 dias (se o projeto estiver com trabalho aberto, a linha fica desligada).
+     */
+    private fun openConversations(item: Workspace.Folder, convs: ProjectSize.Conversations) {
+        val name = item.name
+        thread(name = "jangada-projects-history") {
+            val found = runCatching { ChatHistory.list(linux, Workspace.path(name)) }.getOrElse { emptyList() }
+            runOnUiThread { if (!isDestroyed) showConversations(item, convs, found) }
+        }
+    }
+
+    private fun showConversations(item: Workspace.Folder, convs: ProjectSize.Conversations, found: List<ChatHistory.Conversation>) {
+        val name = item.name
+        val rows = found.map { conversation ->
+            Sheet.Row(conversation.title, DateUtils.getRelativeTimeSpanString(conversation.updatedAt)) {
+                startActivity(
+                    Intent(this@ProjectsActivity, ChatActivity::class.java)
+                        .putExtra(ChatActivity.EXTRA_AGENT_ID, TerminalService.CLAUDE)
+                        .putExtra(ChatActivity.EXTRA_FOLDER, name)
+                        .putExtra(ChatActivity.EXTRA_RESUME, conversation.id),
+                )
+            }
+        }.toMutableList()
+        val stale = ProjectSize.staleIds(convs.all, System.currentTimeMillis())
+        if (stale.isNotEmpty()) {
+            val busy = name in openFolders()
+            rows += Sheet.Row(
+                resources.getQuantityString(R.plurals.projects_conversations_clean, stale.size, stale.size),
+                if (busy) getString(R.string.projects_conversations_clean_open) else null,
+                enabled = !busy,
+                destructive = true,
+            ) { confirmClean(item, stale) }
+        }
+        val sheet = Sheet(this).title(getString(R.string.projects_conversations_title, name))
+        if (found.isEmpty()) sheet.message(getString(R.string.chat_history_empty))
+        sheet.rows(rows).show()
+    }
+
+    /** Pede a confirmação de apagar as conversas paradas. */
+    private fun confirmClean(item: Workspace.Folder, stale: List<String>) {
+        AlertDialog.Builder(this)
+            .setTitle(resources.getQuantityString(R.plurals.projects_conversations_clean, stale.size, stale.size))
+            .setMessage(resources.getQuantityString(R.plurals.projects_conversations_clean_confirm, stale.size, stale.size))
+            .setPositiveButton(R.string.projects_conversations_clean_ok) { _, _ -> cleanStale(item, stale) }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
+    }
+
+    /** Apaga as conversas (uma a uma, fora da principal) e avisa se alguma ficou. */
+    private fun cleanStale(item: Workspace.Folder, stale: List<String>) {
+        val name = item.name
+        // Um chat pode ter aberto no projeto depois do painel: não apaga conversa de trabalho aberto.
+        if (name in openFolders() || service?.folderBusy(name) == true) {
+            Toast.makeText(applicationContext, R.string.projects_conversations_clean_open, Toast.LENGTH_LONG).show()
+            return
+        }
+        thread(name = "jangada-projects-history") {
+            var failed = 0
+            for (id in stale) {
+                // ChatHistory.delete não lança quando o arquivo não sai: confere se ainda existe.
+                val gone = runCatching {
+                    ChatHistory.delete(linux, Workspace.path(name), id)
+                    !File(ChatHistory.dir(linux, Workspace.path(name)), "$id.jsonl").exists()
+                }.getOrDefault(false)
+                if (!gone) failed++
+            }
+            runOnUiThread {
+                if (!isDestroyed) {
+                    Toast.makeText(
+                        applicationContext,
+                        if (failed == 0) R.string.projects_conversations_cleaned else R.string.projects_conversations_clean_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        }
     }
 
     /** Texto da linha desligada: o motivo da regra (trabalhos isolados listados, quando há). */

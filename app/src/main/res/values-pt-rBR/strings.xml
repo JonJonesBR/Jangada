@@ -827,4 +827,23 @@
         <item quantity="one">%1$d arquivo sem commit; ele também será perdido</item>
         <item quantity="other">%1$d arquivos sem commit; eles também serão perdidos</item>
     </plurals>
+    <string name="projects_size_detail">Total %1$s · git %2$s · dependências %3$s</string>
+    <string name="projects_conversations">Conversas do Claude</string>
+    <plurals name="projects_conversations_desc">
+        <item quantity="one">%1$d conversa · %2$s</item>
+        <item quantity="other">%1$d conversas · %2$s</item>
+    </plurals>
+    <string name="projects_conversations_title">Conversas em %1$s</string>
+    <plurals name="projects_conversations_clean">
+        <item quantity="one">Apagar %1$d parada há mais de 30 dias</item>
+        <item quantity="other">Apagar %1$d paradas há mais de 30 dias</item>
+    </plurals>
+    <string name="projects_conversations_clean_open">Feche antes os trabalhos deste projeto</string>
+    <plurals name="projects_conversations_clean_confirm">
+        <item quantity="one">%1$d conversa sem uso há mais de 30 dias será apagada. Não dá para desfazer.</item>
+        <item quantity="other">%1$d conversas sem uso há mais de 30 dias serão apagadas. Não dá para desfazer.</item>
+    </plurals>
+    <string name="projects_conversations_clean_ok">Apagar</string>
+    <string name="projects_conversations_cleaned">Conversas antigas apagadas</string>
+    <string name="projects_conversations_clean_failed">Algumas conversas não puderam ser apagadas</string>
 </resources>

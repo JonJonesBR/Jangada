@@ -831,4 +831,23 @@
         <item quantity="one">%1$d file not committed; it will be lost too</item>
         <item quantity="other">%1$d files not committed; they will be lost too</item>
     </plurals>
+    <string name="projects_size_detail">Total %1$s · git %2$s · dependencies %3$s</string>
+    <string name="projects_conversations">Claude conversations</string>
+    <plurals name="projects_conversations_desc">
+        <item quantity="one">%1$d conversation · %2$s</item>
+        <item quantity="other">%1$d conversations · %2$s</item>
+    </plurals>
+    <string name="projects_conversations_title">Conversations in %1$s</string>
+    <plurals name="projects_conversations_clean">
+        <item quantity="one">Delete %1$d idle for over 30 days</item>
+        <item quantity="other">Delete %1$d idle for over 30 days</item>
+    </plurals>
+    <string name="projects_conversations_clean_open">Close this project’s jobs first</string>
+    <plurals name="projects_conversations_clean_confirm">
+        <item quantity="one">%1$d conversation with no activity for over 30 days will be deleted. This can’t be undone.</item>
+        <item quantity="other">%1$d conversations with no activity for over 30 days will be deleted. This can’t be undone.</item>
+    </plurals>
+    <string name="projects_conversations_clean_ok">Delete</string>
+    <string name="projects_conversations_cleaned">Old conversations deleted</string>
+    <string name="projects_conversations_clean_failed">Some conversations couldn’t be deleted</string>
 </resources>
