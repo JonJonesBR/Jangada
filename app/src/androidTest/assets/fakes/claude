@@ -1,0 +1,56 @@
+#!/bin/bash
+# Claude falso do teste: fala o stream-json que o ChatEngine espera. Só bash e sed.
+LOGDIR=${FAKE_LOGDIR:-/var/log/jangada-fake}; mkdir -p "$LOGDIR"; LOG=$LOGDIR/claude.log
+SID=fake-session-1
+for a in "$@"; do case "$a" in --resume=*) SID=${a#--resume=} ;; esac; done
+echo "ARGV $*" >> "$LOG"
+echo "ENV $(env | grep -E "^(DISABLE_AUTO_COMPACT|CLAUDE_AUTOCOMPACT_PCT_OVERRIDE)=" | tr "\n" " ")" >> "$LOG"
+emit() { printf '%s\n' "$1"; }
+text() { emit '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"'"$1"'"}],"usage":{"input_tokens":100,"output_tokens":20}},"parent_tool_use_id":null,"session_id":"'$SID'"}'; }
+result() { emit '{"type":"result","subtype":"success","is_error":false,"result":"","session_id":"'$SID'","modelUsage":{}}'; }
+ask() { # ask ID TOOL INPUT_JSON
+  PENDING=$1; KIND=$2
+  emit '{"type":"control_request","request_id":"'$1'","request":{"subtype":"can_use_tool","tool_name":"'$2'","input":'"$3"',"tool_use_id":"tu_'$1'"}}'
+}
+PENDING=; KIND=; STUCK=0; N=0
+while IFS= read -r line; do
+  echo "RECV ${line:0:4000}" >> "$LOG"
+  case "$line" in
+    *'"subtype":"initialize"'*)
+      id=$(printf '%s' "$line" | sed -n 's/.*"request_id":"\([^"]*\)".*/\1/p')
+      emit '{"type":"control_response","response":{"subtype":"success","request_id":"'$id'","response":{}}}'
+      emit '{"type":"system","subtype":"init","session_id":"'$SID'","model":"claude-haiku-4-5-20251001","slash_commands":["compact","review"],"terminal_slash_commands":[]}' ;;
+    *'"subtype":"interrupt"'*)
+      echo "INTERRUPT stuck=$STUCK" >> "$LOG"
+      [ "$STUCK" = 1 ] && continue
+      emit '{"type":"result","subtype":"error_during_execution","is_error":true,"result":"","session_id":"'$SID'","modelUsage":{}}' ;;
+    *'"type":"control_response"'*)
+      case "$line" in *'"request_id":"'"$PENDING"'"'*) ;; *) continue ;; esac
+      echo "ANSWERED $KIND" >> "$LOG"
+      case "$line" in
+        *'"behavior":"allow"'*)
+          case "$KIND" in
+            Bash) emit '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu_'$PENDING'","content":"oi","is_error":false}]},"parent_tool_use_id":null}'; text "Comando executado." ;;
+            AskUserQuestion) text "Recebi a sua resposta." ;;
+            ExitPlanMode) text "Plano aprovado, executando." ;;
+          esac ;;
+        *) case "$KIND" in
+             ExitPlanMode) text "Certo, o que você quer mudar no plano?" ;;
+             *) text "Entendido, não vou fazer isso." ;;
+           esac ;;
+      esac
+      PENDING=; result ;;
+    *'"type":"user"'*)
+      N=$((N+1)); STUCK=0
+      case "$line" in
+        *pergunta*) ask q$N AskUserQuestion '{"questions":[{"question":"Qual cor?","header":"Cor","multiSelect":false,"options":[{"label":"Azul","description":"frio"},{"label":"Verde","description":"calmo"}]}]}' ;;
+        *plano*) ask p$N ExitPlanMode '{"plan":"## Plano\n1. Fazer A\n2. Fazer B"}' ;;
+        *comando*) ask b$N Bash '{"command":"echo oi"}' ;;
+        *enorme*) text "$(head -c 1500000 /dev/zero | tr '\0' 'x' | fold -w 80 | paste -sd' ')"; result ;;
+        *trava*) STUCK=1 ;;
+        *lento*) sleep 8; text "Resposta lenta."; result ;;
+        *erro*) emit '{"type":"result","subtype":"error_max_turns","is_error":true,"result":"","session_id":"'$SID'","modelUsage":{}}' ;;
+        *) text "Eco: ok"; result ;;
+      esac ;;
+  esac
+done

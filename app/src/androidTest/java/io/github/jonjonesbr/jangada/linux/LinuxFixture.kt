@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada.linux
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -15,6 +16,34 @@ object LinuxFixture {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     val ready: Unit by lazy { install() }
+
+    /** Linux instalado e os agentes falsos (assets/fakes do teste) em /usr/local/bin, no PATH do Debian. */
+    val withFakes: Unit by lazy {
+        ready
+        installFakes()
+    }
+
+    /** Pasta do Debian (o rootfs) vista pelo app. */
+    val rootfs: File get() = LinuxEnv(context).rootfs
+
+    /** Log do agente falso [name] (o que ele recebeu do app), ou "" se ainda não existe. */
+    fun fakeLog(name: String): String = File(rootfs, "var/log/jangada-fake/$name.log").let { if (it.exists()) it.readText() else "" }
+
+    /** Apaga os logs dos falsos (cada teste começa do zero). */
+    fun clearFakeLogs() {
+        File(rootfs, "var/log/jangada-fake").listFiles()?.forEach { it.delete() }
+    }
+
+    private fun installFakes() {
+        val assets = InstrumentationRegistry.getInstrumentation().context.assets
+        val bin = File(rootfs, "usr/local/bin").apply { mkdirs() }
+        for (name in assets.list("fakes").orEmpty()) {
+            val target = File(bin, name)
+            assets.open("fakes/$name").use { input -> target.outputStream().use { input.copyTo(it) } }
+            assertTrue("não deu para tornar $name executável", target.setExecutable(true, false))
+        }
+        File(rootfs, "var/log/jangada-fake").mkdirs()
+    }
 
     private fun install() {
         assertTrue("o Linux do app não é suportado neste aparelho", LinuxEnv(context).isDeviceSupported)

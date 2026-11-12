@@ -37,6 +37,9 @@ jobs:
       # O emulador é x86_64: o app precisa do proot dessa arquitetura (o build.yml baixa as duas).
       - name: Baixar proot do Termux
         run: bash scripts/fetch-proot.sh x86_64
+      # Os agentes falsos dos testes (bash) precisam ao menos ser bash válido.
+      - name: Conferir os agentes falsos
+        run: for f in app/src/androidTest/assets/fakes/*; do bash -n "$f"; done
       - name: Compilar o app e os testes
         run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
       # Testes de interface: só telas que não precisam do Linux (no x86_64 ele não instala).
