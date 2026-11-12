@@ -895,7 +895,7 @@ class AcpChat(
     private fun respond(id: Any, result: JSONObject) =
         send(JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", result))
 
-    private companion object {
+    internal companion object {
         const val TAG = "JangadaAcp"
         /** Atualizações que compõem a conversa: no replay de uma conversa já na tela, são descartadas. */
         val REPLAYED = setOf(
