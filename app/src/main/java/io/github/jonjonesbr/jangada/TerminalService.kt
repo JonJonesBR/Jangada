@@ -921,6 +921,8 @@ class TerminalService : Service() {
             val open = Intent(this, ProjectsActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val ok = task.state == CloneTask.State.OK
+            // Falha: a tela abre o log da cópia (o PendingIntent troca o extra pelo do último aviso).
+            if (!ok) open.putExtra(EXTRA_CLONE_FAILED, task.folder)
             val text = when (task.state) {
                 CloneTask.State.OK -> getString(R.string.projects_copy_notify_done_text, task.source)
                 CloneTask.State.EXISTS -> getString(R.string.project_exists)
@@ -946,6 +948,7 @@ class TerminalService : Service() {
             )
         } else {
             val open = Intent(this, HomeActivity::class.java)
+                .putExtra(EXTRA_CLONE_FAILED, task.folder)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val text = if (task.state == CloneTask.State.EXISTS) getString(R.string.project_exists) else task.lastLine
             attentionNotification(
@@ -1547,6 +1550,8 @@ class TerminalService : Service() {
         const val ACTION_EXIT = "io.github.jonjonesbr.jangada.EXIT"
         /** Instalação do Linux em primeiro plano (startService antes do Setup.start). */
         const val ACTION_SETUP = "io.github.jonjonesbr.jangada.SETUP"
+        /** Extra do aviso de clone ou cópia que falhou: a pasta, para a tela abrir o log dela. */
+        const val EXTRA_CLONE_FAILED = "clone_failed"
         /** Permitir ou recusar um pedido pelo aviso (extras: chave do trabalho, id do pedido e se permite). */
         private const val ACTION_ANSWER_PERMISSION = "io.github.jonjonesbr.jangada.ANSWER_PERMISSION"
         private const val EXTRA_CHAT_KEY = "io.github.jonjonesbr.jangada.CHAT_KEY"

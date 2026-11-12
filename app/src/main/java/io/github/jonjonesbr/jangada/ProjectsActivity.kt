@@ -25,6 +25,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.Lifecycle
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatHistory
+import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.ProjectOps
@@ -35,6 +36,7 @@ import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
+import java.nio.file.Path
 import kotlin.concurrent.thread
 
 /**
@@ -73,6 +75,9 @@ class ProjectsActivity : JangadaActivity() {
 
     /** O painel de um projeto está sendo preparado (contando as conversas). Só a principal mexe. */
     private var actionsPending = false
+
+    /** Pasta do clone ou cópia que falhou (extra do aviso), esperando o serviço para mostrar o log. */
+    private var pendingCloneFailure: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -115,12 +120,40 @@ class ProjectsActivity : JangadaActivity() {
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),
         )
         setContentView(root)
+        // Aviso de cópia que falhou: a tela abre com o log (ver showPendingCloneFailure).
+        if (savedInstanceState == null) takeCloneFailure(intent)
     }
 
     override fun onStart() {
         super.onStart()
         bound = bindService(Intent(this, TerminalService::class.java), connection, Context.BIND_AUTO_CREATE)
         reload()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takeCloneFailure(intent)
+        showPendingCloneFailure()
+    }
+
+    /** Guarda a pasta do aviso de clone que falhou e tira o extra do intent (para não mostrar de novo). */
+    private fun takeCloneFailure(intent: Intent?) {
+        val target = intent ?: return
+        val folder = target.getStringExtra(TerminalService.EXTRA_CLONE_FAILED) ?: return
+        pendingCloneFailure = folder
+        target.removeExtra(TerminalService.EXTRA_CLONE_FAILED)
+    }
+
+    /** Com o serviço ligado, mostra o log do clone que falhou (se ele ainda estiver como falho). */
+    private fun showPendingCloneFailure() {
+        val folder = pendingCloneFailure ?: return
+        val svc = service ?: return
+        pendingCloneFailure = null
+        val task = svc.clones[folder] ?: return
+        if (task.state != TerminalService.CloneTask.State.RUNNING && task.state != TerminalService.CloneTask.State.OK) {
+            showCloneFailure(task)
+        }
     }
 
     override fun onStop() {
@@ -149,6 +182,7 @@ class ProjectsActivity : JangadaActivity() {
             service = svc
             // Com o serviço na mão, a lista mostra quais projetos têm trabalho aberto.
             render()
+            showPendingCloneFailure()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -288,6 +322,15 @@ class ProjectsActivity : JangadaActivity() {
                 ),
             ) { openConversations(item, convs) }
         }
+        // Dependências (node_modules, .venv…) se refazem: apagar libera espaço sem perder código.
+        val deps = sizes[name]?.deps ?: 0L
+        if (deps > 0L) {
+            rows += Sheet.Row(
+                getString(R.string.projects_deps_clean),
+                getString(R.string.projects_deps_clean_desc, Formatter.formatShortFileSize(this, deps)),
+                destructive = true,
+            ) { askCleanDeps(item) }
+        }
         rows += Sheet.Row(
             getString(R.string.projects_delete),
             deleteBlock?.let { blockReason(it, name, renaming = false) },
@@ -385,6 +428,60 @@ class ProjectsActivity : JangadaActivity() {
                 if (renaming) getString(R.string.projects_rename_has_worktrees, dependents)
                 else getString(R.string.projects_delete_has_worktrees, dependents)
             else -> getString(R.string.projects_gone)
+        }
+    }
+
+    /** Acha as pastas de dependências do projeto (fora da principal) e pede a confirmação de apagar. */
+    private fun askCleanDeps(item: Workspace.Folder) {
+        val name = item.name
+        if (name in openFolders() || service?.folderBusy(name) == true) {
+            toast(R.string.projects_conversations_clean_open)
+            return
+        }
+        val root = Workspace.hostPath(linux.rootfs, Workspace.path(name)).toPath()
+        thread(name = "jangada-projects-info") {
+            val found = runCatching { ProjectSize.depDirs(root) }.getOrDefault(emptyList())
+            runOnUiThread { if (!isDestroyed) showCleanDeps(item, root, found) }
+        }
+    }
+
+    private fun showCleanDeps(item: Workspace.Folder, root: Path, found: List<Path>) {
+        if (found.isEmpty()) {
+            toast(R.string.projects_deps_none)
+            return
+        }
+        val shown = found.take(15).joinToString("\n") { root.relativize(it).toString() } +
+            if (found.size > 15) "\n\u2026" else ""
+        AlertDialog.Builder(this)
+            .setTitle(R.string.projects_deps_clean)
+            .setMessage(getString(R.string.projects_deps_confirm, shown))
+            .setPositiveButton(R.string.projects_conversations_clean_ok) { _, _ -> cleanDeps(item, found) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Apaga as pastas de dependências (uma a uma, fora da principal) e remede o projeto. */
+    private fun cleanDeps(item: Workspace.Folder, found: List<Path>) {
+        val name = item.name
+        // Um chat pode ter aberto no projeto depois do aviso: não apaga com trabalho aberto.
+        if (name in openFolders() || service?.folderBusy(name) == true) {
+            toast(R.string.projects_conversations_clean_open)
+            return
+        }
+        thread(name = "jangada-projects-info") {
+            var failed = 0
+            for (dir in found) {
+                // Fs.deleteTree não segue links; conta como falha se a pasta continuar existindo.
+                val gone = runCatching { Fs.deleteTree(dir) }.isSuccess && !Fs.exists(dir)
+                if (!gone) failed++
+            }
+            runOnUiThread {
+                if (!isDestroyed) {
+                    toast(if (failed == 0) R.string.projects_deps_cleaned else R.string.projects_deps_clean_failed)
+                    sizes.remove(name)
+                    reload()
+                }
+            }
         }
     }
 

@@ -119,6 +119,9 @@ class HomeActivity : JangadaActivity() {
     /** true desde o bindService até o unbindService (feitos em onStart e onStop). */
     private var bound = false
 
+    /** Pasta do clone ou cópia que falhou (extra do aviso), esperando o serviço para mostrar o log. */
+    private var pendingCloneFailure: String? = null
+
     /** Cartão de cada agente (id -> view), para mexer só no que mudou. */
     private val cards = HashMap<String, View>()
     /** Estado de cada tarefa na última vez que os cartões foram desenhados. */
@@ -169,6 +172,8 @@ class HomeActivity : JangadaActivity() {
             return
         }
 
+        // Aviso de clone que falhou: a tela abre com o log (ver showPendingCloneFailure).
+        if (savedInstanceState == null) takeCloneFailure(intent)
         setContentView(R.layout.activity_home)
         agentsList = findViewById(R.id.agents)
         sessionsList = findViewById(R.id.sessions)
@@ -420,6 +425,32 @@ class HomeActivity : JangadaActivity() {
         renderStorage()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takeCloneFailure(intent)
+        showPendingCloneFailure()
+    }
+
+    /** Guarda a pasta do aviso de clone que falhou e tira o extra do intent (para não mostrar de novo). */
+    private fun takeCloneFailure(intent: Intent?) {
+        val target = intent ?: return
+        val folder = target.getStringExtra(TerminalService.EXTRA_CLONE_FAILED) ?: return
+        pendingCloneFailure = folder
+        target.removeExtra(TerminalService.EXTRA_CLONE_FAILED)
+    }
+
+    /** Com o serviço ligado, mostra o log do clone que falhou (se ele ainda estiver como falho). */
+    private fun showPendingCloneFailure() {
+        val folder = pendingCloneFailure ?: return
+        val svc = service ?: return
+        pendingCloneFailure = null
+        val task = svc.clones[folder] ?: return
+        if (task.state != TerminalService.CloneTask.State.RUNNING && task.state != TerminalService.CloneTask.State.OK) {
+            showCloneFailure(task)
+        }
+    }
+
     override fun onStop() {
         service?.let {
             it.removeSessionsListener(sessionsListener)
@@ -461,6 +492,7 @@ class HomeActivity : JangadaActivity() {
             if (acknowledgeFinished(svc)) refreshInstalled()
             renderSessions()
             renderAgents()
+            showPendingCloneFailure()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {

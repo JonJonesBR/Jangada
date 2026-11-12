@@ -857,4 +857,10 @@
     <string name="projects_conversations_clean_ok">Apagar</string>
     <string name="projects_conversations_cleaned">Conversas antigas apagadas</string>
     <string name="projects_conversations_clean_failed">Algumas conversas não puderam ser apagadas</string>
+    <string name="projects_deps_clean">Apagar dependências</string>
+    <string name="projects_deps_clean_desc">%1$s em node_modules, .venv e parecidos; reinstale depois (npm install, pip…)</string>
+    <string name="projects_deps_none">Nenhuma pasta de dependências</string>
+    <string name="projects_deps_confirm">Estas pastas serão apagadas:\n\n%1$s\n\nElas se refazem ao reinstalar as dependências.</string>
+    <string name="projects_deps_cleaned">Dependências apagadas</string>
+    <string name="projects_deps_clean_failed">Algumas pastas não puderam ser apagadas</string>
 </resources>

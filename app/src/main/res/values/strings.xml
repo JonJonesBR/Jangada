@@ -861,4 +861,10 @@
     <string name="projects_conversations_clean_ok">Delete</string>
     <string name="projects_conversations_cleaned">Old conversations deleted</string>
     <string name="projects_conversations_clean_failed">Some conversations couldn’t be deleted</string>
+    <string name="projects_deps_clean">Delete dependencies</string>
+    <string name="projects_deps_clean_desc">%1$s in node_modules, .venv and similar; reinstall them later (npm install, pip…)</string>
+    <string name="projects_deps_none">No dependency folders found</string>
+    <string name="projects_deps_confirm">These folders will be deleted:\n\n%1$s\n\nThey can be rebuilt by reinstalling the dependencies.</string>
+    <string name="projects_deps_cleaned">Dependencies deleted</string>
+    <string name="projects_deps_clean_failed">Some folders couldn’t be deleted</string>
 </resources>

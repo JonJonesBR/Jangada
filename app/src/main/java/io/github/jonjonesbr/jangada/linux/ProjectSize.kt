@@ -81,6 +81,46 @@ object ProjectSize {
         return Sizes(total, git, deps)
     }
 
+    /**
+     * Pastas de dependências de [dir] (as de [DEP_DIRS]), para apagar. Não desce dentro de uma delas
+     * (node_modules aninhado fica dentro do de cima) e não entra em .git da raiz. Não segue links.
+     * Cancelado → lista vazia. Erro de leitura numa pasta é pulado.
+     */
+    fun depDirs(dir: Path, cancelled: () -> Boolean = { false }): List<Path> {
+        val found = ArrayList<Path>()
+        var stop = false
+        runCatching {
+            Files.walkFileTree(dir, object : SimpleFileVisitor<Path>() {
+                override fun preVisitDirectory(d: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    if (cancelled()) {
+                        stop = true
+                        return FileVisitResult.TERMINATE
+                    }
+                    if (d == dir) return FileVisitResult.CONTINUE
+                    val name = d.fileName.toString()
+                    if (name == ".git" && d.parent == dir) return FileVisitResult.SKIP_SUBTREE
+                    if (name in DEP_DIRS) {
+                        found.add(d)
+                        return FileVisitResult.SKIP_SUBTREE
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun visitFile(f: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    if (cancelled()) {
+                        stop = true
+                        return FileVisitResult.TERMINATE
+                    }
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun visitFileFailed(f: Path, exc: java.io.IOException): FileVisitResult = FileVisitResult.CONTINUE
+            })
+        }
+        if (stop || cancelled()) return emptyList()
+        return found
+    }
+
     /** Conversa do Claude: id (nome do .jsonl sem extensão) e data de modificação. */
     class Conv(val id: String, val modified: Long)
 

@@ -112,6 +112,24 @@ class ProjectSizeTest {
         assertTrue(ProjectSize.staleIds(emptyList(), agora).isEmpty())
     }
 
+    @Test
+    fun achaDependenciasSemDescerNelas() {
+        val root = tmp.newFolder("projeto")
+        write(root, "node_modules/pacote/i.js", 1)
+        write(root, "node_modules/pacote/node_modules/aninhado.js", 1)
+        write(root, "api/.venv/lib/x.py", 1)
+        write(root, ".git/node_modules/x", 1)
+        write(root, "src/a.kt", 1)
+        val outside = tmp.newFolder("fora")
+        write(outside, "node_modules/y.js", 1)
+        if (!symlink(File(root, "src/link"), outside)) return
+
+        val found = ProjectSize.depDirs(root.toPath()).map { root.toPath().relativize(it).toString() }
+
+        assertEquals(setOf("node_modules", "api/.venv"), found.toSet())
+        assertEquals(2, found.size)
+    }
+
     private fun write(root: File, relative: String, size: Int) {
         File(root, relative).apply {
             parentFile.mkdirs()
