@@ -37,6 +37,9 @@ object Projects {
     /** Código de saída do script de clone quando a pasta de destino já existe. */
     const val CLONE_EXISTS = 3
 
+    /** Código de saída do script de cópia quando falta espaço para ela (ver [copyScript]). */
+    const val COPY_NO_SPACE = 4
+
     /**
      * Argumentos `-c` do git para operações de rede (envio): sem resposta, o git desiste (velocidade
      * mínima por tempo), e o ssh não pergunta nada (BatchMode, aceita uma chave de servidor nova
@@ -234,6 +237,34 @@ object Projects {
             cd ${q(Workspace.ROOT)}
             rm -rf -- ${q(tmp)}
             GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND='ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new' LC_ALL=C.UTF-8 git clone --progress -- ${q(url)} ${q(tmp)}
+            if [ -e ${q(name)} ] || [ -L ${q(name)} ]; then rm -rf -- ${q(tmp)}; exit $CLONE_EXISTS; fi
+            mv -T -- ${q(tmp)} ${q(name)}
+        """.trimIndent()
+    }
+
+    /**
+     * Script que duplica o projeto [source] para a pasta nova [name] de ~/projetos. Copia numa pasta
+     * oculta (a mesma do clone, então [cleanupScript] serve) e só renomeia no fim. `cp -a` copia
+     * links como links (não segue) e mantém permissões e datas. Antes, confere o espaço: a cópia
+     * precisa caber com folga de 10% (sai com [COPY_NO_SPACE]). Os registros de trabalhos isolados
+     * (.git/worktrees) não vão junto: apontariam para as pastas do original. Sai com [CLONE_EXISTS]
+     * se a pasta já existe.
+     */
+    fun copyScript(source: String, name: String): String {
+        val tmp = cloneTemp(name)
+        return """
+            set -e
+            if [ -L ${q(Workspace.ROOT)} ] || [ ! -d ${q(Workspace.ROOT)} ]; then echo "${Workspace.ROOT}: not a directory" >&2; exit 1; fi
+            cd ${q(Workspace.ROOT)}
+            if [ -L ${q(source)} ] || [ ! -d ${q(source)} ]; then echo ${q("$source: not a directory")} >&2; exit 1; fi
+            if [ -e ${q(name)} ] || [ -L ${q(name)} ]; then exit $CLONE_EXISTS; fi
+            rm -rf -- ${q(tmp)}
+            need=${'$'}(du -sk -- ${q(source)} | cut -f1)
+            free=${'$'}(df -Pk . | awk 'NR==2 {print ${'$'}4}')
+            if [ -n "${'$'}need" ] && [ -n "${'$'}free" ] && [ ${'$'}((need + need / 10)) -gt "${'$'}free" ]; then exit $COPY_NO_SPACE; fi
+            echo "${'$'}need KB"
+            cp -a --reflink=auto -- ${q(source)} ${q(tmp)}
+            if [ -d ${q("$tmp/.git/worktrees")} ] && [ ! -L ${q("$tmp/.git")} ]; then rm -rf -- ${q("$tmp/.git/worktrees")}; fi
             if [ -e ${q(name)} ] || [ -L ${q(name)} ]; then rm -rf -- ${q(tmp)}; exit $CLONE_EXISTS; fi
             mv -T -- ${q(tmp)} ${q(name)}
         """.trimIndent()

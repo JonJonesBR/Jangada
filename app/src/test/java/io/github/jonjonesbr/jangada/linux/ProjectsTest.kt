@@ -246,6 +246,43 @@ class ProjectsTest {
     // Auxiliares
 
     /** Roda [script] com a raiz de ~/projetos trocada por [root] (a de verdade nunca é tocada). */
+    @Test
+    fun copiaLevaTudoMantemLinksESemWorktrees() {
+        Assume.assumeTrue(linkSimbolico() == null)
+        val root = tmp.newFolder("raiz-copia")
+        val origem = File(root, "app it's").apply { mkdirs() }
+        File(origem, ".git/worktrees/x").mkdirs()
+        File(origem, ".env").writeText("segredo")
+        Files.createSymbolicLink(File(origem, "link").toPath(), File(tmp.root, "fora-do-projeto").toPath())
+        assertEquals(0, rodaComRaiz(Projects.copyScript("app it's", "app-copia"), root))
+        val copia = File(root, "app-copia")
+        assertEquals("segredo", File(copia, ".env").readText())
+        assertTrue("o link virou outra coisa", Files.isSymbolicLink(File(copia, "link").toPath()))
+        assertTrue(File(copia, ".git").isDirectory)
+        assertFalse("a cópia levou os registros de worktree", File(copia, ".git/worktrees").exists())
+        assertTrue("o original perdeu os registros de worktree", File(origem, ".git/worktrees/x").isDirectory)
+        assertFalse(File(root, Projects.cloneTemp("app-copia")).exists())
+    }
+
+    @Test
+    fun copiaParaPastaQueExisteNaoMexe() {
+        val root = tmp.newFolder("raiz-copia-existe")
+        File(root, "app").mkdirs()
+        File(root, "b").mkdirs()
+        assertEquals(Projects.CLONE_EXISTS, rodaComRaiz(Projects.copyScript("app", "b"), root))
+        assertFalse(File(root, Projects.cloneTemp("b")).exists())
+    }
+
+    @Test
+    fun copiaDeOrigemQueNaoEhPastaFalha() {
+        Assume.assumeTrue(linkSimbolico() == null)
+        val root = tmp.newFolder("raiz-copia-link")
+        Files.createSymbolicLink(File(root, "app").toPath(), tmp.newFolder("alvo").toPath())
+        assertFalse(rodaComRaiz(Projects.copyScript("app", "b"), root) == 0)
+        assertFalse(rodaComRaiz(Projects.copyScript("sumiu", "b"), root) == 0)
+        assertFalse(File(root, "b").exists())
+    }
+
     private fun rodaComRaiz(script: String, root: File): Int {
         val trocado = script.replace("'${Workspace.ROOT}", "'${root.absolutePath}")
         val log = tmp.newFile()

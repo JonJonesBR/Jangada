@@ -139,7 +139,7 @@ fun ComponentActivity.showCloneProgress(
         addView(line)
     }
     val dialog = AlertDialog.Builder(this)
-        .setTitle(getString(R.string.clone_progress_title, task.folder))
+        .setTitle(getString(if (task.source != null) R.string.projects_copy_progress_title else R.string.clone_progress_title, task.folder))
         .setView(content)
         .setCancelable(false)
         .setNegativeButton(R.string.clone_cancel, null)
@@ -216,7 +216,7 @@ fun Activity.showCloneFailure(task: TerminalService.CloneTask) {
         addView(message)
     }
     AlertDialog.Builder(this)
-        .setTitle(R.string.clone_failed_title)
+        .setTitle(if (task.source != null) R.string.projects_copy_failed_title else R.string.clone_failed_title)
         .setView(scroll)
         .setPositiveButton(android.R.string.ok, null)
         .show()

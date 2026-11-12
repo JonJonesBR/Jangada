@@ -28,10 +28,12 @@ import io.github.jonjonesbr.jangada.linux.ProjectOps
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.showCloneFailure
+import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import kotlin.concurrent.thread
 
 /**
- * Projetos: as pastas de ~/projetos, com Renomear e Excluir. Tocar num projeto abre o painel de
+ * Projetos: as pastas de ~/projetos, com Renomear, Duplicar e Excluir. Tocar num projeto abre o painel de
  * ações. Antes de mexer numa pasta, o serviço fecha os chats e terminais dela (closeFolder), e a
  * pasta fica ocupada até o fim da operação. As regras estão em [ProjectOps]. Leituras de disco
  * rodam em threads; as views mudam só na thread principal.
@@ -192,6 +194,7 @@ class ProjectsActivity : JangadaActivity() {
         val renameBlock = ProjectOps.renameRefusal(name, "${name}x", listing)
             ?.takeIf { it == ProjectOps.Refusal.IS_WORKTREE || it == ProjectOps.Refusal.HAS_WORKTREES }
         val deleteBlock = ProjectOps.deleteRefusal(name, listing)
+        val copyBlock = ProjectOps.duplicateRefusal(name, listing)
         Sheet(this).title(name)
             .rows(
                 listOf(
@@ -200,6 +203,12 @@ class ProjectsActivity : JangadaActivity() {
                         renameBlock?.let { blockReason(it, name, renaming = true) },
                         enabled = renameBlock == null,
                     ) { askRename(item) },
+                    Sheet.Row(
+                        getString(R.string.projects_copy),
+                        if (copyBlock == ProjectOps.Refusal.IS_WORKTREE) getString(R.string.projects_copy_worktree)
+                        else copyBlock?.let { getString(R.string.projects_gone) } ?: getString(R.string.projects_copy_desc),
+                        enabled = copyBlock == null,
+                    ) { askCopy(item) },
                     Sheet.Row(
                         getString(R.string.projects_delete),
                         deleteBlock?.let { blockReason(it, name, renaming = false) },
@@ -415,6 +424,70 @@ class ProjectsActivity : JangadaActivity() {
             },
         )
         if (!started) toast(R.string.projects_folder_busy) else toast(R.string.projects_closing)
+    }
+
+    /**
+     * Pede o nome da cópia (sugere "<nome>-copia") e duplica pelo serviço, com o mesmo andamento
+     * do clone (Cancelar, Em segundo plano). A cópia leva tudo, também o que não está no git.
+     */
+    private fun askCopy(item: Workspace.Folder) {
+        if (service == null) return noService()
+        val name = item.name
+        val taken = listing.map { it.name }
+        val field = EditText(this).apply {
+            setText(ProjectOps.copyName(name, getString(R.string.projects_copy_suffix), taken).orEmpty())
+            setSingleLine(true)
+            filters = arrayOf(InputFilter.LengthFilter(NAME_MAX))
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+            addView(label(getString(R.string.projects_copy_message), 14f, R.color.setup_muted, top = 0))
+            addView(field)
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.projects_copy_title, name))
+            .setView(content)
+            .setPositiveButton(R.string.projects_copy_confirm, null)
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnShowListener {
+            val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            fun check() {
+                val typed = field.text.toString().trim()
+                val valid = Workspace.isValidName(typed)
+                val exists = taken.any { it.equals(typed, ignoreCase = true) }
+                ok.isEnabled = valid && !exists
+                field.error = when {
+                    typed.isEmpty() -> null
+                    !valid -> getString(R.string.chat_folder_invalid)
+                    exists -> getString(R.string.project_exists)
+                    else -> null
+                }
+            }
+            field.doAfterTextChanged { check() }
+            check()
+            ok.setOnClickListener {
+                val newName = field.text.toString().trim()
+                dialog.dismiss()
+                startCopy(name, newName)
+            }
+        }
+        dialog.show()
+    }
+
+    /** Começa a cópia no serviço e acompanha; terminando com a tela aberta, recarrega a lista. */
+    private fun startCopy(source: String, folder: String) {
+        val svc = service ?: return noService()
+        val task = svc.runCopy(source, folder)
+        if (task == null) {
+            toast(R.string.projects_folder_busy)
+            return
+        }
+        showCloneProgress(svc, task) { done ->
+            if (done.state == TerminalService.CloneTask.State.OK) toast(R.string.projects_copied) else showCloneFailure(done)
+            reload()
+        }
     }
 
     /**

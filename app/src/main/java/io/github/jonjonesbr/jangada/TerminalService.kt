@@ -169,8 +169,11 @@ class TerminalService : Service() {
     /** Pedido de instalar, atualizar ou desinstalar que espera a vez (outra tarefa de agente rodando). */
     class QueuedTask(val recipe: AgentRecipe, val updating: Boolean, val uninstalling: Boolean)
 
-    /** Clone de um repositório para uma pasta nova de ~/projetos, em segundo plano. */
-    class CloneTask(val agentId: String, val url: String, val folder: String) {
+    /**
+     * Clone de um repositório para uma pasta nova de ~/projetos, em segundo plano. Com [source], é
+     * a cópia de um projeto (Duplicar, ver [runCopy]): mesmo andamento, cancelar e aviso.
+     */
+    class CloneTask(val agentId: String, val url: String, val folder: String, val source: String? = null) {
         enum class State { RUNNING, OK, EXISTS, FAILED }
 
         @Volatile var state = State.RUNNING
@@ -373,6 +376,8 @@ class TerminalService : Service() {
      */
     fun closeFolder(folder: String, then: () -> Unit): Boolean {
         if (folder.isEmpty() || folder in busyFolders) return false
+        // A pasta está sendo copiada (Duplicar): espera a cópia terminar ou ser cancelada.
+        if (clones.values.any { it.source == folder && it.state == CloneTask.State.RUNNING }) return false
         busyFolders += folder
         sessionFolder.filterValues { it == folder }.keys.toList().forEach { closeSession(it) }
         cancelClone(folder)
@@ -813,13 +818,30 @@ class TerminalService : Service() {
     fun runClone(agentId: String, url: String, folder: String): CloneTask? {
         if (clones[folder]?.state == CloneTask.State.RUNNING || folder in busyFolders) return null
         if (!Projects.isCloneUrl(url) || !Workspace.isValidName(folder)) return null
-        val task = CloneTask(agentId, url, folder)
+        return launchFolderTask(CloneTask(agentId, url, folder), Projects.cloneScript(url, folder))
+    }
+
+    /**
+     * Duplica o projeto [source] para a pasta nova [folder] de ~/projetos, em segundo plano (cópia
+     * inteira, sem seguir links, ver [Projects.copyScript]). Devolve null (e não copia) se uma das
+     * pastas está ocupada (sendo clonada, copiada, excluída ou renomeada) ou os nomes não servem.
+     * Ao terminar sem tela acompanhando, o aviso abre a tela de Projetos. Thread principal.
+     */
+    fun runCopy(source: String, folder: String): CloneTask? {
+        if (clones[folder]?.state == CloneTask.State.RUNNING || folder in busyFolders || source in busyFolders) return null
+        if (!Workspace.isListable(source) || !Workspace.isValidName(folder) || source == folder) return null
+        return launchFolderTask(CloneTask("", "", folder, source), Projects.copyScript(source, folder))
+    }
+
+    /** Roda o [script] de clone ou cópia de [task] numa thread (ver [runClone]). */
+    private fun launchFolderTask(task: CloneTask, script: String): CloneTask {
+        val folder = task.folder
         clones[folder] = task
         goForeground()
         updateNotification()
         val worker = thread(start = false, name = "jangada-clone-$folder") {
             val exit = runCatching {
-                LinuxEnv(this).runBash(Projects.cloneScript(url, folder), onStart = { process ->
+                LinuxEnv(this).runBash(script, onStart = { process ->
                     task.process = process
                     // Cancelado antes de o processo nascer: encerra logo.
                     if (task.cancelled) process.destroy()
@@ -836,6 +858,10 @@ class TerminalService : Service() {
             }
             task.process = null
             if (task.cancelled && exit != 0) task.append(getString(R.string.task_cancelled))
+            if (!task.cancelled && exit == Projects.COPY_NO_SPACE) {
+                task.append(getString(R.string.projects_copy_no_space))
+                task.lastLine = getString(R.string.projects_copy_no_space)
+            }
             // Sem o clone, a pasta oculta pode ter ficado (o processo foi morto no meio): apaga.
             if (exit != 0) runCatching { LinuxEnv(this).run(Projects.cleanupScript(folder)) { } }
             task.state = when {
@@ -890,6 +916,23 @@ class TerminalService : Service() {
         if (task.cancelled && task.state != CloneTask.State.OK) return
         // Um código por pasta: com o mesmo, o PendingIntent de um aviso trocaria o extra do outro.
         val requestCode = REQUEST_CLONE + task.folder.hashCode() * 31
+        if (task.source != null) {
+            // Cópia: o aviso abre a tela de Projetos (ela não é de nenhum agente).
+            val open = Intent(this, ProjectsActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            val ok = task.state == CloneTask.State.OK
+            val text = when (task.state) {
+                CloneTask.State.OK -> getString(R.string.projects_copy_notify_done_text, task.source)
+                CloneTask.State.EXISTS -> getString(R.string.project_exists)
+                else -> task.lastLine
+            }
+            attentionNotification(
+                requestCode, NOTIFICATION_CLONE,
+                getString(if (ok) R.string.projects_copy_notify_done else R.string.projects_copy_notify_failed, task.folder),
+                text, open, tag = task.folder,
+            )
+            return
+        }
         if (task.state == CloneTask.State.OK) {
             val open = Intent(this, ChatActivity::class.java)
                 .putExtra(ChatActivity.EXTRA_AGENT_ID, task.agentId)
@@ -1158,7 +1201,7 @@ class TerminalService : Service() {
                 if (progress != null) getString(R.string.service_setup_progress, (progress * 100).toInt())
                 else getString(R.string.service_setup)
             }
-            cloning != null -> getString(R.string.clone_running, cloning.folder)
+            cloning != null -> getString(if (cloning.source != null) R.string.projects_copy_running else R.string.clone_running, cloning.folder)
             running != null -> getString(
                 when {
                     running.uninstalling -> R.string.task_uninstalling
