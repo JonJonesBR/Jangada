@@ -2593,7 +2593,7 @@ class ChatActivity : JangadaActivity() {
                     val svc = service ?: return@setPositiveButton
                     if (busyBlocks()) return@setPositiveButton
                     Toast.makeText(this, getString(R.string.login_come_back), Toast.LENGTH_LONG).show()
-                    openTerminal(svc, "opencode auth logout ${AgentRecipe.q(account.integration)}", login = true)
+                    openTerminal(svc, "opencode auth logout ${AgentRecipe.q(account.integration)} --standalone", login = true)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
