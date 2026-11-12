@@ -52,9 +52,14 @@ class AttachmentOrientationTest {
             saveAttributes()
         }
 
-        val anexo = Attachments.prepare(context, LinuxEnv(context), Uri.fromFile(arquivo))
-        copiado = anexo
-        val codificada = anexo.imageBase64
+        // Uri de arquivo não informa o tipo (as fotos de verdade vêm por content://, com image/jpeg): o
+        // prepare copia para a pasta de anexos, e o restore refaz o anexo como imagem, pelo mesmo encodeImage.
+        val linux = LinuxEnv(context)
+        val copia = Attachments.prepare(context, linux, Uri.fromFile(arquivo))
+        copiado = copia
+        val anexo = Attachments.restore(linux, copia.name, copia.guestPath, "image/jpeg")
+        assertNotNull("o anexo copiado não foi refeito", anexo)
+        val codificada = anexo!!.imageBase64
         assertNotNull("o anexo não trouxe a imagem codificada", codificada)
         val bytes = Base64.decode(codificada!!, Base64.DEFAULT)
         val imagem = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)

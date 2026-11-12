@@ -34,9 +34,15 @@ class ClaudeLimitsChipTest {
 
     @Test
     fun chipMostraOLimiteInformado() {
-        ChatUi.open(TerminalService.CLAUDE).use {
+        ChatUi.open(TerminalService.CLAUDE).use { scenario ->
             ChatUi.send("limites")
             ChatUi.waitText("Limites recebidos.", FAKE)
+            // Com o teclado aberto, a tela fica compacta e os atalhos (chips) somem: fecha o teclado.
+            scenario.onActivity { activity ->
+                activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                    ?.hideSoftInputFromWindow(activity.window.decorView.windowToken, 0)
+                activity.currentFocus?.clearFocus()
+            }
             // O chip some quando não há janelas; aparece depois do evento. Espera até 60 s pelo 42.
             val fim = System.currentTimeMillis() + 60_000
             var texto = ""

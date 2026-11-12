@@ -88,11 +88,15 @@ class WorktreeFinishTest {
             ChatUi.tap(R.string.chat_worktree_discard, FAKE)
             // A confirmação só aparece depois que o resumo fecha: então o próximo Descartar é o dela.
             ChatUi.waitText(context.getString(R.string.chat_worktree_discard_confirm, 0, 1).take(40), FAKE)
-            ChatUi.tap(R.string.chat_worktree_discard, FAKE)
+            // O título desse diálogo também é "Descartar": toca no botão positivo, não no texto.
+            val confirmar = device.wait(Until.findObject(By.res("android", "button1")), 10_000)
+            assertNotNull("o botão de confirmar não apareceu.\nNa tela: ${ChatUi.screenTexts()}", confirmar)
+            confirmar!!.click()
+            // A tela fica aberta até a pasta sair: é ela que roda o git.
+            val fim = System.currentTimeMillis() + 60_000
+            while (trabalho.exists() && System.currentTimeMillis() < fim) Thread.sleep(500)
+            assertTrue("a pasta do trabalho isolado não sumiu do disco.\nNa tela: ${ChatUi.screenTexts()}", !trabalho.exists())
         }
-        val fim = System.currentTimeMillis() + 60_000
-        while (trabalho.exists() && System.currentTimeMillis() < fim) Thread.sleep(500)
-        assertTrue("a pasta do trabalho isolado não sumiu do disco", !trabalho.exists())
         assertTrue("o repositório de origem sumiu junto", File(base, "a.txt").exists())
     }
 }

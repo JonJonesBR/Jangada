@@ -130,6 +130,10 @@ class HomeScreenTest {
      */
     @Test
     fun liberarEspacoTerminaComResultado() {
+        // Um cache do pip (que a limpeza apaga), para a linha ter o que liberar no emulador limpo.
+        val cache = java.io.File(LinuxFixture.rootfs, "root/.cache/pip/jangada-teste/cache.bin")
+        cache.parentFile!!.mkdirs()
+        cache.writeBytes(ByteArray(2_000_000))
         ActivityScenario.launch(HomeActivity::class.java).use {
             ChatUi.tap(R.string.storage_details, FAKE, timeoutMs = 120_000)
             val linha = device.wait(Until.findObject(By.text(context.getString(R.string.storage_clean_caches))), 120_000)
