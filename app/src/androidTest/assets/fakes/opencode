@@ -5,6 +5,9 @@ DATA=${FAKE_DATA:-$HOME/.local/share/opencode-fake}; mkdir -p "$DATA"; ACC=$DATA
 echo "ARGV $*" >> "$LOG"
 case "$1" in
   --version) echo "0.0.0-fake"; exit 0 ;;
+  stats) # Consumo (Ajustes do chat): uma linha de JSON, como "opencode stats --json"
+    echo '{"sessions":3,"cost":0.42,"models":[{"model":{"id":"modelo-falso","providerID":"opencode","variant":"default"},"steps":12,"tokens":{"input":15000,"output":2000,"reasoning":0,"cache":{"read":3000,"write":0}},"cost":0.42}]}'
+    exit 0 ;;
   auth)
     case "$2" in
       list) # --format json: como o opencode 2.x (id, name, connections com label; nunca a chave)

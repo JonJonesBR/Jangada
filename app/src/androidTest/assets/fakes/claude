@@ -51,6 +51,7 @@ while IFS= read -r line; do
         *lento*) sleep 8; text "Resposta lenta."; result ;;
         *erro*) emit '{"type":"result","subtype":"error_max_turns","is_error":true,"result":"","session_id":"'$SID'","modelUsage":{}}' ;;
         *readme*) text "Pronto! Criei o **Jangada**:\n\n- tela inicial\n- chat\n- terminal\n\n\`\`\`kotlin\nfun main() = println(42)\n\`\`\`"; result ;;
+        *limites*) emit '{"type":"rate_limit_event","rate_limit_info":{"status":"allowed","rateLimitType":"five_hour","unifiedWindows":{"five_hour":{"utilization":0.42,"resetsAt":4102444800,"status":"allowed"}}}}'; text "Limites recebidos."; result ;;
         *) text "Eco: ok"; result ;;
       esac ;;
   esac
