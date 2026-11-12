@@ -499,6 +499,9 @@
     <string name="chat_acp_option_failed">Couldn’t change %1$s: %2$s</string>
     <string name="chat_acp_model_failed">Couldn’t change the model: %1$s</string>
     <string name="chat_acp_login_hint">The agent needs you to log in. Tap &gt;_ at the top, log in on the agent’s screen and come back to the chat.</string>
+    <string name="chat_acp_free_limit">The free usage limit is over for now. To keep going: switch to another model, add your own key in Chat settings › Accounts and keys, or subscribe to OpenCode Go.</string>
+    <string name="chat_acp_go_limit">The OpenCode Go usage limit is over for now. Wait for it to reset, switch to another model or add another key in Chat settings › Accounts and keys.</string>
+    <string name="chat_acp_go_link">See OpenCode Go</string>
     <string name="chat_acp_error">Agent error.</string>
     <string name="chat_setting_mode">Mode</string>
     <string name="chat_action">Action</string>

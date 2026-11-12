@@ -767,6 +767,15 @@ class ChatActivity : JangadaActivity() {
     )
 
     /** Texto longo (log ou erro do agente) numa caixa que se pode selecionar e copiar. */
+    /** Abre no navegador o endereço de um aviso (só https); sem navegador, avisa. */
+    private fun openInfoUrl(url: String) {
+        if (!url.startsWith("https://")) return
+        val opened = runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
+        }.isSuccess
+        if (!opened) Toast.makeText(this, url, Toast.LENGTH_LONG).show()
+    }
+
     private fun showDetails(title: Int, body: String) {
         val view = TextView(this).apply {
             text = body
@@ -3485,27 +3494,34 @@ class ChatActivity : JangadaActivity() {
         /** Aviso da conversa; com [ChatItem.Info.details], um link "Detalhes" abre o erro completo. */
         private fun infoText(item: ChatItem.Info, old: TextView?) = (old ?: TextView(this@ChatActivity)).apply {
             val details = item.details
-            text = if (details == null) {
+            val url = item.url
+            val hasLink = details != null || url != null
+            text = if (!hasLink) {
                 item.text
             } else {
                 SpannableStringBuilder(item.text).apply {
-                    append("\n")
-                    val start = length
-                    append(getString(R.string.chat_error_details))
-                    setSpan(
-                        object : ClickableSpan() {
-                            override fun onClick(widget: View) = showDetails(R.string.chat_error_details, details)
+                    // Cada link numa linha própria: o do endereço (ex.: assinar o plano) e o de Detalhes.
+                    fun link(label: String, action: () -> Unit) {
+                        append("\n")
+                        val start = length
+                        append(label)
+                        setSpan(
+                            object : ClickableSpan() {
+                                override fun onClick(widget: View) = action()
 
-                            override fun updateDrawState(ds: TextPaint) {
-                                ds.isUnderlineText = true
-                                ds.color = getColor(R.color.accent_text)
-                            }
-                        },
-                        start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                    )
+                                override fun updateDrawState(ds: TextPaint) {
+                                    ds.isUnderlineText = true
+                                    ds.color = getColor(R.color.accent_text)
+                                }
+                            },
+                            start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                        )
+                    }
+                    if (url != null) link(item.urlLabel ?: url) { openInfoUrl(url) }
+                    if (details != null) link(getString(R.string.chat_error_details)) { showDetails(R.string.chat_error_details, details) }
                 }
             }
-            movementMethod = if (details != null) LinkMovementMethod.getInstance() else null
+            movementMethod = if (hasLink) LinkMovementMethod.getInstance() else null
             gravity = Gravity.CENTER
             textSize = 13f * chatScale
             setTextColor(getColor(if (item.isError) R.color.setup_error else R.color.setup_muted))

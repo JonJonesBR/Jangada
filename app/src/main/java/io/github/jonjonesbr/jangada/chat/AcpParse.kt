@@ -13,6 +13,26 @@ internal object AcpParse {
         return error.optInt("code") == -32000 || Regex("auth|login|sign.?in|credential|api.?key", RegexOption.IGNORE_CASE).containsMatchIn(text)
     }
 
+    /** Limite de uso do plano que acabou (OpenCode: free do Zen ou assinatura Go). */
+    enum class UsageLimit { FREE, GO }
+
+    /**
+     * Erro de fim do limite do plano. O opencode (packages/cli/src/acp/error.ts) responde ao
+     * session/prompt com erro JSON-RPC interno: `data.errorName` "provider.free-limit" ou
+     * "provider.go-limit" e a mensagem "Free usage limit reached…". Testar ANTES de [isAuthError]:
+     * a mensagem fala em conectar um provedor.
+     */
+    fun usageLimit(error: JSONObject?): UsageLimit? {
+        error ?: return null
+        val name = error.optJSONObject("data")?.optString("errorName").orEmpty()
+        return when {
+            name == "provider.go-limit" -> UsageLimit.GO
+            name == "provider.free-limit" -> UsageLimit.FREE
+            error.optString("message").contains("Free usage limit reached", ignoreCase = true) -> UsageLimit.FREE
+            else -> null
+        }
+    }
+
     /** Opções de um seletor; grupos (ex.: "Recomendados") viram uma lista só. */
     fun selectChoices(options: JSONArray?): List<Pair<String, String>> {
         options ?: return emptyList()

@@ -4,10 +4,28 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AcpParseTest {
+
+    /** Formato do opencode (packages/cli/src/acp/error.ts): erro interno com data.errorName. */
+    @Test
+    fun limiteDoPlano() {
+        val free = JSONObject(
+            """{"code":-32603,"message":"Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.","data":{"errorName":"provider.free-limit"}}""",
+        )
+        assertEquals(AcpParse.UsageLimit.FREE, AcpParse.usageLimit(free))
+        // A mensagem fala em conectar um provedor, mas não é erro de login.
+        assertFalse(AcpParse.isAuthError(free))
+        val go = JSONObject("""{"code":-32603,"message":"Usage limit reached","data":{"errorName":"provider.go-limit"}}""")
+        assertEquals(AcpParse.UsageLimit.GO, AcpParse.usageLimit(go))
+        // Sem errorName (versão antiga), a mensagem basta.
+        assertEquals(AcpParse.UsageLimit.FREE, AcpParse.usageLimit(JSONObject("""{"code":-32603,"message":"Free usage limit reached"}""")))
+        assertNull(AcpParse.usageLimit(JSONObject("""{"code":-32603,"message":"Internal service failure"}""")))
+        assertNull(AcpParse.usageLimit(null))
+    }
 
     @Test
     fun codigoMenos32000ENoticaComoLogin() {

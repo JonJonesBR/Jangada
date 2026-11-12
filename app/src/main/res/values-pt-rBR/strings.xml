@@ -497,6 +497,9 @@
     <string name="chat_acp_option_failed">Não consegui mudar %1$s: %2$s</string>
     <string name="chat_acp_model_failed">Não consegui mudar o modelo: %1$s</string>
     <string name="chat_acp_login_hint">O agente precisa de login. Toque em &gt;_ no topo, entre pela tela do agente e volte ao chat.</string>
+    <string name="chat_acp_free_limit">O limite de uso grátis acabou por agora. Para continuar: troque de modelo, conecte uma chave sua em Ajustes do chat › Contas e chaves ou assine o OpenCode Go.</string>
+    <string name="chat_acp_go_limit">O limite de uso do OpenCode Go acabou por agora. Espere renovar, troque de modelo ou conecte outra chave em Ajustes do chat › Contas e chaves.</string>
+    <string name="chat_acp_go_link">Conhecer o OpenCode Go</string>
     <string name="chat_acp_error">Erro do agente.</string>
     <string name="chat_setting_mode">Modo</string>
     <string name="chat_action">Ação</string>

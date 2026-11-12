@@ -478,7 +478,9 @@ class AcpChat(
             if (error != null) {
                 // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar,
                 // nem quando o agente fechou sozinho no meio da resposta (onExited já avisou).
-                if (AcpParse.isAuthError(error)) requireLogin(sessionId)
+                val limit = AcpParse.usageLimit(error)
+                if (limit != null) add(usageLimitInfo(limit, error))
+                else if (AcpParse.isAuthError(error)) requireLogin(sessionId)
                 else if (!cancelled && !(isStopped(error) && exitShown)) add(ChatItem.Info(friendlyError(error), isError = true))
             }
             else if (refused) add(ChatItem.Info(context.getString(R.string.chat_acp_refused), isError = true))
@@ -861,6 +863,17 @@ class AcpChat(
         return ""
     }
 
+    /** Aviso de limite do plano esgotado, com o que fazer e o link do OpenCode Go; a mensagem original vai em Detalhes. */
+    private fun usageLimitInfo(limit: AcpParse.UsageLimit, error: JSONObject?): ChatItem.Info = ChatItem.Info(
+        text = context.getString(
+            if (limit == AcpParse.UsageLimit.GO) R.string.chat_acp_go_limit else R.string.chat_acp_free_limit,
+        ),
+        isError = true,
+        details = error?.optString("message")?.takeIf { it.isNotBlank() },
+        url = if (limit == AcpParse.UsageLimit.FREE) OPENCODE_GO_URL else null,
+        urlLabel = if (limit == AcpParse.UsageLimit.FREE) context.getString(R.string.chat_acp_go_link) else null,
+    )
+
     private fun friendlyError(error: JSONObject?): String {
         val message = error?.optString("message").orEmpty()
         val data = error?.opt("data")?.toString().orEmpty()
@@ -897,6 +910,8 @@ class AcpChat(
 
     internal companion object {
         const val TAG = "JangadaAcp"
+        /** Página do OpenCode Go (assinatura), aberta pelo aviso de limite free esgotado. */
+        const val OPENCODE_GO_URL = "https://opencode.ai/go"
         /** Atualizações que compõem a conversa: no replay de uma conversa já na tela, são descartadas. */
         val REPLAYED = setOf(
             "agent_message_chunk", "agent_thought_chunk", "user_message_chunk", "tool_call", "tool_call_update", "plan",
