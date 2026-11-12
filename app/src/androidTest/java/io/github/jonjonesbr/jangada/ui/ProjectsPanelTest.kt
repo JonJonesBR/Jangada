@@ -92,7 +92,7 @@ class ProjectsPanelTest {
 
     /** O tamanho do projeto aparece na linha (a medida roda em segundo plano); se não aparecer, segue. */
     private fun esperarTamanho() {
-        device.wait(Until.findObject(By.textMatches(".*[0-9].*(kB|KB|MB).*")), 30_000)
+        device.wait(Until.findObject(By.text(java.util.regex.Pattern.compile(".*[0-9].*(kB|KB|MB).*"))), 30_000)
     }
 
     @Test
