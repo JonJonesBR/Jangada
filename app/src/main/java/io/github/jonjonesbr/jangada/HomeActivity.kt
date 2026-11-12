@@ -194,6 +194,7 @@ class HomeActivity : JangadaActivity() {
         findViewById<Button>(R.id.open_terminal).setOnClickListener { openTerminal() }
         findViewById<Button>(R.id.storage_allow).setOnClickListener { requestStorage() }
         findViewById<Button>(R.id.storage_details).setOnClickListener { showSpaceDetails() }
+        findViewById<Button>(R.id.projects_open).setOnClickListener { startActivity(Intent(this, ProjectsActivity::class.java)) }
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -252,6 +253,7 @@ class HomeActivity : JangadaActivity() {
         findViewById<View>(R.id.storage_allow).visibility = if (granted) View.GONE else View.VISIBLE
         findViewById<View>(R.id.storage_card).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         findViewById<View>(R.id.storage_details).visibility = if (linux.isReady) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.projects_open).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         renderSpace()
     }
 

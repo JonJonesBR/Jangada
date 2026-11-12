@@ -482,6 +482,12 @@ class ChatActivity : JangadaActivity() {
                 }
                 return
             }
+            // A pasta está sendo excluída ou renomeada (tela Projetos): o chat dela não abre agora.
+            if (svc.folderBusy(folder)) {
+                Toast.makeText(this@ChatActivity, R.string.projects_folder_busy, Toast.LENGTH_LONG).show()
+                finish()
+                return
+            }
             // Um pedido anterior (de antes de a tela parar e voltar) ainda espera o adaptador: ele abre o chat.
             if (opening) return
             val resume = intent.getStringExtra(EXTRA_RESUME)

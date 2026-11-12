@@ -355,6 +355,45 @@ class TerminalService : Service() {
         }
     }
 
+    /**
+     * Pastas com uma operação de projeto em andamento (excluir, renomear): nenhum chat nem clone
+     * começa nelas até [releaseFolder]. Só a thread principal mexe.
+     */
+    private val busyFolders = HashSet<String>()
+
+    /** A pasta [folder] está sendo excluída ou renomeada: a tela não abre o chat dela. Thread principal. */
+    fun folderBusy(folder: String): Boolean = folder in busyFolders
+
+    /**
+     * Prepara [folder] para sair ou mudar de nome: marca a pasta como ocupada, fecha as sessões
+     * de terminal e os chats dela (de todos os agentes) e cancela um clone para ela. [then] roda
+     * na thread principal depois que os chats saíram e o clone parou (no máximo 5 s para cada
+     * espera). Devolve false (e não faz nada) se a pasta já está ocupada. Quem chama libera a
+     * pasta com [releaseFolder] ao terminar, com sucesso ou não. Thread principal.
+     */
+    fun closeFolder(folder: String, then: () -> Unit): Boolean {
+        if (folder.isEmpty() || folder in busyFolders) return false
+        busyFolders += folder
+        sessionFolder.filterValues { it == folder }.keys.toList().forEach { closeSession(it) }
+        cancelClone(folder)
+        val cloneWorker = clones[folder]?.worker
+        val slots = chats.values.filter { it.folder == folder }
+        val chatsGone = java.util.concurrent.CountDownLatch(slots.size)
+        // Os avisos de saída chegam na thread principal; a espera fica numa thread própria.
+        slots.forEach { closeChat(it.agentId, it.folder) { chatsGone.countDown() } }
+        thread(name = "jangada-fecha-pasta") {
+            runCatching { chatsGone.await(5, java.util.concurrent.TimeUnit.SECONDS) }
+            cloneWorker?.let { runCatching { it.join(5_000) } }
+            main.post { then() }
+        }
+        return true
+    }
+
+    /** Fim da operação na pasta [folder]: chats e clones podem voltar a abrir nela. Thread principal. */
+    fun releaseFolder(folder: String) {
+        busyFolders -= folder
+    }
+
     override fun onCreate() {
         super.onCreate()
         // Limpeza de restos de versões antigas: em segundo plano, sem atrasar o serviço.
@@ -772,7 +811,7 @@ class TerminalService : Service() {
      * inválidos. Quem chama deve ter dado startService antes (goForeground já faz isso).
      */
     fun runClone(agentId: String, url: String, folder: String): CloneTask? {
-        if (clones[folder]?.state == CloneTask.State.RUNNING) return null
+        if (clones[folder]?.state == CloneTask.State.RUNNING || folder in busyFolders) return null
         if (!Projects.isCloneUrl(url) || !Workspace.isValidName(folder)) return null
         val task = CloneTask(agentId, url, folder)
         clones[folder] = task
