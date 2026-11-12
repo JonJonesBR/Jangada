@@ -67,7 +67,7 @@ jobs:
 
       # proot + bibliotecas, direto do repositório oficial do Termux (conferidos por SHA-256).
       - name: Baixar proot do Termux
-        run: bash scripts/fetch-proot.sh aarch64
+        run: bash scripts/fetch-proot.sh aarch64 && bash scripts/fetch-proot.sh x86_64
 
       # Testes na JVM: leitor de tar, receitas e scripts gerados, histórico, traduções.
       - name: Testes
@@ -111,8 +111,10 @@ jobs:
           set -euo pipefail
           # A lista vai para um arquivo: "grep -q" fecharia o pipe cedo e o unzip falharia.
           unzip -l Jangada.apk > "$RUNNER_TEMP/apk-lista.txt"
-          grep -q 'assets/bootstrap/aarch64/proot$' "$RUNNER_TEMP/apk-lista.txt" \
-            || { echo "::error title=APK sem proot::O proot não está dentro do APK."; exit 1; }
+          for arch in aarch64 x86_64; do
+            grep -q "assets/bootstrap/$arch/proot\$" "$RUNNER_TEMP/apk-lista.txt" \
+              || { echo "::error title=APK sem proot::O proot ($arch) não está dentro do APK."; exit 1; }
+          done
           bytes=$(stat -c %s Jangada.apk)
           mb=$(awk -v b="$bytes" 'BEGIN { printf "%.1f", b / 1048576 }')
           sha256sum Jangada.apk > Jangada.apk.sha256

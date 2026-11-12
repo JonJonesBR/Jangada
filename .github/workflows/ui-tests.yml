@@ -34,6 +34,9 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # O emulador é x86_64: o app precisa do proot dessa arquitetura (o build.yml baixa as duas).
+      - name: Baixar proot do Termux
+        run: bash scripts/fetch-proot.sh x86_64
       - name: Compilar o app e os testes
         run: ./gradlew --no-daemon :app:assembleDebug :app:assembleDebugAndroidTest
       # Testes de interface: só telas que não precisam do Linux (no x86_64 ele não instala).

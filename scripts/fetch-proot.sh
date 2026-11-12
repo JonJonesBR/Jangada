@@ -4,7 +4,7 @@
 # Roda no GitHub Actions antes do build; para compilar localmente, rode
 # este script uma vez antes do Gradle.
 #
-# Uso: scripts/fetch-proot.sh [aarch64]   (ou --latest para ver versões novas)
+# Uso: scripts/fetch-proot.sh [aarch64|x86_64]   (ou --latest para ver versões novas)
 set -euo pipefail
 
 ARCH="${1:-aarch64}"
@@ -21,6 +21,12 @@ PINS_aarch64=(
   "proot pool/main/p/proot/proot_5.1.107.102_aarch64.deb 10a394b585c2fc2b2c8502544f4e5f1be581dc8bfff79e8ba62f16207423e030"
   "libtalloc pool/main/libt/libtalloc/libtalloc_2.5.0_aarch64.deb 556591f43bb773ad8777e1a29522640866a55f95dab71914418b94a8c58ad5a7"
   "libandroid-shmem pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_aarch64.deb 0da3a24d558b93c92bcf8d611e0826a99ff96e396b148e6cdf33b47c47c57ff6"
+)
+# Aparelhos x86_64 (Chromebooks, emuladores; os testes no emulador do CI usam este).
+PINS_x86_64=(
+  "proot pool/main/p/proot/proot_5.1.107.102_x86_64.deb 2497064226c15971be8131c7facead94a06c225347796326a383c832dca57758"
+  "libtalloc pool/main/libt/libtalloc/libtalloc_2.5.0_x86_64.deb b8c6d95f20075dc1f9ec6573575b2444e8d526e48e0d8d6d5cf4e071e6e06530"
+  "libandroid-shmem pool/main/liba/libandroid-shmem/libandroid-shmem_0.7_x86_64.deb ffa9e4c87467b158b148d0ff92dda796aa038276c2075af3269cdcdb06f25797"
 )
 
 # Mostra as versões mais novas do índice, no formato das linhas acima.
@@ -50,8 +56,11 @@ fetch() {
 }
 
 if [ "$ARCH" = "--latest" ]; then
-  ARCH=aarch64
-  latest
+  for ARCH in aarch64 x86_64; do
+    echo "PINS_$ARCH=("
+    latest
+    echo ")"
+  done
   exit 0
 fi
 

@@ -42,14 +42,37 @@ class LinuxEnv(context: Context) {
     val hasStorageAccess: Boolean
         get() = runCatching { File(SHARED_STORAGE).let { it.canRead() && it.canWrite() } }.getOrDefault(false)
 
-    /** Por enquanto o ambiente Linux existe só para celulares ARM de 64 bits. */
+    /**
+     * Arquitetura do Linux: [assetArch] é a pasta do proot nos assets (nome do Termux), [image] a
+     * arquitetura da imagem no Docker Hub e [machine] o que o `uname -m` mostra.
+     */
+    class Arch(val assetArch: String, val image: String, val machine: String) {
+        companion object {
+            val ARM64 = Arch("aarch64", "arm64", "aarch64")
+            val X86_64 = Arch("x86_64", "amd64", "x86_64")
+        }
+    }
+
+    /**
+     * Arquitetura do Linux deste aparelho, pela ABI principal do Android (a primeira da lista: um
+     * aparelho x86_64 que também traduz ARM não pega o proot errado). Null = sem Linux para ele.
+     */
+    private val arch: Arch? = archFor(Build.SUPPORTED_ABIS?.firstOrNull())
+
+    /** Pasta do proot e das bibliotecas nos assets (ver scripts/fetch-proot.sh). */
+    private val assetDir get() = "bootstrap/${arch?.assetArch ?: Arch.ARM64.assetArch}"
+
+    /** Arquitetura da imagem do Debian no Docker Hub (arm64 ou amd64). */
+    val imageArchitecture: String get() = arch?.image ?: ARCHITECTURE
+
+    /** O ambiente Linux existe para celulares ARM de 64 bits e aparelhos x86_64 (Chromebooks, emuladores). */
     val isDeviceSupported: Boolean
-        get() = Build.SUPPORTED_ABIS.contains("arm64-v8a") && prootInAssets()
+        get() = arch != null && prootInAssets()
 
     /** Os assets não mudam com o app aberto: a lista é lida uma vez e guardada. */
     private fun prootInAssets(): Boolean {
         prootInAssetsCache?.let { return it }
-        val found = app.assets.list(ASSET_DIR)?.contains("proot") == true
+        val found = app.assets.list(assetDir)?.contains("proot") == true
         prootInAssetsCache = found
         return found
     }
@@ -88,12 +111,12 @@ class LinuxEnv(context: Context) {
 
     /** Copia proot e bibliotecas dos assets para uma pasta de onde podem ser executados. */
     fun installBootstrap() {
-        val names = app.assets.list(ASSET_DIR) ?: return
+        val names = app.assets.list(assetDir) ?: return
         libDir.mkdirs()
         for (name in names) {
             val target = if (name.startsWith("lib")) File(libDir, name) else File(bootstrapDir, name)
             val temp = File(target.parentFile, ".$name.tmp")
-            app.assets.open("$ASSET_DIR/$name").use { input ->
+            app.assets.open("$assetDir/$name").use { input ->
                 temp.outputStream().use { input.copyTo(it) }
             }
             temp.setReadable(true, true)
@@ -126,7 +149,7 @@ class LinuxEnv(context: Context) {
         args += "--link2symlink"
         args += "--sysvipc"
         args += "--kernel-release=\\Linux\\localhost\\${FakeSysData.KERNEL_RELEASE}" +
-            "\\${FakeSysData.KERNEL_VERSION}\\aarch64\\localdomain\\-1\\"
+            "\\${FakeSysData.KERNEL_VERSION}\\${arch?.machine ?: Arch.ARM64.machine}\\localdomain\\-1\\"
         args += "-L"
         args += "--change-id=0:0"
         args += "--rootfs=${rootfs.absolutePath}"
@@ -557,7 +580,13 @@ class LinuxEnv(context: Context) {
             return chosen.joinToString("") { "nameserver $it\n" } + "options timeout:2 attempts:2\n"
         }
 
-        private const val ASSET_DIR = "bootstrap/aarch64"
+        /** Arquitetura do Linux para a ABI [abi] do Android, ou null se o app não tem Linux para ela. */
+        fun archFor(abi: String?): Arch? = when (abi) {
+            "arm64-v8a" -> Arch.ARM64
+            "x86_64" -> Arch.X86_64
+            else -> null
+        }
+
         const val IMAGE_REPOSITORY = "library/debian"
         const val IMAGE_TAG = "trixie-slim"
         const val IMAGE = "debian:$IMAGE_TAG"
@@ -568,6 +597,7 @@ class LinuxEnv(context: Context) {
          * da mesma tag, num commit só disso.
          */
         const val IMAGE_DIGEST = "sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4"
+        /** Arquitetura padrão da imagem (celulares ARM); a do aparelho é [imageArchitecture]. */
         const val ARCHITECTURE = "arm64"
         const val BASE_PACKAGES = "ca-certificates curl git less nano procps unzip xz-utils"
         /** Pasta (dentro da home do Debian) onde os agentes trabalham. */

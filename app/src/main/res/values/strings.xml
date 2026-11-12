@@ -17,7 +17,7 @@
     <string name="setup_hide_log">Hide technical details</string>
     <string name="setup_copy_log">Copy details</string>
     <string name="setup_copied">Details copied</string>
-    <string name="setup_unsupported">This phone isn’t supported yet: Jangada’s Linux needs a 64-bit ARM processor.</string>
+    <string name="setup_unsupported">This device isn’t supported yet: Jangada’s Linux needs a 64-bit ARM or x86 processor.</string>
     <string name="setup_error_space">Not enough free space. Linux needs about 700 MB free to install.</string>
     <string name="setup_error_rate_limit">Docker Hub is limiting downloads from your connection. Wait a few minutes and try again.</string>
     <string name="setup_error_offline">No internet connection. Check Wi-Fi or mobile data and try again.</string>

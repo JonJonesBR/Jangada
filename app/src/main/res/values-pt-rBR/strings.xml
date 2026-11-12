@@ -15,7 +15,7 @@
     <string name="setup_hide_log">Esconder detalhes técnicos</string>
     <string name="setup_copy_log">Copiar detalhes</string>
     <string name="setup_copied">Detalhes copiados</string>
-    <string name="setup_unsupported">Este celular ainda não é compatível: o Linux do Jangada precisa de um processador ARM de 64 bits.</string>
+    <string name="setup_unsupported">Este aparelho ainda não é compatível: o Linux do Jangada precisa de um processador ARM ou x86 de 64 bits.</string>
     <string name="setup_error_space">Pouco espaço livre. O Linux precisa de cerca de 700 MB livres para instalar.</string>
     <string name="setup_error_rate_limit">O Docker Hub está limitando downloads da sua conexão. Espere alguns minutos e tente de novo.</string>
     <string name="setup_error_offline">Sem conexão com a internet. Confira o Wi-Fi ou os dados móveis e tente de novo.</string>
