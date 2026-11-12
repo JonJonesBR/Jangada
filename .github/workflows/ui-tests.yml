@@ -1,6 +1,6 @@
 name: Testes no emulador
 
-# Roda só sob demanda (botão "Run workflow") e nas tags v*. Leva uns 15 minutos (o emulador
+# Roda só sob demanda (botão "Run workflow") e nas tags v*. Leva uns 15 minutos (a instalação do Debian no emulador é a maior parte) (o emulador
 # sobe do zero a cada vez), então não roda em cada push: o build.yml já cobre os testes de unidade.
 on:
   workflow_dispatch:
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   ui:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -47,6 +47,9 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
+          # O Debian (~400 MB com o git e o curl) e o apt precisam de espaço e memória.
+          ram-size: 4096M
+          disk-size: 6000M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
       - name: Guardar o relatório
