@@ -365,7 +365,9 @@ class ChatActivity : JangadaActivity() {
                 updateCommandSuggestions()
             }
         })
-        takeShared(intent)
+        // Tela recriada: a intent volta com os extras originais (o removeExtra vale só para a cópia daqui), e
+        // os anexos dela já vieram guardados (keptAttachments). Ler de novo os duplicaria.
+        if (savedInstanceState == null) takeShared(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
