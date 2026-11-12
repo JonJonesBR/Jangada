@@ -1,5 +1,18 @@
 # Novidades
 
+## 1.17.0
+
+- Chat do Claude: perguntas do agente (AskUserQuestion) viram um cartão com as opções, uma por pergunta, com "Outra resposta…" para escrever; o plano (ExitPlanMode) aparece formatado, com Aprovar plano ou Continuar planejando, e o aviso não oferece mais "Permitir" para ele.
+- Chat: um segundo Parar encerra o agente que não responde ao primeiro. Agente ACP que não abre a conversa em 5 minutos avisa, em vez de ficar subindo para sempre. Uma mensagem estranha do agente não trava o turno nem deixa um pedido sem resposta.
+- Chat: anexos e o que foi compartilhado não somem nem se duplicam quando a tela é recriada (girar, trocar o tema). Histórico com o agente ACP dormindo avisa em vez de falhar; copiar que falha avisa.
+- OpenCode, Contas e chaves: a lista é lida no celular mesmo com o banco ocupado, e uma consulta que falha não aparece como "nenhuma conta"; o login é conferido antes de dizer que deu certo; conta sem rótulo se remove pelo terminal.
+- Git e clone: leituras do git (status, diff, log) têm tempo limite de 2 minutos, com aviso próprio; endereço de repositório com senha ou token é recusado.
+- Serviço: aba de terminal encerrada não segura mais o aviso do serviço; backup roda em primeiro plano e o aviso diz que está em andamento. A limpeza automática espera terminais e agentes pararem, e uma busca que falha não apaga nada.
+- Telas: a barra de cima ficou legível no tema claro, e trocar claro/escuro no Android redesenha as telas abertas.
+- Linux também em x86_64 (Chromebooks e emuladores).
+- Reforços: extração da imagem do Linux mais segura, restaurar backup nunca mexe em ~/celular, títulos e blocos de código do Markdown corrigidos.
+- Testes automáticos num emulador (telas, instalação do Linux, chats do Claude e do OpenCode, contas, serviço), com agentes falsos e sem nenhum dado pessoal.
+
 ## 1.16.0
 
 - Espaço no Linux: o painel ganhou uma barra com Linux e agentes, conversas, projetos e o que pode limpar, uma lista das maiores pastas (a partir de 50 MB) e o espaço livre do celular. As legendas ficaram curtas.
