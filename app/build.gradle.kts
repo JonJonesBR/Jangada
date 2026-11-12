@@ -19,6 +19,7 @@ android {
         targetSdk = 28
         versionCode = 122
         versionName = "1.16.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -68,6 +69,12 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // O org.json do Android não funciona fora do celular; nos testes, usa a biblioteca original.
     testImplementation("org.json:json:20260814")
+
+    // Testes de interface (app/src/androidTest), rodados no emulador do CI (ver .github/workflows/ui-tests.yml).
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test:core-ktx:1.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
 // Mostra no log do CI o motivo de cada teste que falhar.
