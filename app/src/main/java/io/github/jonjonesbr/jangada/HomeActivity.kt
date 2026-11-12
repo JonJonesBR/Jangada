@@ -60,6 +60,7 @@ import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
+import io.github.jonjonesbr.jangada.ui.resumeCloneProgress
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -493,6 +494,11 @@ class HomeActivity : JangadaActivity() {
             renderSessions()
             renderAgents()
             showPendingCloneFailure()
+            // Clone que seguia com a tela fora: o progresso volta (terminando bem, abre o chat).
+            resumeCloneProgress(svc, { it.source == null }) { done ->
+                if (done.state == TerminalService.CloneTask.State.OK) openChat(done.agentId, done.folder)
+                else showCloneFailure(done)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {

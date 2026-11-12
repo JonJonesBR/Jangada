@@ -34,6 +34,7 @@ import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
+import io.github.jonjonesbr.jangada.ui.resumeCloneProgress
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
 import java.nio.file.Path
@@ -183,6 +184,11 @@ class ProjectsActivity : JangadaActivity() {
             // Com o serviço na mão, a lista mostra quais projetos têm trabalho aberto.
             render()
             showPendingCloneFailure()
+            // Cópia que seguia com a tela fora: o progresso volta.
+            resumeCloneProgress(svc, { it.source != null }) { done ->
+                if (done.state == TerminalService.CloneTask.State.OK) toast(R.string.projects_copied) else showCloneFailure(done)
+                reload()
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {

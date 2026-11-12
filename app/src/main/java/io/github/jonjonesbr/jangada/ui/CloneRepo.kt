@@ -184,11 +184,28 @@ fun ComponentActivity.showCloneProgress(
             service.cancelClone(task.folder)
         }
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            // Escolha do usuário: ao voltar à tela, o progresso não reaparece (o resultado vem pelo aviso).
+            task.sentToBackground = true
             if (stop()) service.unwatchClone(task)
         }
     }
     dialog.show()
     handler.post(tick)
+}
+
+/**
+ * A tela voltou com um clone (ou cópia) ainda rodando, que ela deixou de acompanhar ao sair da
+ * frente: mostra o progresso de novo. Só o primeiro que [matches] aceita e o serviço devolve
+ * (ver [TerminalService.rewatchClone]). Thread principal.
+ */
+fun ComponentActivity.resumeCloneProgress(
+    service: TerminalService,
+    matches: (TerminalService.CloneTask) -> Boolean,
+    onDone: (TerminalService.CloneTask) -> Unit,
+) {
+    if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) return
+    val task = service.clones.values.firstOrNull { matches(it) && service.rewatchClone(it) } ?: return
+    showCloneProgress(service, task, onDone)
 }
 
 /**

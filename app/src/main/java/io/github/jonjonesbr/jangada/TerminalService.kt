@@ -186,6 +186,8 @@ class TerminalService : Service() {
         @Volatile var worker: Thread? = null
         /** Uma tela mostra o progresso: ao terminar, ela abre o chat (sem aviso). */
         @Volatile var watched = true
+        /** O usuário mandou o clone para segundo plano (botão): a tela não volta a mostrar o progresso. */
+        @Volatile var sentToBackground = false
         /** O aviso de fim já saiu ou a tela já tratou o resultado. */
         @Volatile var reported = false
         private val log = StringBuilder()
@@ -904,6 +906,17 @@ class TerminalService : Service() {
     fun unwatchClone(task: CloneTask) {
         task.watched = false
         if (task.state != CloneTask.State.RUNNING) reportClone(task)
+    }
+
+    /**
+     * A tela voltou e quer acompanhar de novo um clone que ela deixou de ver só porque saiu da frente
+     * (não pelo botão Em segundo plano). Verdadeiro se o clone ainda roda e passou a ser acompanhado:
+     * o aviso de fim não sai, a tela trata o resultado. Thread principal (a mesma do fim do clone).
+     */
+    fun rewatchClone(task: CloneTask): Boolean {
+        if (task.state != CloneTask.State.RUNNING || task.watched || task.sentToBackground || task.reported) return false
+        task.watched = true
+        return true
     }
 
     /**
