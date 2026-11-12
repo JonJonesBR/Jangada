@@ -362,6 +362,7 @@ class AcpChat(
      * outros agentes. Roda na thread principal.
      */
     private fun refreshLimits(delayMs: Long = 0L) {
+        if (agentId == OPENCODE_ID) return refreshOpenCodeLimits()
         if (agentId != CODEX_ID) return
         if (limitsReading) {
             limitsAgain = true
@@ -395,6 +396,54 @@ class AcpChat(
                         if (limitsAgain) {
                             limitsAgain = false
                             if (running) refreshLimits()
+                        }
+                    }
+                }
+            }
+        }
+        if (started.isFailure) limitsReading = false
+    }
+
+    /** Última leitura dos limites do OpenCode Go (ms; só a thread principal mexe). */
+    private var openCodeLimitsAt = 0L
+    /** A última leitura disse que não há login no console do OpenCode: só tenta de novo ao abrir a conversa. */
+    private var openCodeNoGo = false
+
+    /**
+     * OpenCode Go: pergunta ao próprio opencode (`opencode api experimental.usage.limits`, com servidor
+     * privado que sai no fim) os limites do console em que ele está logado. Abre outro opencode, então
+     * no máximo uma vez a cada [OPENCODE_LIMITS_EVERY_MS], e sem login no console (data null) só de novo
+     * na próxima conversa. Falha ou formato inesperado: não mostra nada. Thread principal.
+     */
+    private fun refreshOpenCodeLimits() {
+        val now = System.currentTimeMillis()
+        val first = openCodeLimitsAt == 0L
+        if (limitsReading || (!first && (openCodeNoGo || now - openCodeLimitsAt < OPENCODE_LIMITS_EVERY_MS))) return
+        limitsReading = true
+        openCodeLimitsAt = now
+        val started = runCatching {
+            thread(name = "jangada-limites-opencode") {
+                var limits: PlanLimits? = null
+                var answered = false
+                try {
+                    val out = StringBuilder()
+                    val code = linux.runBash(OPENCODE_LIMITS_SCRIPT) { out.append(it).append('\n') }
+                    answered = code == 0
+                    if (answered) limits = PlanLimitsParser.fromOpenCodeUsage(out.toString(), System.currentTimeMillis())
+                } catch (e: Exception) {
+                    Log.w(TAG, "limites do OpenCode", e)
+                } finally {
+                    val found = limits
+                    val noGo = answered && found == null
+                    main.post {
+                        limitsReading = false
+                        openCodeNoGo = noGo
+                        if (found != null) {
+                            val old = limitsStore.load(agentId)
+                            limitsStore.save(agentId, found)
+                            val at = System.currentTimeMillis()
+                            warnLimits(crossedWindows(old, found).filter { it.resetsAtMs == null || it.resetsAtMs > at })
+                            changed()
                         }
                     }
                 }
@@ -918,6 +967,12 @@ class AcpChat(
         )
         /** Id do Codex na receita: só ele lê os limites do plano pelas sessões. */
         const val CODEX_ID = "codex"
+        /** Id do OpenCode na receita: lê os limites do Go pela API do próprio opencode. */
+        const val OPENCODE_ID = "opencode"
+        /** Intervalo mínimo entre leituras dos limites do OpenCode Go (cada uma abre outro opencode). */
+        const val OPENCODE_LIMITS_EVERY_MS = 10 * 60_000L
+        /** Pergunta os limites ao opencode, com servidor próprio (sai no fim) e tempo limite. */
+        const val OPENCODE_LIMITS_SCRIPT = "timeout 40 opencode api experimental.usage.limits --standalone </dev/null 2>/dev/null"
         /** Comando do agente que compacta a conversa (o mesmo do "Compactar agora") e o texto que o manda. */
         const val COMPACT_NAME = "compact"
         const val COMPACT_TEXT = "/compact"

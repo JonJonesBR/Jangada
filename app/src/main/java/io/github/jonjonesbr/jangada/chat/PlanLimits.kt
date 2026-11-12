@@ -61,6 +61,31 @@ object PlanLimitsParser {
         return build(windows, nowMs)
     }
 
+    /**
+     * Resposta de `opencode api experimental.usage.limits` (packages/schema/src/usage-limits.ts do
+     * opencode): `{"location":…,"data":{"go":{"rolling"|"weekly"|"monthly":{"percent","limited","resetsAt"}}}}`.
+     * `percent` vai de 0 a 100 e `resetsAt` é epoch em ms. A janela "rolling" do Go é a de 5 horas e a
+     * mensal entra como outra ("30 d"). Sem login no console (`data` null) ou sem Go: null.
+     */
+    fun fromOpenCodeUsage(text: String, nowMs: Long): PlanLimits? = runCatching {
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        val go = JSONObject(text.substring(start)).optJSONObject("data")?.optJSONObject("go") ?: return null
+        val windows = listOf(
+            "rolling" to LimitWindow.Kind.FIVE_HOUR,
+            "weekly" to LimitWindow.Kind.WEEKLY,
+            "monthly" to LimitWindow.Kind.OTHER,
+        ).mapNotNull { (key, kind) ->
+            val meter = go.optJSONObject(key) ?: return@mapNotNull null
+            val raw = meter.optDouble("percent", Double.NaN)
+            // Limitado (o Go recusa até renovar) conta como cheio, mesmo que o percentual venha menor.
+            val percent = (if (meter.optBoolean("limited")) 100 else percentOf(raw, 1.0)) ?: return@mapNotNull null
+            val resetsAt = meter.optDouble("resetsAt", Double.NaN).takeIf { !it.isNaN() && it > 0 }?.toLong()
+            LimitWindow(kind, percent, resetsAt, "30 d".takeIf { kind == LimitWindow.Kind.OTHER })
+        }
+        build(windows, nowMs)
+    }.getOrNull()
+
     /** Uma linha de sessão do Codex (rollout). Null quando a linha não traz "rate_limits" válidos. */
     fun fromCodexLine(line: String, nowMs: Long): PlanLimits? {
         if (!line.contains("\"rate_limits\"")) return null

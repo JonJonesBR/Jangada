@@ -28,6 +28,32 @@ class PlanLimitsTest {
          "overageEnabled":true}
     """.trimIndent()
 
+    /** Formato do opencode (packages/schema/src/usage-limits.ts); sem login no console, data é null (conferido na 2.2.7). */
+    @Test
+    fun limitesDoOpenCodeGo() {
+        val now = 1_700_000_000_000L
+        val json = """bash: no job control in this shell
+{"location":{"directory":"/root"},"data":{"workspace":{"id":"wrk_1","usageURL":"https://opencode.ai/wrk_1/activity/overview"},
+"go":{"rolling":{"percent":42.4,"limited":false,"resetsAt":1700003600000},
+"weekly":{"percent":80,"limited":false,"resetsAt":1700500000000},
+"monthly":{"percent":10,"limited":true,"resetsAt":1702000000000}},"budgets":[]}}"""
+        val limits = PlanLimitsParser.fromOpenCodeUsage(json, now)!!
+        assertEquals(
+            listOf(
+                LimitWindow(LimitWindow.Kind.FIVE_HOUR, 42, 1700003600000L),
+                LimitWindow(LimitWindow.Kind.WEEKLY, 80, 1700500000000L),
+                // Limitado conta como cheio.
+                LimitWindow(LimitWindow.Kind.OTHER, 100, 1702000000000L, "30 d"),
+            ),
+            limits.windows,
+        )
+        assertEquals(now, limits.updatedAtMs)
+        assertNull(PlanLimitsParser.fromOpenCodeUsage("""{"location":{"directory":"/tmp"},"data":null}""", now))
+        assertNull(PlanLimitsParser.fromOpenCodeUsage("""{"location":{},"data":{"workspace":{"id":"w"},"budgets":[]}}""", now))
+        assertNull(PlanLimitsParser.fromOpenCodeUsage("erro", now))
+        assertNull(PlanLimitsParser.fromOpenCodeUsage("{quebrado", now))
+    }
+
     @Test
     fun claudeExemploReal() {
         val limits = PlanLimitsParser.fromClaude(JSONObject(exemploClaude), agora)!!
