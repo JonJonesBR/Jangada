@@ -71,9 +71,11 @@ import io.github.jonjonesbr.jangada.chat.limitsSummary
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
+import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.OpenCodeStats
 import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.ChatView
 import io.github.jonjonesbr.jangada.chat.Markdown
@@ -95,7 +97,9 @@ import io.github.jonjonesbr.jangada.ui.dpToPx
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
+import java.text.SimpleDateFormat
 import java.util.Collections
+import java.util.Date
 import java.util.IdentityHashMap
 import java.util.Locale
 import java.util.WeakHashMap
@@ -204,6 +208,27 @@ class ChatActivity : JangadaActivity() {
     private val attachPicker = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isNotEmpty()) prepareAttachments(uris)
     }
+    /** Texto da conversa à espera de o usuário escolher onde salvar (ver [exportConversation]). */
+    private var pendingExport: String? = null
+    /** Onde salvar a conversa exportada (arquivo Markdown escolhido pelo usuário). */
+    private val exportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        val text = pendingExport
+        pendingExport = null
+        if (uri == null || text == null) return@registerForActivityResult
+        thread(name = "chat-export") {
+            val saved = runCatching {
+                val stream = contentResolver.openOutputStream(uri) ?: error("no output stream")
+                stream.use { it.write(text.toByteArray()) }
+            }.isSuccess
+            runOnUiThread {
+                if (!isDestroyed) Toast.makeText(
+                    this,
+                    if (saved) R.string.chat_export_done else R.string.chat_export_failed,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
 
     /** Adaptador ACP ainda não pronto (instalando, ou falhou): campo de texto e Enviar desligados. */
     private var preparing = false
@@ -304,6 +329,8 @@ class ChatActivity : JangadaActivity() {
             pendingAttachments += kept
             renderAttachments()
         }
+        // Anexos que estavam na caixa ao sair da tela: só quando a tela não foi recriada (ela já os trouxe).
+        if (savedInstanceState == null && pendingAttachments.isEmpty()) restoreDraftAttachments()
         findViewById<View>(R.id.chat_home).setOnClickListener { goHome() }
         sendButton.setOnClickListener { send() }
         findViewById<View>(R.id.chat_attach).setOnClickListener { pickAttachment() }
@@ -423,8 +450,10 @@ class ChatActivity : JangadaActivity() {
         // Só larga o aviso se ele ainda for o deste trabalho.
         if (service?.visibleChat == chatKey) service?.visibleChat = null
         // O texto não enviado vira rascunho deste trabalho: ir à tela inicial, trocar de trabalho,
-        // abrir o terminal ou ir para outro app não o perde. Os anexos ficam de fora.
+        // abrir o terminal ou ir para outro app não o perde. Os anexos pendentes também (nome e caminho;
+        // a imagem é refeita ao voltar, em [restoreDraftAttachments]).
         drafts.put(chatKey, input.text.toString())
+        drafts.putAttachments(chatKey, pendingAttachments.map { Triple(it.name, it.guestPath, it.mimeType) })
         dismissCommandSuggestions()
         super.onPause()
     }
@@ -480,6 +509,12 @@ class ChatActivity : JangadaActivity() {
                     pendingRemoval = null
                     removeWorktree(svc, job, force)
                 }
+                return
+            }
+            // A pasta está sendo excluída ou renomeada (tela Projetos): o chat dela não abre agora.
+            if (svc.folderBusy(folder)) {
+                Toast.makeText(this@ChatActivity, R.string.projects_folder_busy, Toast.LENGTH_LONG).show()
+                finish()
                 return
             }
             // Um pedido anterior (de antes de a tela parar e voltar) ainda espera o adaptador: ele abre o chat.
@@ -733,6 +768,15 @@ class ChatActivity : JangadaActivity() {
     )
 
     /** Texto longo (log ou erro do agente) numa caixa que se pode selecionar e copiar. */
+    /** Abre no navegador o endereço de um aviso (só https); sem navegador, avisa. */
+    private fun openInfoUrl(url: String) {
+        if (!url.startsWith("https://")) return
+        val opened = runCatching {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE))
+        }.isSuccess
+        if (!opened) Toast.makeText(this, url, Toast.LENGTH_LONG).show()
+    }
+
     private fun showDetails(title: Int, body: String) {
         val view = TextView(this).apply {
             text = body
@@ -1407,6 +1451,7 @@ class ChatActivity : JangadaActivity() {
                     if (service == null) return
                     input.setText("")
                     drafts.put(chatKey, "")
+                    drafts.putAttachments(chatKey, emptyList())
                     sendAwake("/compact")
                 }
             }
@@ -1433,6 +1478,7 @@ class ChatActivity : JangadaActivity() {
         if (service == null) return
         input.setText("")
         drafts.put(chatKey, "")
+        drafts.putAttachments(chatKey, emptyList())
         newConversation()
     }
 
@@ -1440,6 +1486,7 @@ class ChatActivity : JangadaActivity() {
     private fun openHistoryFromBox() {
         input.setText("")
         drafts.put(chatKey, "")
+        drafts.putAttachments(chatKey, emptyList())
         showHistory()
     }
 
@@ -1510,6 +1557,7 @@ class ChatActivity : JangadaActivity() {
         input.setText("")
         // Enviado: o rascunho sai já, para não voltar se o app morrer antes do onPause.
         drafts.put(chatKey, "")
+        drafts.putAttachments(chatKey, emptyList())
         pendingAttachments.clear()
         renderAttachments()
         chat.sendMessage(text, files)
@@ -1672,7 +1720,95 @@ class ChatActivity : JangadaActivity() {
         if (canDelete) rows += Sheet.Row(title = getString(R.string.chat_history_delete_row), destructive = true) {
             showDeleteHistory(conversations)
         }
+        // Busca nas conversas (só o Claude: a lista dos outros agentes é do próprio agente).
+        if (isClaude) rows.add(0, Sheet.Row(title = getString(R.string.chat_history_search), icon = "🔍") { askSearch() })
         Sheet(this).title(getString(R.string.chat_history)).rows(rows).show()
+    }
+
+    /** Busca nas conversas do Claude: pede as palavras e, com texto, procura (ver [searchHistory]). */
+    private fun askSearch() {
+        val field = EditText(this).apply {
+            setSingleLine(true)
+            hint = getString(R.string.chat_history_search_hint)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.chat_history_search)
+            .setView(field)
+            .setPositiveButton(R.string.chat_history_search_go) { _, _ ->
+                val text = field.text.toString().trim()
+                if (text.isNotEmpty()) searchHistory(text)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Lê os arquivos da pasta fora da thread principal; falha conta como nada achado. */
+    private fun searchHistory(text: String) {
+        val cwd = chatCwd
+        thread(name = "chat-search") {
+            val found = runCatching {
+                ChatHistory.search(linux, cwd, text, cancelled = { isDestroyed || isFinishing })
+            }.getOrDefault(emptyList())
+            runOnUiThread { if (!isDestroyed) showSearchResults(text, found) }
+        }
+    }
+
+    /** Resultados da busca: tocar numa conversa faz o mesmo que na linha do Histórico. */
+    private fun showSearchResults(query: String, found: List<ChatHistory.Match>) {
+        val svc = service ?: return
+        if (found.isEmpty()) {
+            Toast.makeText(this, R.string.chat_history_search_none, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val rows = found.map { match ->
+            Sheet.Row(title = match.conversation.title, description = match.snippet) {
+                val conversation = match.conversation
+                val isCurrent = conversation.id == engine?.sessionId
+                if (!isCurrent && !busyBlocks()) reopenChat(svc) {
+                    svc.openChat(agentId, folder = folder, resume = conversation.id, restart = true)
+                }
+            }
+        }
+        Sheet(this).title(getString(R.string.chat_history_search_results, query)).rows(rows).show()
+    }
+
+    /** Anexos guardados no rascunho deste trabalho: refaz os que ainda estão em ~/projetos/anexos. */
+    private fun restoreDraftAttachments() {
+        val saved = drafts.getAttachments(chatKey)
+        if (saved.isEmpty()) return
+        thread(name = "chat-draft-attachments") {
+            val restored = saved.mapNotNull { (name, path, mime) ->
+                runCatching { Attachments.restore(linux, name, path, mime) }.getOrNull()
+            }
+            runOnUiThread {
+                // Se o usuário já anexou algo (ou a tela fechou), não mexe.
+                if (!isDestroyed && pendingAttachments.isEmpty()) {
+                    pendingAttachments += restored
+                    renderAttachments()
+                }
+            }
+        }
+    }
+
+    /**
+     * Salva a conversa deste trabalho como Markdown, no arquivo que o usuário escolher. O texto vai
+     * para [pendingExport] antes de abrir o seletor de arquivos (ver [exportPicker]).
+     */
+    private fun exportConversation() {
+        val items = engine?.items?.toList().orEmpty()
+        if (items.isEmpty()) {
+            Toast.makeText(this, R.string.chat_export_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val place = if (folder.isEmpty()) displayPath(Workspace.ROOT) else folder
+        pendingExport = ChatExport.markdown("$agentName · $place", items, getString(R.string.chat_export_you), agentName)
+        val stamp = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date())
+        runCatching { exportPicker.launch("conversa-$stamp.md") }.onFailure {
+            // Sem app de arquivos para escolher o destino: nada foi salvo.
+            pendingExport = null
+            Toast.makeText(this, R.string.chat_export_failed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** Apagar conversas: cada uma em vermelho; tocar numa pede a confirmação e, depois, volta a lista. */
@@ -1818,6 +1954,11 @@ class ChatActivity : JangadaActivity() {
         ) { loadFolders { folders -> showWorktreeFinish(folders) } }
         rows += autoCompactRow()
         rows += Sheet.Row(
+            title = getString(R.string.chat_export),
+            description = getString(R.string.chat_export_desc),
+            icon = "⇩",
+        ) { exportConversation() }
+        rows += Sheet.Row(
             title = getString(R.string.chat_menu_settings),
             description = getString(R.string.chat_menu_settings_desc),
             icon = "⚙",
@@ -1854,6 +1995,11 @@ class ChatActivity : JangadaActivity() {
             description = getString(R.string.opencode_auth_row_desc),
             icon = "🔑",
         ) { openOpenCodeAccounts() }
+        if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += Sheet.Row(
+            title = getString(R.string.opencode_usage_row),
+            description = getString(R.string.opencode_usage_row_desc, OpenCodeStats.DAYS),
+            icon = "📊",
+        ) { openOpenCodeUsage() }
         // Sem ajustes do agente (ou sem chat pronto), o painel mostra a pasta e a visualização, que são do app.
         if (!isClaude) rows += optionRows(engine as? AcpChat)
         Sheet(this).title(getString(R.string.chat_settings_title)).rows(rows).show()
@@ -2137,44 +2283,44 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Tira o trabalho isolado: antes, fecha as sessões de terminal e os chats (de todos os
-     * agentes, rodando ou parados) dessa pasta; quando todos saírem, remove o worktree e a branch.
-     * Os avisos de saída chegam na thread principal: o contador não precisa de trava.
+     * Tira o trabalho isolado: o serviço trava a pasta e fecha as sessões de terminal e os chats
+     * (de todos os agentes, rodando ou parados) dela (closeFolder, no máximo 5 s de espera);
+     * depois, remove o worktree e a branch. A pasta fica travada até o git terminar, para nenhum
+     * chat reabrir nela no meio. Pasta já ocupada (tela Projetos mexendo nela): avisa e desiste.
      */
     private fun removeWorktree(svc: TerminalService, job: WorktreeJob, force: Boolean) {
-        svc.sessionFolder.filterValues { it == job.folder }.keys.toList().forEach { svc.closeSession(it) }
-        val slots = svc.chats.values.filter { it.folder == job.folder }
-        if (slots.isEmpty()) {
-            removeFromGit(job, force)
-            return
-        }
-        var waiting = slots.size
-        for (slot in slots) {
-            svc.closeChat(slot.agentId, slot.folder) {
-                waiting--
-                if (waiting == 0) removeFromGit(job, force)
-            }
+        val started = svc.closeFolder(job.folder) { removeFromGit(svc, job, force) }
+        if (!started) {
+            removingWorktree = false
+            setPreparing(false)
+            Toast.makeText(this, R.string.projects_folder_busy, Toast.LENGTH_LONG).show()
         }
     }
 
     /**
-     * `git worktree remove` e `git branch -d` (ou -D) no repositório base; ao fim, abre o chat
-     * dele. Se a remoção falha, mostra o erro e oferece reabrir o trabalho na pasta.
+     * `git worktree remove` e `git branch -d` (ou -D) no repositório base; ao fim, solta a pasta
+     * (sempre, mesmo com a tela fechada) e abre o chat do base. Se a remoção falha, mostra o erro
+     * e oferece reabrir o trabalho na pasta.
      */
-    private fun removeFromGit(job: WorktreeJob, force: Boolean) {
+    private fun removeFromGit(svc: TerminalService, job: WorktreeJob, force: Boolean) {
         val basePath = Workspace.path(job.base)
         val removeArgs = listOfNotNull("worktree", "remove", if (force) "--force" else null, Workspace.path(job.folder))
         thread(name = "chat-worktree-remove") {
-            val removed = Git.run(linux, basePath, *removeArgs.toTypedArray())
-            if (removed.code != 0) {
-                onUi { showRemoveFailed(job, removed) }
-                return@thread
-            }
+            val removed = runCatching { Git.run(linux, basePath, *removeArgs.toTypedArray()) }
             val branch = job.branch
-            val deleted = if (branch == null) null else Git.run(linux, basePath, "branch", if (force) "-D" else "-d", branch)
-            onUi {
+            val deleted = removed.getOrNull()?.takeIf { it.code == 0 }?.let {
+                if (branch == null) null else runCatching { Git.run(linux, basePath, "branch", if (force) "-D" else "-d", branch) }.getOrNull()
+            }
+            runOnUiThread {
+                svc.releaseFolder(job.folder)
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                val result = removed.getOrNull()
+                if (result == null || result.code != 0) {
+                    showRemoveFailed(job, result)
+                    return@runOnUiThread
+                }
                 removingWorktree = false
-                if (deleted != null && deleted.code != 0) {
+                if (branch != null && (deleted == null || deleted.code != 0)) {
                     Toast.makeText(this, getString(R.string.chat_worktree_branch_kept, branch), Toast.LENGTH_LONG).show()
                 }
                 openJobScreen(agentId, job.base)
@@ -2186,9 +2332,10 @@ class ChatActivity : JangadaActivity() {
      * O worktree não saiu, mas os chats da pasta já foram fechados: a tela não pode ficar sem
      * chat e sem saída. Mostra o erro e oferece reabrir o trabalho aqui ou ir para o base.
      */
-    private fun showRemoveFailed(job: WorktreeJob, result: Git.Result) {
+    private fun showRemoveFailed(job: WorktreeJob, result: Git.Result?) {
         removingWorktree = false
-        val body = getString(R.string.chat_worktree_remove_failed) + "\n\n" + result.shown.ifBlank { getString(R.string.git_failed_title) }
+        val shown = result?.shown.orEmpty()
+        val body = getString(R.string.chat_worktree_remove_failed) + "\n\n" + shown.ifBlank { getString(R.string.git_failed_title) }
         AlertDialog.Builder(this)
             .setTitle(R.string.chat_worktree_title)
             .setMessage(body)
@@ -2250,6 +2397,44 @@ class ChatActivity : JangadaActivity() {
     }
 
     /** Contas e chaves do OpenCode: lê as contas fora da thread principal e abre o painel. */
+    /**
+     * Consumo do OpenCode por modelo nos últimos dias (`opencode stats`, ver [OpenCodeStats]): tokens e
+     * custo. Lido fora da thread principal; falha ou formato inesperado avisa e não mostra nada.
+     */
+    private fun openOpenCodeUsage() {
+        runOpenCodeTask(getString(R.string.opencode_usage_loading), {
+            val out = StringBuilder()
+            linux.runBash(OpenCodeStats.SCRIPT) { out.append(it).append('\n') }
+            OpenCodeStats.parse(out.toString())
+        }) { usage ->
+            if (usage == null) {
+                openCodeToast(getString(R.string.opencode_usage_failed))
+                return@runOpenCodeTask
+            }
+            val locale = resources.configuration.locales[0]
+            val k = getString(R.string.opencode_usage_thousand)
+            val m = getString(R.string.opencode_usage_million)
+            fun count(v: Long) = OpenCodeStats.shortCount(v, k, m, locale)
+            val summary = getString(
+                R.string.opencode_usage_summary,
+                OpenCodeStats.DAYS, usage.sessions, count(usage.tokens), OpenCodeStats.dollars(usage.cost, locale),
+            )
+            val rows = usage.models.map { model ->
+                Sheet.Row(
+                    title = model.model,
+                    description = getString(
+                        R.string.opencode_usage_model,
+                        count(model.input), count(model.output + model.reasoning), count(model.cacheRead),
+                    ),
+                    value = OpenCodeStats.dollars(model.cost, locale),
+                ) {}
+            }
+            val sheet = Sheet(this).title(getString(R.string.opencode_usage_title)).message(summary)
+            if (rows.isEmpty()) sheet.message(summary + "\n\n" + getString(R.string.opencode_usage_empty))
+            sheet.rows(rows).show()
+        }
+    }
+
     private fun openOpenCodeAccounts() {
         runOpenCodeTask(getString(R.string.opencode_auth_loading), { OpenCodeAuth.list(linux) }) { accounts ->
             if (accounts == null) openCodeToast(getString(R.string.opencode_auth_read_failed))
@@ -2361,12 +2546,39 @@ class ChatActivity : JangadaActivity() {
                 }
                 field.text.clear()
                 dialog.dismiss()
-                runOpenCodeTask(getString(R.string.opencode_auth_connecting, name), { OpenCodeAuth.login(linux, id, key) }) { ok ->
-                    openCodeToast(getString(if (ok == true) R.string.opencode_auth_added else R.string.opencode_auth_add_failed))
+                if (!OpenCodeAuth.canCheckKey(id)) {
+                    connectOpenCodeKey(id, name, key)
+                    return@setOnClickListener
+                }
+                // Antes de conectar, pergunta ao provedor se a chave vale (o opencode aceita qualquer texto).
+                runOpenCodeTask(getString(R.string.opencode_auth_checking, name), { OpenCodeAuth.checkKey(linux, id, key) }) { check ->
+                    if (check == OpenCodeAuth.KeyCheck.INVALID) confirmRejectedKey(id, name, key)
+                    else connectOpenCodeKey(id, name, key)
                 }
             }
         }
         dialog.show()
+    }
+
+    /** Conecta a integração [id] com a chave já conferida (ou que não deu para conferir). */
+    private fun connectOpenCodeKey(id: String, name: String, key: String) {
+        runOpenCodeTask(getString(R.string.opencode_auth_connecting, name), { OpenCodeAuth.login(linux, id, key) }) { ok ->
+            openCodeToast(getString(if (ok == true) R.string.opencode_auth_added else R.string.opencode_auth_add_failed))
+        }
+    }
+
+    /**
+     * O provedor recusou a chave: oferece digitar de novo ou conectar mesmo assim (a resposta do
+     * provedor pode estar errada, ou a chave ainda não ter sido liberada).
+     */
+    private fun confirmRejectedKey(id: String, name: String, key: String) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.opencode_auth_key_rejected_title)
+            .setMessage(getString(R.string.opencode_auth_key_rejected, name))
+            .setPositiveButton(R.string.opencode_auth_key_retype) { _, _ -> askOpenCodeKey(id, name) }
+            .setNeutralButton(R.string.opencode_auth_key_anyway) { _, _ -> connectOpenCodeKey(id, name, key) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     /** Confirma a remoção de uma conta; a conta sai só com o OK. */
@@ -2381,7 +2593,7 @@ class ChatActivity : JangadaActivity() {
                     val svc = service ?: return@setPositiveButton
                     if (busyBlocks()) return@setPositiveButton
                     Toast.makeText(this, getString(R.string.login_come_back), Toast.LENGTH_LONG).show()
-                    openTerminal(svc, "opencode auth logout ${AgentRecipe.q(account.integration)}", login = true)
+                    openTerminal(svc, "opencode auth logout ${AgentRecipe.q(account.integration)} --standalone", login = true)
                 }
                 .setNegativeButton(android.R.string.cancel, null)
                 .show()
@@ -3353,27 +3565,34 @@ class ChatActivity : JangadaActivity() {
         /** Aviso da conversa; com [ChatItem.Info.details], um link "Detalhes" abre o erro completo. */
         private fun infoText(item: ChatItem.Info, old: TextView?) = (old ?: TextView(this@ChatActivity)).apply {
             val details = item.details
-            text = if (details == null) {
+            val url = item.url
+            val hasLink = details != null || url != null
+            text = if (!hasLink) {
                 item.text
             } else {
                 SpannableStringBuilder(item.text).apply {
-                    append("\n")
-                    val start = length
-                    append(getString(R.string.chat_error_details))
-                    setSpan(
-                        object : ClickableSpan() {
-                            override fun onClick(widget: View) = showDetails(R.string.chat_error_details, details)
+                    // Cada link numa linha própria: o do endereço (ex.: assinar o plano) e o de Detalhes.
+                    fun link(label: String, action: () -> Unit) {
+                        append("\n")
+                        val start = length
+                        append(label)
+                        setSpan(
+                            object : ClickableSpan() {
+                                override fun onClick(widget: View) = action()
 
-                            override fun updateDrawState(ds: TextPaint) {
-                                ds.isUnderlineText = true
-                                ds.color = getColor(R.color.accent_text)
-                            }
-                        },
-                        start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                    )
+                                override fun updateDrawState(ds: TextPaint) {
+                                    ds.isUnderlineText = true
+                                    ds.color = getColor(R.color.accent_text)
+                                }
+                            },
+                            start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+                        )
+                    }
+                    if (url != null) link(item.urlLabel ?: url) { openInfoUrl(url) }
+                    if (details != null) link(getString(R.string.chat_error_details)) { showDetails(R.string.chat_error_details, details) }
                 }
             }
-            movementMethod = if (details != null) LinkMovementMethod.getInstance() else null
+            movementMethod = if (hasLink) LinkMovementMethod.getInstance() else null
             gravity = Gravity.CENTER
             textSize = 13f * chatScale
             setTextColor(getColor(if (item.isError) R.color.setup_error else R.color.setup_muted))

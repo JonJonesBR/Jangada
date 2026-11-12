@@ -37,6 +37,9 @@ object Projects {
     /** Código de saída do script de clone quando a pasta de destino já existe. */
     const val CLONE_EXISTS = 3
 
+    /** Código de saída do script de cópia quando falta espaço para ela (ver [copyScript]). */
+    const val COPY_NO_SPACE = 4
+
     /**
      * Argumentos `-c` do git para operações de rede (envio): sem resposta, o git desiste (velocidade
      * mínima por tempo), e o ssh não pergunta nada (BatchMode, aceita uma chave de servidor nova
@@ -68,6 +71,95 @@ object Projects {
         val made = Hosting.create(linux, name, host, isPrivate = true, push = false)
         val hostOutput = if (made.code == 0) null else made.shown.ifBlank { "exit ${made.code}" }
         return Result.Created(name, null, hostOutput)
+    }
+
+    /** Resultado de [delete]: saiu, ou a saída do git / o erro quando não deu certo. */
+    sealed class Deleted {
+        object Ok : Deleted()
+        class Failed(val output: String) : Deleted()
+    }
+
+    /**
+     * Exclui o projeto [item] (pasta da lista de [Workspace.list]). Quem chama já fechou os chats e
+     * terminais dela (TerminalService.closeFolder) e conferiu [ProjectOps.deleteRefusal].
+     * Um trabalho isolado sai pelo git (`worktree remove --force` na base e a branch jangada/<nome>
+     * apagada); se a base não existe mais, a pasta é apagada. As outras pastas são apagadas sem
+     * atravessar links (Fs). Fora da thread principal.
+     */
+    fun delete(linux: LinuxEnv, item: Workspace.Folder): Deleted {
+        if (!Workspace.isListable(item.name)) return Deleted.Failed("")
+        val root = Workspace.hostPath(linux.rootfs, Workspace.ROOT).toPath()
+        val dir = Workspace.hostPath(linux.rootfs, Workspace.path(item.name)).toPath()
+        // Raiz e pasta de verdade (nem link), e a pasta direto dentro da raiz.
+        if (!Fs.isDir(root) || !Fs.isDir(dir) || dir.parent != root) return Deleted.Failed("")
+        val base = item.worktreeOf
+        if (base != null && Workspace.existing(linux.rootfs, base) == base) {
+            val removed = Git.run(linux, Workspace.path(base), "worktree", "remove", "--force", Workspace.path(item.name))
+            if (removed.code != 0) return Deleted.Failed(removed.shown)
+            // Só a branch que o próprio app criou (convenção dos trabalhos isolados).
+            val branch = item.branch
+            if (branch != null && branch.startsWith(WORKTREE_BRANCH)) Git.run(linux, Workspace.path(base), "branch", "-D", branch)
+            return Deleted.Ok
+        }
+        return runCatching { Fs.deleteTree(dir) }
+            .fold({ Deleted.Ok }, { e -> Deleted.Failed(e.message.orEmpty()) })
+    }
+
+    /**
+     * Pasta das conversas do Claude Code de [folder] (em /root/.claude/projects), se ela e as de
+     * cima são pastas de verdade (nenhum link no caminho); senão null.
+     */
+    fun claudeHistoryDir(linux: LinuxEnv, folder: String): java.nio.file.Path? {
+        var current = linux.rootfs.toPath()
+        for (part in listOf("root", ".claude", "projects", Workspace.claudeProjectKey(Workspace.path(folder)))) {
+            current = current.resolve(part)
+            if (!Fs.isDir(current)) return null
+        }
+        return current
+    }
+
+    /** Apaga as conversas do Claude Code de [folder] (sem atravessar links). Fora da thread principal. */
+    fun deleteClaudeHistory(linux: LinuxEnv, folder: String): Boolean {
+        val dir = claudeHistoryDir(linux, folder) ?: return true
+        return runCatching { Fs.deleteTree(dir) }.isSuccess
+    }
+
+    /** Resultado de [rename]. */
+    enum class Renamed {
+        /** Pasta e conversas do Claude renomeadas. */
+        OK,
+        /** A pasta mudou de nome, mas as conversas do Claude ficaram no nome antigo. */
+        HISTORY_KEPT,
+        /** Já existe algo com o nome novo (também oculto ou link). */
+        EXISTS,
+        /** Nada mudou. */
+        FAILED,
+    }
+
+    /**
+     * Renomeia o projeto [old] para [new] (num movimento só, sem sobrescrever) e leva junto a pasta
+     * de conversas do Claude Code, para o histórico e o "continuar" seguirem funcionando. Quem chama
+     * já fechou os chats e terminais (TerminalService.closeFolder) e conferiu [ProjectOps.renameRefusal].
+     * As conversas de outros agentes ficam onde estão. Fora da thread principal.
+     */
+    fun rename(linux: LinuxEnv, old: String, new: String): Renamed {
+        if (!Workspace.isListable(old) || !Workspace.isValidName(new)) return Renamed.FAILED
+        val root = Workspace.hostPath(linux.rootfs, Workspace.ROOT).toPath()
+        val from = Workspace.hostPath(linux.rootfs, Workspace.path(old)).toPath()
+        val to = Workspace.hostPath(linux.rootfs, Workspace.path(new)).toPath()
+        if (!Fs.isDir(root) || !Fs.isDir(from) || from.parent != root || to.parent != root) return Renamed.FAILED
+        // Só a caixa muda ("app" para "App"): num disco que não diferencia, o destino "existe" e é a própria pasta.
+        val sameEntry = old.equals(new, ignoreCase = true) && Fs.exists(to) && runCatching { java.nio.file.Files.isSameFile(from, to) }.getOrDefault(false)
+        if (Fs.exists(to) && !sameEntry) return Renamed.EXISTS
+        val moved = runCatching { java.nio.file.Files.move(from, to, java.nio.file.StandardCopyOption.ATOMIC_MOVE) }.isSuccess
+        if (!moved) return Renamed.FAILED
+        val (oldKey, newKey) = ProjectOps.claudeHistoryMove(old, new)
+        if (oldKey == newKey) return Renamed.OK
+        val history = claudeHistoryDir(linux, old) ?: return Renamed.OK
+        val target = history.resolveSibling(newKey)
+        // Já há conversas no nome novo: não mistura nem sobrescreve.
+        if (Fs.exists(target)) return Renamed.HISTORY_KEPT
+        return if (runCatching { java.nio.file.Files.move(history, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE) }.isSuccess) Renamed.OK else Renamed.HISTORY_KEPT
     }
 
     /**
@@ -151,6 +243,34 @@ object Projects {
     }
 
     /**
+     * Script que duplica o projeto [source] para a pasta nova [name] de ~/projetos. Copia numa pasta
+     * oculta (a mesma do clone, então [cleanupScript] serve) e só renomeia no fim. `cp -a` copia
+     * links como links (não segue) e mantém permissões e datas. Antes, confere o espaço: a cópia
+     * precisa caber com folga de 10% (sai com [COPY_NO_SPACE]). Os registros de trabalhos isolados
+     * (.git/worktrees) não vão junto: apontariam para as pastas do original. Sai com [CLONE_EXISTS]
+     * se a pasta já existe.
+     */
+    fun copyScript(source: String, name: String): String {
+        val tmp = cloneTemp(name)
+        return """
+            set -e
+            if [ -L ${q(Workspace.ROOT)} ] || [ ! -d ${q(Workspace.ROOT)} ]; then echo "${Workspace.ROOT}: not a directory" >&2; exit 1; fi
+            cd ${q(Workspace.ROOT)}
+            if [ -L ${q(source)} ] || [ ! -d ${q(source)} ]; then echo ${q("$source: not a directory")} >&2; exit 1; fi
+            if [ -e ${q(name)} ] || [ -L ${q(name)} ]; then exit $CLONE_EXISTS; fi
+            rm -rf -- ${q(tmp)}
+            need=${'$'}(du -sk -- ${q(source)} | cut -f1)
+            free=${'$'}(df -Pk . | awk 'NR==2 {print ${'$'}4}')
+            if [ -n "${'$'}need" ] && [ -n "${'$'}free" ] && [ ${'$'}((need + need / 10)) -gt "${'$'}free" ]; then exit $COPY_NO_SPACE; fi
+            echo "${'$'}need KB"
+            cp -a --reflink=auto -- ${q(source)} ${q(tmp)}
+            if [ -d ${q("$tmp/.git/worktrees")} ] && [ ! -L ${q("$tmp/.git")} ]; then rm -rf -- ${q("$tmp/.git/worktrees")}; fi
+            if [ -e ${q(name)} ] || [ -L ${q(name)} ]; then rm -rf -- ${q(tmp)}; exit $CLONE_EXISTS; fi
+            mv -T -- ${q(tmp)} ${q(name)}
+        """.trimIndent()
+    }
+
+    /**
      * Script que apaga a pasta oculta de um clone que não terminou (o processo pode ter sido morto no meio).
      * Com a raiz virada link, não apaga nada (o clone nem começou, ver [cloneScript]).
      */
@@ -176,5 +296,19 @@ object Projects {
         else -> null
     }
 
+    /**
+     * Explicação de um `git pull --ff-only` recusado: a branch daqui e a do remoto se separaram, ou
+     * há mudanças sem commit que o pull sobrescreveria. Null se a saída não é nenhum desses casos.
+     */
+    fun pullHint(output: String): Int? = when {
+        output.contains("Not possible to fast-forward", ignoreCase = true) ||
+            output.contains("diverg", ignoreCase = true) -> R.string.remote_pull_diverged
+        output.contains("would be overwritten", ignoreCase = true) -> R.string.remote_pull_dirty
+        else -> null
+    }
+
     private fun q(text: String) = AgentRecipe.q(text)
+
+    /** Prefixo das branches dos trabalhos isolados (ver Worktrees.create). */
+    private const val WORKTREE_BRANCH = "jangada/"
 }

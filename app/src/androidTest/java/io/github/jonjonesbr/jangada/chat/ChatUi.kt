@@ -124,10 +124,14 @@ object ChatUi {
         return found!!
     }
 
-    /** Toca no botão (ou linha) com o texto exato do recurso [res]. */
+    /**
+     * Toca no botão (ou linha) com o texto do recurso [res], inteiro. Sem diferença de maiúsculas: os
+     * botões dos diálogos aparecem em maiúsculas no Android 11 ("DELETE").
+     */
     fun tap(res: Int, fake: String, timeoutMs: Long = 30_000) {
         val text = context.getString(res)
-        val found = device.wait(Until.findObject(By.text(text)), timeoutMs)
+        val exact = java.util.regex.Pattern.compile(java.util.regex.Pattern.quote(text), java.util.regex.Pattern.CASE_INSENSITIVE)
+        val found = device.wait(Until.findObject(By.text(exact)), timeoutMs)
         if (found == null) fail(failure("\"$text\" não apareceu.", fake))
         found!!.click()
     }

@@ -1,6 +1,7 @@
 package io.github.jonjonesbr.jangada.linux
 
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
+import org.json.JSONArray
 import java.io.IOException
 
 /**
@@ -18,7 +19,7 @@ object OpenCodeAuth {
     /** Id da receita do agente no catálogo (assets/agents/opencode.json). */
     const val AGENT_ID = "opencode"
 
-    /** Conta conectada. [integration] é o id (ex.: opencode-go); no caminho sem SQLite, o nome mostrado. */
+    /** Conta conectada. [integration] é o id (ex.: opencode-go); só no caminho da lista de texto, o nome mostrado. */
     data class Account(val integration: String, val label: String, val active: Boolean)
 
     /** Integrações sugeridas no painel (id → nome mostrado). Outro id é digitado pelo usuário. */
@@ -36,6 +37,7 @@ object OpenCodeAuth {
     /** Marcas da primeira linha de [listScript]: de onde veio a lista. */
     private const val MARK_SQL = "JANGADA_ACCOUNTS_SQL"
     private const val MARK_TEXT = "JANGADA_ACCOUNTS_TEXT"
+    private const val MARK_JSON = "JANGADA_ACCOUNTS_JSON"
 
     /** Caminho do banco do OpenCode, dentro do Debian (expandido pelo shell). */
     private const val DB = "\"\$HOME/.local/share/opencode/opencode.db\""
@@ -65,12 +67,13 @@ object OpenCodeAuth {
      */
     fun parseListed(lines: List<String>): List<Account>? {
         // A marca pode não ser a primeira linha: o bash -i do runBash avisa antes ("no job control").
-        val first = lines.indexOfFirst { it.trim() == MARK_SQL || it.trim() == MARK_TEXT }
+        val first = lines.indexOfFirst { it.trim() == MARK_SQL || it.trim() == MARK_TEXT || it.trim() == MARK_JSON }
         if (first < 0) return null
         val rest = lines.drop(first + 1)
         return when (lines[first].trim()) {
             MARK_SQL -> parseAccounts(rest)
             MARK_TEXT -> parseListText(rest)
+            MARK_JSON -> parseListJson(rest.joinToString("\n"))
             else -> null
         }
     }
@@ -101,6 +104,34 @@ object OpenCodeAuth {
         Account(integration = parts[0], label = parts[1], active = true)
     }
 
+    /**
+     * Saída de `opencode auth list --format json`: uma lista de integrações (`id`, `name`) com as
+     * conexões de cada uma (`label`, `method`). A chave não vem nesse JSON; mesmo assim, só id e
+     * rótulo são lidos. O JSON não diz qual conta está em uso: cada uma conta como ativa. Integração
+     * com id inválido ou conexão sem rótulo é ignorada. JSON que não se entende vira null.
+     */
+    fun parseListJson(text: String): List<Account>? = try {
+        val start = text.indexOf('[')
+        if (start < 0) null
+        else {
+            val integrations = JSONArray(text.substring(start))
+            val accounts = ArrayList<Account>()
+            for (i in 0 until integrations.length()) {
+                val integration = integrations.optJSONObject(i) ?: continue
+                val id = integration.optString("id")
+                if (!isValidIntegration(id)) continue
+                val connections = integration.optJSONArray("connections") ?: continue
+                for (j in 0 until connections.length()) {
+                    val label = connections.optJSONObject(j)?.optString("label")?.trim().orEmpty()
+                    if (isSafeText(label)) accounts += Account(integration = id, label = label, active = true)
+                }
+            }
+            accounts
+        }
+    } catch (e: org.json.JSONException) {
+        null
+    }
+
     /** Nome mostrado de um id: o da lista sugerida ou o próprio id. */
     fun displayName(id: String): String = SUGGESTED.firstOrNull { it.first == id }?.second ?: id
 
@@ -116,6 +147,12 @@ object OpenCodeAuth {
         "  rows=${'$'}(sqlite3 -cmd '.timeout 3000' $DB \"select integration_id||'|'||coalesce(label,'')||'|'||coalesce(active,1) from credential\" 2>/dev/null); then",
         "  echo $MARK_SQL",
         "  [ -n \"${'$'}rows\" ] && printf '%s\\n' \"${'$'}rows\"",
+        // Sem sqlite3 (o caso do celular): o JSON do auth list traz o id e o rótulo, sem a chave.
+        // Versão antiga do opencode, sem --format json, cai na lista de texto.
+        "elif json=${'$'}(timeout 20 opencode auth list --format json --standalone </dev/null 2>/dev/null) &&",
+        "  printf '%s' \"${'$'}json\" | grep -q '^ *\\['; then",
+        "  echo $MARK_JSON",
+        "  printf '%s\\n' \"${'$'}json\"",
         "else",
         "  echo $MARK_TEXT",
         "  opencode auth list --standalone </dev/null 2>/dev/null",
@@ -180,14 +217,100 @@ object OpenCodeAuth {
         return loggedIn(linux, id) ?: true
     }
 
-    /** A integração [id] aparece no SQLite do OpenCode? null se não deu para saber (sem sqlite3, erro). */
+    /** A integração [id] aparece no SQLite ou no JSON do OpenCode? null se não deu para saber (lista de texto, erro). */
     private fun loggedIn(linux: LinuxEnv, id: String): Boolean? = try {
         val lines = ArrayList<String>()
         linux.runBash(listScript()) { lines += it }
-        if (lines.none { it.trim() == MARK_SQL }) null
+        if (lines.none { it.trim() == MARK_SQL || it.trim() == MARK_JSON }) null
         else parseListed(lines)?.any { it.integration == id }
     } catch (e: IOException) {
         null
+    }
+
+    /** Resultado de perguntar ao provedor se a chave vale. */
+    enum class KeyCheck { VALID, INVALID, UNKNOWN }
+
+    /**
+     * Como perguntar a cada provedor se a chave vale, sem gastar nada (lista de modelos ou dados da
+     * chave). [header] tem um %s no lugar da chave. Conferido em 12/11/2026 com chaves falsas: 401
+     * em todos, menos o Google (400 com "API key not valid"). As rotas do OpenCode respondem 200 sem
+     * chave e 401 com chave errada.
+     */
+    private class KeyProbe(val url: String, val header: String, val extra: String? = null)
+
+    private val PROBES = mapOf(
+        "opencode-go" to KeyProbe("https://opencode.ai/zen/go/v1/models", "Authorization: Bearer %s"),
+        "opencode" to KeyProbe("https://opencode.ai/zen/v1/models", "Authorization: Bearer %s"),
+        "openrouter" to KeyProbe("https://openrouter.ai/api/v1/key", "Authorization: Bearer %s"),
+        "anthropic" to KeyProbe("https://api.anthropic.com/v1/models", "x-api-key: %s", "anthropic-version: 2023-06-01"),
+        "openai" to KeyProbe("https://api.openai.com/v1/models", "Authorization: Bearer %s"),
+        "google" to KeyProbe("https://generativelanguage.googleapis.com/v1beta/models", "x-goog-api-key: %s"),
+    )
+
+    private const val MARK_KEYCHECK = "JANGADA_KEYCHECK"
+
+    /** Dá para conferir a chave da integração [id] antes de conectar. */
+    fun canCheckKey(id: String): Boolean = id in PROBES
+
+    /**
+     * Script que pergunta ao provedor de [id] se a chave vale. A chave vem pela entrada padrão (uma
+     * linha) e vai ao curl pela entrada padrão também (`-H @-`): nunca entra na linha de comando de um
+     * processo. Imprime `JANGADA_KEYCHECK <código http> <1 se a resposta diz chave inválida>`. Null
+     * se o provedor não é conhecido.
+     */
+    fun keyCheckScript(id: String): String? {
+        val probe = PROBES[id] ?: return null
+        val headers = listOfNotNull(probe.header, probe.extra).joinToString("\\n")
+        return listOf(
+            "exec 2>/dev/null",
+            "IFS= read -r JANGADA_KEY",
+            // printf é do próprio bash: a chave não aparece na lista de processos.
+            "out=${'$'}(printf '$headers\\n' \"${'$'}JANGADA_KEY\" | curl -s -m 15 -w '\\n$MARK_KEYCHECK_HTTP %{http_code}' -H @- ${AgentRecipe.q(probe.url)})",
+            "unset JANGADA_KEY",
+            "code=${'$'}{out##*$MARK_KEYCHECK_HTTP }",
+            "bad=0",
+            "case \"${'$'}out\" in *'API key not valid'*|*API_KEY_INVALID*) bad=1 ;; esac",
+            "echo \"$MARK_KEYCHECK ${'$'}code ${'$'}bad\"",
+        ).joinToString("\n")
+    }
+
+    private const val MARK_KEYCHECK_HTTP = "JANGADA_HTTP"
+
+    /**
+     * Lê a saída de [keyCheckScript]: 2xx vale; 401, 403 ou a resposta dizendo que a chave é inválida
+     * (o Google responde 400) não vale; o resto (sem internet, tempo esgotado, 429, 5xx) não se sabe.
+     */
+    fun parseKeyCheck(lines: List<String>): KeyCheck {
+        val line = lines.lastOrNull { it.trim().startsWith("$MARK_KEYCHECK ") } ?: return KeyCheck.UNKNOWN
+        val parts = line.trim().split(Regex("\\s+"))
+        val code = parts.getOrNull(1)?.toIntOrNull() ?: return KeyCheck.UNKNOWN
+        val bad = parts.getOrNull(2) == "1"
+        return when {
+            code in 200..299 -> KeyCheck.VALID
+            code == 401 || code == 403 || bad -> KeyCheck.INVALID
+            else -> KeyCheck.UNKNOWN
+        }
+    }
+
+    /**
+     * Pergunta ao provedor de [id] se [key] vale, sem conectar nada. UNKNOWN se o provedor não é
+     * conhecido ou a pergunta falhou. A chave vai pela entrada padrão e a resposta não é guardada.
+     * Fora da thread principal.
+     */
+    fun checkKey(linux: LinuxEnv, id: String, key: String): KeyCheck {
+        val script = keyCheckScript(id) ?: return KeyCheck.UNKNOWN
+        if (!isValidKey(key)) return KeyCheck.UNKNOWN
+        var process: Process? = null
+        return try {
+            process = linux.startProcess(script, secrets = false)
+            process.outputStream.use { it.write("$key\n".toByteArray(Charsets.UTF_8)) }
+            val lines = process.inputStream.bufferedReader().use { it.readLines() }
+            process.waitFor()
+            parseKeyCheck(lines)
+        } catch (e: IOException) {
+            process?.destroy()
+            KeyCheck.UNKNOWN
+        }
     }
 
     /** Remove a conta [account]. Verdadeiro se o logout saiu com código 0. Fora da thread principal. */

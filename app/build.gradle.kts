@@ -17,8 +17,8 @@ android {
         // 28 de propósito, a mesma escolha do Termux: permite executar os programas
         // do ambiente Linux (Etapa 2) a partir da pasta do app. Ver README.
         targetSdk = 28
-        versionCode = 123
-        versionName = "1.17.0"
+        versionCode = 125
+        versionName = "1.19.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -76,6 +76,7 @@ dependencies {
     androidTestImplementation("androidx.test:core-ktx:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-intents:3.6.1")
 }
 
 // Mostra no log do CI o motivo de cada teste que falhar.

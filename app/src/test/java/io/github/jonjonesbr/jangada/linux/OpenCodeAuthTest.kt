@@ -94,6 +94,72 @@ class OpenCodeAuthTest {
         assertNull(OpenCodeAuth.parseListed(emptyList()))
     }
 
+    /** Formato real do `opencode auth list --format json` (2.2.7, conferido com contas falsas). */
+    @Test
+    fun listaEmJson() {
+        val json = """
+            [
+              {"id": "anthropic", "name": "Anthropic", "connections": [
+                {"type": "credential", "id": "cred_1", "label": "OAuth", "method": "oauth"}]},
+              {"id": "openrouter", "name": "OpenRouter", "connections": [
+                {"type": "credential", "id": "cred_2", "label": "API key", "method": "key"},
+                {"type": "credential", "id": "cred_3", "label": "Trabalho", "method": "key"}]},
+              {"id": "Inválido!", "name": "x", "connections": [{"label": "a"}]},
+              {"id": "groq", "name": "Groq", "connections": [{"label": ""}]}
+            ]
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                Account("anthropic", "OAuth", true),
+                Account("openrouter", "API key", true),
+                Account("openrouter", "Trabalho", true),
+            ),
+            OpenCodeAuth.parseListJson(json),
+        )
+        assertEquals(emptyList<Account>(), OpenCodeAuth.parseListJson("[]"))
+        assertNull(OpenCodeAuth.parseListJson("No authenticated integrations"))
+        assertNull(OpenCodeAuth.parseListJson("[{quebrado"))
+        // Pela marca, com o aviso do bash antes e o JSON em várias linhas.
+        assertEquals(
+            listOf(Account("anthropic", "OAuth", true)),
+            OpenCodeAuth.parseListed(
+                listOf(
+                    "bash: no job control in this shell",
+                    "JANGADA_ACCOUNTS_JSON",
+                    "[",
+                    "  {\"id\": \"anthropic\", \"connections\": [",
+                    "    {\"label\": \"OAuth\", \"method\": \"oauth\"}]}",
+                    "]",
+                ),
+            ),
+        )
+    }
+
+    /** Respostas reais com chaves falsas (12/11/2026): 401 nos outros, 400 com marca no Google. */
+    @Test
+    fun conferenciaDaChave() {
+        assertEquals(OpenCodeAuth.KeyCheck.VALID, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 200 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.INVALID, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 401 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.INVALID, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 403 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.INVALID, OpenCodeAuth.parseKeyCheck(listOf("bash: no job control in this shell", "JANGADA_KEYCHECK 400 1")))
+        // Sem internet (curl dá 000 ou nada), limite de pedidos e erro do servidor: não se sabe.
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 000 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK  0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 429 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 400 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(emptyList()))
+
+        assertTrue(OpenCodeAuth.canCheckKey("openrouter"))
+        assertFalse(OpenCodeAuth.canCheckKey("groq"))
+        assertNull(OpenCodeAuth.keyCheckScript("groq"))
+        val script = OpenCodeAuth.keyCheckScript("anthropic")!!
+        // A chave chega pela entrada padrão e vai ao curl pela entrada também: nunca na linha de comando.
+        assertTrue(script.contains("IFS= read -r JANGADA_KEY"))
+        assertTrue(script.contains("-H @-"))
+        assertTrue(script.contains("x-api-key: %s\\nanthropic-version: 2023-06-01\\n"))
+        assertTrue(script.contains("'https://api.anthropic.com/v1/models'"))
+    }
+
     @Test
     fun idDeIntegracao() {
         assertTrue(OpenCodeAuth.isValidIntegration("opencode-go"))

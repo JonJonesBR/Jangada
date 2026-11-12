@@ -15,6 +15,7 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 import java.nio.file.FileAlreadyExistsException
+import java.nio.file.LinkOption
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
 
@@ -56,6 +57,28 @@ object Attachments {
         val guestPath = "/root/${LinuxEnv.WORKSPACE}/$DIR/${target.name}"
         val image = if (mime.startsWith("image/")) encodeImage(target) else null
         return Attachment(target.name, guestPath, if (image != null) "image/jpeg" else mime, image)
+    }
+
+    /**
+     * Refaz um anexo guardado no rascunho, se o arquivo ainda estiver em ~/projetos/anexos. Só aceita
+     * um arquivo direto nessa pasta, sem ".." e sem link (no arquivo nem nas pastas acima). Imagem
+     * é reduzida de novo, como no envio. Null se não der. Rodar fora da thread principal.
+     */
+    fun restore(linux: LinuxEnv, name: String, guestPath: String, mime: String): Attachment? {
+        val prefix = "/root/${LinuxEnv.WORKSPACE}/$DIR/"
+        if (!guestPath.startsWith(prefix)) return null
+        val leaf = guestPath.removePrefix(prefix)
+        if (leaf.isEmpty() || leaf.contains('/') || leaf.contains("..")) return null
+        val workspace = File(linux.rootfs, "root/${LinuxEnv.WORKSPACE}")
+        val dir = File(workspace, DIR)
+        for (path in listOf(File(linux.rootfs, "root"), workspace, dir)) {
+            if (Files.isSymbolicLink(path.toPath())) return null
+        }
+        val file = File(dir, leaf)
+        // NOFOLLOW_LINKS: um link no lugar do arquivo não é regular, então não entra.
+        if (!Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS)) return null
+        val image = if (mime.startsWith("image/")) encodeImage(file) else null
+        return Attachment(name, guestPath, if (image != null) "image/jpeg" else mime, image)
     }
 
     /**

@@ -23,3 +23,13 @@ signing.properties
 *.aab
 # Baixado pelo scripts/fetch-proot.sh na hora do build
 app/src/main/assets/bootstrap/
+# Credenciais e dados sensíveis
+secrets.properties
+google-services.json
+service-account*.json
+credentials*.json
+*.secret
+# Saídas e logs
+out/
+*.log
+*.hprof

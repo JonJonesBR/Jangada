@@ -1,5 +1,25 @@
 # Novidades
 
+## 1.19.0
+
+- Projetos: cada projeto mostra quanto ocupa e, no painel, o total separado em git e dependências. O painel também lista as conversas do Claude do projeto (tocar abre a conversa) e apaga as paradas há mais de 30 dias, só com o projeto fechado.
+- Projetos: Apagar dependências (node_modules, .venv e parecidos), com a lista das pastas antes de confirmar; nunca entra no .git nem segue links.
+- Chat: Buscar nas conversas (Histórico do Claude), com o trecho onde a palavra aparece; Exportar conversa em Markdown, no arquivo que você escolher; os anexos ainda não enviados ficam no rascunho do trabalho e voltam ao reabrir.
+- Chat: encerrar um trabalho isolado trava a pasta até o git terminar, para nenhum chat reabrir nela no meio, e não fica esperando para sempre um agente que não fecha.
+- OpenCode, Contas e chaves: a lista vem do próprio opencode (sem precisar do sqlite3); antes de conectar, o app pergunta ao provedor se a chave vale, sem gastar nada, e oferece digitar de novo quando ela é recusada.
+- OpenCode: Consumo nos Ajustes do chat (tokens e custo por modelo nos últimos 7 dias); limites do OpenCode Go (5 horas, semanal e mensal) no chat e no cartão, com aviso a 90%; e, quando o limite grátis acaba, um aviso com o que fazer e o link do OpenCode Go.
+- OpenCode: nenhum comando do app deixa o servidor do opencode rodando em segundo plano.
+- Clone e cópia: o progresso volta à tela quando você retorna (a não ser que tenha mandado para segundo plano), e o aviso de falha abre o log.
+- Testes no emulador para o painel do projeto, a busca e o rascunho com anexos.
+
+## 1.18.0
+
+- Projetos: tela nova, aberta pelo cartão de armazenamento da tela inicial, com a lista de ~/projetos e, para cada um, Renomear, Duplicar e Excluir. Antes de renomear ou excluir, os chats e terminais da pasta são fechados, e nenhum chat abre nela até o fim.
+- Renomear leva junto as conversas do Claude (o continuar segue funcionando), os rascunhos e a compactação de cada trabalho; as conversas de outros agentes ficam no nome antigo.
+- Excluir pede o nome do projeto digitado e mostra os arquivos sem commit; um trabalho isolado sai pelo git. Apagar as conversas do Claude é opcional. Um repositório com trabalhos isolados não se renomeia nem se exclui antes deles.
+- Duplicar copia a pasta inteira (também o que está fora do git, sem seguir links e sem os trabalhos isolados) em segundo plano, com Cancelar, e confere o espaço livre antes.
+- Mudanças: Atualizar do remoto (git pull só avançando a branch), com explicação quando as branches se separaram ou há mudanças sem commit no caminho.
+
 ## 1.17.0
 
 - Chat do Claude: perguntas do agente (AskUserQuestion) viram um cartão com as opções, uma por pergunta, com "Outra resposta…" para escrever; o plano (ExitPlanMode) aparece formatado, com Aprovar plano ou Continuar planejando, e o aviso não oferece mais "Permitir" para ele.

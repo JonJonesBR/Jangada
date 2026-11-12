@@ -5,9 +5,18 @@ DATA=${FAKE_DATA:-$HOME/.local/share/opencode-fake}; mkdir -p "$DATA"; ACC=$DATA
 echo "ARGV $*" >> "$LOG"
 case "$1" in
   --version) echo "0.0.0-fake"; exit 0 ;;
+  stats) # Consumo (Ajustes do chat): uma linha de JSON, como "opencode stats --json"
+    echo '{"sessions":3,"cost":0.42,"models":[{"model":{"id":"modelo-falso","providerID":"opencode","variant":"default"},"steps":12,"tokens":{"input":15000,"output":2000,"reasoning":0,"cache":{"read":3000,"write":0}},"cost":0.42}]}'
+    exit 0 ;;
   auth)
     case "$2" in
-      list) # colunas separadas por 2+ espaços: integração, rótulo, estado
+      list) # --format json: como o opencode 2.x (id, name, connections com label; nunca a chave)
+        if [ "$3" = "--format" ] && [ "$4" = "json" ]; then
+          sep=; printf '['; while IFS=$'\t' read -r i l; do
+            printf '%s{"id":"%s","name":"%s","connections":[{"type":"credential","id":"cred_%s","label":"%s","method":"key"}]}' "$sep" "$i" "$i" "$i" "$l"; sep=,
+          done < "$ACC"; printf ']\n'; exit 0
+        fi
+        # sem --format: colunas separadas por 2+ espaços: integração, rótulo, estado
         if [ -s "$ACC" ]; then while IFS=$'\t' read -r i l; do printf '%s  %s  active\n' "$i" "$l"; done < "$ACC"
         else echo "No authenticated integrations"; fi; exit 0 ;;
       login) # $3 = integração; a chave vem pelo terminal (pty do "script")

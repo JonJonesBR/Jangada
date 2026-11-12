@@ -60,6 +60,7 @@ import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.askWorktreeName
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
+import io.github.jonjonesbr.jangada.ui.resumeCloneProgress
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -119,6 +120,9 @@ class HomeActivity : JangadaActivity() {
     /** true desde o bindService até o unbindService (feitos em onStart e onStop). */
     private var bound = false
 
+    /** Pasta do clone ou cópia que falhou (extra do aviso), esperando o serviço para mostrar o log. */
+    private var pendingCloneFailure: String? = null
+
     /** Cartão de cada agente (id -> view), para mexer só no que mudou. */
     private val cards = HashMap<String, View>()
     /** Estado de cada tarefa na última vez que os cartões foram desenhados. */
@@ -169,6 +173,8 @@ class HomeActivity : JangadaActivity() {
             return
         }
 
+        // Aviso de clone que falhou: a tela abre com o log (ver showPendingCloneFailure).
+        if (savedInstanceState == null) takeCloneFailure(intent)
         setContentView(R.layout.activity_home)
         agentsList = findViewById(R.id.agents)
         sessionsList = findViewById(R.id.sessions)
@@ -194,6 +200,7 @@ class HomeActivity : JangadaActivity() {
         findViewById<Button>(R.id.open_terminal).setOnClickListener { openTerminal() }
         findViewById<Button>(R.id.storage_allow).setOnClickListener { requestStorage() }
         findViewById<Button>(R.id.storage_details).setOnClickListener { showSpaceDetails() }
+        findViewById<Button>(R.id.projects_open).setOnClickListener { startActivity(Intent(this, ProjectsActivity::class.java)) }
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -252,6 +259,7 @@ class HomeActivity : JangadaActivity() {
         findViewById<View>(R.id.storage_allow).visibility = if (granted) View.GONE else View.VISIBLE
         findViewById<View>(R.id.storage_card).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         findViewById<View>(R.id.storage_details).visibility = if (linux.isReady) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.projects_open).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         renderSpace()
     }
 
@@ -418,6 +426,32 @@ class HomeActivity : JangadaActivity() {
         renderStorage()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takeCloneFailure(intent)
+        showPendingCloneFailure()
+    }
+
+    /** Guarda a pasta do aviso de clone que falhou e tira o extra do intent (para não mostrar de novo). */
+    private fun takeCloneFailure(intent: Intent?) {
+        val target = intent ?: return
+        val folder = target.getStringExtra(TerminalService.EXTRA_CLONE_FAILED) ?: return
+        pendingCloneFailure = folder
+        target.removeExtra(TerminalService.EXTRA_CLONE_FAILED)
+    }
+
+    /** Com o serviço ligado, mostra o log do clone que falhou (se ele ainda estiver como falho). */
+    private fun showPendingCloneFailure() {
+        val folder = pendingCloneFailure ?: return
+        val svc = service ?: return
+        pendingCloneFailure = null
+        val task = svc.clones[folder] ?: return
+        if (task.state != TerminalService.CloneTask.State.RUNNING && task.state != TerminalService.CloneTask.State.OK) {
+            showCloneFailure(task)
+        }
+    }
+
     override fun onStop() {
         service?.let {
             it.removeSessionsListener(sessionsListener)
@@ -459,6 +493,12 @@ class HomeActivity : JangadaActivity() {
             if (acknowledgeFinished(svc)) refreshInstalled()
             renderSessions()
             renderAgents()
+            showPendingCloneFailure()
+            // Clone que seguia com a tela fora: o progresso volta (terminando bem, abre o chat).
+            resumeCloneProgress(svc, { it.source == null }) { done ->
+                if (done.state == TerminalService.CloneTask.State.OK) openChat(done.agentId, done.folder)
+                else showCloneFailure(done)
+            }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {

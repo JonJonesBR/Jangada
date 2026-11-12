@@ -15,6 +15,9 @@ object ChatHistory {
 
     class Conversation(val id: String, val title: String, val updatedAt: Long)
 
+    /** Conversa que contém o texto buscado, com um trecho em volta dele. */
+    class Match(val conversation: Conversation, val snippet: String)
+
     fun dir(linux: LinuxEnv, cwd: String) = File(linux.rootfs, "root/.claude/projects/${Workspace.claudeProjectKey(cwd)}")
 
     fun list(linux: LinuxEnv, cwd: String, limit: Int = 50): List<Conversation> =
@@ -32,6 +35,75 @@ object ChatHistory {
 
     /** Arquivo da conversa [id], se existir. */
     fun file(linux: LinuxEnv, cwd: String, id: String): File? = File(dir(linux, cwd), "$id.jsonl").takeIf { it.isFile }
+
+    /**
+     * Procura [query] nas mensagens das conversas da pasta [cwd] (mais recentes primeiro).
+     * Lê arquivo a arquivo, linha a linha: rodar fora da thread principal. Cada conversa entra
+     * uma vez, com o primeiro trecho achado. Para em [limit] resultados ou quando [cancelled] for verdadeiro.
+     */
+    fun search(
+        linux: LinuxEnv,
+        cwd: String,
+        query: String,
+        limit: Int = 30,
+        cancelled: () -> Boolean = { false },
+    ): List<Match> {
+        val results = mutableListOf<Match>()
+        val files = (dir(linux, cwd).listFiles() ?: emptyArray())
+            .filter { it.name.endsWith(".jsonl") && it.length() > 0 }
+            // Mesma regra de [list]: a data é lida uma vez, para a ordenação ser estável.
+            .map { it to it.lastModified() }
+            .sortedByDescending { it.second }
+        for ((file, modified) in files) {
+            if (results.size >= limit || cancelled()) break
+            runCatching {
+                val snippet = file.bufferedReader().useLines { lines -> findSnippet(lines, query, cancelled) }
+                if (snippet != null) {
+                    val title = title(file)
+                    if (title != null) {
+                        results += Match(Conversation(file.name.removeSuffix(".jsonl"), title, modified), snippet)
+                    }
+                }
+            }
+        }
+        return results
+    }
+
+    /** Primeiro trecho de uma mensagem (do usuário ou do agente) que contém [query]; null se não achar. */
+    private fun findSnippet(lines: Sequence<String>, query: String, cancelled: () -> Boolean): String? {
+        for (line in lines) {
+            if (cancelled()) return null
+            // Teste barato antes de ler o JSON: a maioria das linhas não tem o texto.
+            if (!line.contains(query, ignoreCase = true)) continue
+            for (item in parse(sequenceOf(line), MAX_ITEMS_PER_LINE)) {
+                val text = when (item) {
+                    is ChatItem.User -> item.text
+                    is ChatItem.Assistant -> item.text
+                    else -> null
+                } ?: continue
+                snippet(text, query)?.let { return it }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Trecho de [radius] caracteres antes e depois de [query] em [text] (sem maiúsculas). Quebras de
+     * linha viram espaço; "…" marca o corte. Null se não achar, ou se a busca estiver em branco.
+     */
+    fun snippet(text: String, query: String, radius: Int = 60): String? {
+        val needle = query.trim()
+        if (needle.isEmpty()) return null
+        val at = text.indexOf(needle, ignoreCase = true)
+        if (at < 0) return null
+        var start = (at - radius).coerceAtLeast(0)
+        var end = (at + needle.length + radius).coerceAtMost(text.length)
+        // Não corta um par de surrogates (emoji) ao meio.
+        if (start > 0 && Character.isLowSurrogate(text[start])) start++
+        if (end < text.length && Character.isHighSurrogate(text[end - 1])) end--
+        val middle = text.substring(start, end).replace('\n', ' ').replace('\r', ' ').trim()
+        return (if (start > 0) "…" else "") + middle + (if (end < text.length) "…" else "")
+    }
 
     /**
      * O que já foi conversado, lido do arquivo que o próprio Claude Code
@@ -162,4 +234,6 @@ object ChatHistory {
     }
 
     private const val MAX_LINES = 60
+    /** Mensagens lidas de cada linha na busca (uma linha tem uma mensagem, às vezes com vários blocos). */
+    private const val MAX_ITEMS_PER_LINE = 10
 }

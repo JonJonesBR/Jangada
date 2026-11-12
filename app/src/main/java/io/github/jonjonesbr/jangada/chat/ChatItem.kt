@@ -58,8 +58,17 @@ sealed class ChatItem {
 
     /** Plano de trabalho do agente (lista de tarefas que ele vai atualizando). */
     class Plan(var entries: List<PlanEntry>) : ChatItem()
-    /** [details]: texto técnico (ex.: saída de erro do agente), mostrado sob o link "Detalhes". */
-    class Info(val text: String, val isError: Boolean = false, val details: String? = null) : ChatItem()
+    /**
+     * [details]: texto técnico (ex.: saída de erro do agente), mostrado sob o link "Detalhes".
+     * [url]: endereço aberto pelo link [urlLabel] (ex.: assinar um plano).
+     */
+    class Info(
+        val text: String,
+        val isError: Boolean = false,
+        val details: String? = null,
+        val url: String? = null,
+        val urlLabel: String? = null,
+    ) : ChatItem()
     /** Raciocínio do agente: sempre guardado na conversa; a tela decide se mostra (ver [ChatView]). */
     class Thinking(var text: String) : ChatItem()
     /**

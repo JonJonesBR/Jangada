@@ -120,4 +120,15 @@ class ChatHistoryTest {
         assertEquals("", ToolText.summary("Write", null))
         assertEquals(null, ToolText.labelRes("FerramentaNova"))
     }
+
+    @Test
+    fun trechoDaBusca() {
+        assertEquals("Oi mundo", ChatHistory.snippet("Oi mundo", "mundo", radius = 60))
+        // Ignora maiúsculas e corta dos dois lados com reticências.
+        assertEquals("…aaaa BUSCA bbbb…", ChatHistory.snippet("xxxxaaaa BUSCA bbbbyyyy", "busca", radius = 5))
+        // Quebra de linha vira espaço.
+        assertEquals("linha um linha dois", ChatHistory.snippet("linha um\nlinha dois", "dois", radius = 60))
+        assertNull(ChatHistory.snippet("nada aqui", "outra"))
+        assertNull(ChatHistory.snippet("nada aqui", "   "))
+    }
 }

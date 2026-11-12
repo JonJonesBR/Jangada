@@ -1,0 +1,1 @@
+Projects: size of each one, Claude conversations (open, delete old ones) and delete dependencies. Chat: search conversations, export as Markdown and attachments kept in the draft. OpenCode: checks the key before connecting, shows usage per model, Go limits and a clear notice when the free limit runs out. Clone: progress comes back to the screen and a failure opens the log.

@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada
 
 import android.content.Context
 import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.linux.ProjectOps
 
 /** Preferências do usuário (tela de configurações). */
 class AppSettings(context: Context) {
@@ -124,6 +125,29 @@ class AppSettings(context: Context) {
     /** O valor que vale para o trabalho [key]: o dele, ou o geral (ver AutoCompact.effectiveAutoCompact). */
     fun autoCompactFor(key: String): String =
         AutoCompact.effectiveAutoCompact(autoCompact, jobPrefs.getString(key, null))
+
+    /**
+     * Projeto excluído: tira a compactação dos trabalhos da pasta [folder] e, se ela era a última
+     * pasta usada no chat, volta à raiz.
+     */
+    fun forgetFolder(folder: String) {
+        val editor = jobPrefs.edit()
+        jobPrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { editor.remove(it) }
+        editor.apply()
+        if (chatFolder == folder) chatFolder = ""
+    }
+
+    /** Projeto renomeado: os ajustes dos trabalhos e a última pasta usada passam de [old] para [new]. */
+    fun moveFolder(old: String, new: String) {
+        val editor = jobPrefs.edit()
+        for ((key, value) in jobPrefs.all) {
+            val moved = ProjectOps.movedKey(key, old, new) ?: continue
+            if (value is String) editor.putString(moved, value)
+            editor.remove(key)
+        }
+        editor.apply()
+        if (chatFolder == old) chatFolder = new
+    }
 
     /** Limpeza automática dos caches (uma vez por dia, ver TerminalService.maybeAutoClean). */
     var autoClean: Boolean
