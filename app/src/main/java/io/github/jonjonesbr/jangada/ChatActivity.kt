@@ -71,6 +71,7 @@ import io.github.jonjonesbr.jangada.chat.limitsSummary
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
+import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
@@ -95,7 +96,9 @@ import io.github.jonjonesbr.jangada.ui.dpToPx
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
 import java.io.File
+import java.text.SimpleDateFormat
 import java.util.Collections
+import java.util.Date
 import java.util.IdentityHashMap
 import java.util.Locale
 import java.util.WeakHashMap
@@ -204,6 +207,27 @@ class ChatActivity : JangadaActivity() {
     private val attachPicker = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isNotEmpty()) prepareAttachments(uris)
     }
+    /** Texto da conversa à espera de o usuário escolher onde salvar (ver [exportConversation]). */
+    private var pendingExport: String? = null
+    /** Onde salvar a conversa exportada (arquivo Markdown escolhido pelo usuário). */
+    private val exportPicker = registerForActivityResult(ActivityResultContracts.CreateDocument("text/markdown")) { uri ->
+        val text = pendingExport
+        pendingExport = null
+        if (uri == null || text == null) return@registerForActivityResult
+        thread(name = "chat-export") {
+            val saved = runCatching {
+                val stream = contentResolver.openOutputStream(uri) ?: error("no output stream")
+                stream.use { it.write(text.toByteArray()) }
+            }.isSuccess
+            runOnUiThread {
+                if (!isDestroyed) Toast.makeText(
+                    this,
+                    if (saved) R.string.chat_export_done else R.string.chat_export_failed,
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
 
     /** Adaptador ACP ainda não pronto (instalando, ou falhou): campo de texto e Enviar desligados. */
     private var preparing = false
@@ -304,6 +328,8 @@ class ChatActivity : JangadaActivity() {
             pendingAttachments += kept
             renderAttachments()
         }
+        // Anexos que estavam na caixa ao sair da tela: só quando a tela não foi recriada (ela já os trouxe).
+        if (savedInstanceState == null && pendingAttachments.isEmpty()) restoreDraftAttachments()
         findViewById<View>(R.id.chat_home).setOnClickListener { goHome() }
         sendButton.setOnClickListener { send() }
         findViewById<View>(R.id.chat_attach).setOnClickListener { pickAttachment() }
@@ -423,8 +449,10 @@ class ChatActivity : JangadaActivity() {
         // Só larga o aviso se ele ainda for o deste trabalho.
         if (service?.visibleChat == chatKey) service?.visibleChat = null
         // O texto não enviado vira rascunho deste trabalho: ir à tela inicial, trocar de trabalho,
-        // abrir o terminal ou ir para outro app não o perde. Os anexos ficam de fora.
+        // abrir o terminal ou ir para outro app não o perde. Os anexos pendentes também (nome e caminho;
+        // a imagem é refeita ao voltar, em [restoreDraftAttachments]).
         drafts.put(chatKey, input.text.toString())
+        drafts.putAttachments(chatKey, pendingAttachments.map { Triple(it.name, it.guestPath, it.mimeType) })
         dismissCommandSuggestions()
         super.onPause()
     }
@@ -1413,6 +1441,7 @@ class ChatActivity : JangadaActivity() {
                     if (service == null) return
                     input.setText("")
                     drafts.put(chatKey, "")
+                    drafts.putAttachments(chatKey, emptyList())
                     sendAwake("/compact")
                 }
             }
@@ -1439,6 +1468,7 @@ class ChatActivity : JangadaActivity() {
         if (service == null) return
         input.setText("")
         drafts.put(chatKey, "")
+        drafts.putAttachments(chatKey, emptyList())
         newConversation()
     }
 
@@ -1446,6 +1476,7 @@ class ChatActivity : JangadaActivity() {
     private fun openHistoryFromBox() {
         input.setText("")
         drafts.put(chatKey, "")
+        drafts.putAttachments(chatKey, emptyList())
         showHistory()
     }
 
@@ -1516,6 +1547,7 @@ class ChatActivity : JangadaActivity() {
         input.setText("")
         // Enviado: o rascunho sai já, para não voltar se o app morrer antes do onPause.
         drafts.put(chatKey, "")
+        drafts.putAttachments(chatKey, emptyList())
         pendingAttachments.clear()
         renderAttachments()
         chat.sendMessage(text, files)
@@ -1678,7 +1710,95 @@ class ChatActivity : JangadaActivity() {
         if (canDelete) rows += Sheet.Row(title = getString(R.string.chat_history_delete_row), destructive = true) {
             showDeleteHistory(conversations)
         }
+        // Busca nas conversas (só o Claude: a lista dos outros agentes é do próprio agente).
+        if (isClaude) rows.add(0, Sheet.Row(title = getString(R.string.chat_history_search), icon = "🔍") { askSearch() })
         Sheet(this).title(getString(R.string.chat_history)).rows(rows).show()
+    }
+
+    /** Busca nas conversas do Claude: pede as palavras e, com texto, procura (ver [searchHistory]). */
+    private fun askSearch() {
+        val field = EditText(this).apply {
+            setSingleLine(true)
+            hint = getString(R.string.chat_history_search_hint)
+            inputType = InputType.TYPE_CLASS_TEXT
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.chat_history_search)
+            .setView(field)
+            .setPositiveButton(R.string.chat_history_search_go) { _, _ ->
+                val text = field.text.toString().trim()
+                if (text.isNotEmpty()) searchHistory(text)
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Lê os arquivos da pasta fora da thread principal; falha conta como nada achado. */
+    private fun searchHistory(text: String) {
+        val cwd = chatCwd
+        thread(name = "chat-search") {
+            val found = runCatching {
+                ChatHistory.search(linux, cwd, text, cancelled = { isDestroyed || isFinishing })
+            }.getOrDefault(emptyList())
+            runOnUiThread { if (!isDestroyed) showSearchResults(text, found) }
+        }
+    }
+
+    /** Resultados da busca: tocar numa conversa faz o mesmo que na linha do Histórico. */
+    private fun showSearchResults(query: String, found: List<ChatHistory.Match>) {
+        val svc = service ?: return
+        if (found.isEmpty()) {
+            Toast.makeText(this, R.string.chat_history_search_none, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val rows = found.map { match ->
+            Sheet.Row(title = match.conversation.title, description = match.snippet) {
+                val conversation = match.conversation
+                val isCurrent = conversation.id == engine?.sessionId
+                if (!isCurrent && !busyBlocks()) reopenChat(svc) {
+                    svc.openChat(agentId, folder = folder, resume = conversation.id, restart = true)
+                }
+            }
+        }
+        Sheet(this).title(getString(R.string.chat_history_search_results, query)).rows(rows).show()
+    }
+
+    /** Anexos guardados no rascunho deste trabalho: refaz os que ainda estão em ~/projetos/anexos. */
+    private fun restoreDraftAttachments() {
+        val saved = drafts.getAttachments(chatKey)
+        if (saved.isEmpty()) return
+        thread(name = "chat-draft-attachments") {
+            val restored = saved.mapNotNull { (name, path, mime) ->
+                runCatching { Attachments.restore(linux, name, path, mime) }.getOrNull()
+            }
+            runOnUiThread {
+                // Se o usuário já anexou algo (ou a tela fechou), não mexe.
+                if (!isDestroyed && pendingAttachments.isEmpty()) {
+                    pendingAttachments += restored
+                    renderAttachments()
+                }
+            }
+        }
+    }
+
+    /**
+     * Salva a conversa deste trabalho como Markdown, no arquivo que o usuário escolher. O texto vai
+     * para [pendingExport] antes de abrir o seletor de arquivos (ver [exportPicker]).
+     */
+    private fun exportConversation() {
+        val items = engine?.items?.toList().orEmpty()
+        if (items.isEmpty()) {
+            Toast.makeText(this, R.string.chat_export_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val place = if (folder.isEmpty()) displayPath(Workspace.ROOT) else folder
+        pendingExport = ChatExport.markdown("$agentName · $place", items, getString(R.string.chat_export_you), agentName)
+        val stamp = SimpleDateFormat("yyyy-MM-dd-HHmm", Locale.US).format(Date())
+        runCatching { exportPicker.launch("conversa-$stamp.md") }.onFailure {
+            // Sem app de arquivos para escolher o destino: nada foi salvo.
+            pendingExport = null
+            Toast.makeText(this, R.string.chat_export_failed, Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** Apagar conversas: cada uma em vermelho; tocar numa pede a confirmação e, depois, volta a lista. */
@@ -1823,6 +1943,11 @@ class ChatActivity : JangadaActivity() {
             icon = "⏏",
         ) { loadFolders { folders -> showWorktreeFinish(folders) } }
         rows += autoCompactRow()
+        rows += Sheet.Row(
+            title = getString(R.string.chat_export),
+            description = getString(R.string.chat_export_desc),
+            icon = "⇩",
+        ) { exportConversation() }
         rows += Sheet.Row(
             title = getString(R.string.chat_menu_settings),
             description = getString(R.string.chat_menu_settings_desc),

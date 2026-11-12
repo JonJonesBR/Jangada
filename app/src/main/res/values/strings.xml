@@ -735,6 +735,17 @@
     <string name="sheet_desc_sleep_job">Put to sleep (the conversation continues later)</string>
     <string name="chat_history_delete_row">Delete conversations…</string>
     <string name="chat_history_delete_title">Delete which conversation?</string>
+    <string name="chat_history_search">Search conversations</string>
+    <string name="chat_history_search_hint">Words to find</string>
+    <string name="chat_history_search_go">Search</string>
+    <string name="chat_history_search_results">Search: “%1$s”</string>
+    <string name="chat_history_search_none">Nothing found</string>
+    <string name="chat_export">Export conversation</string>
+    <string name="chat_export_desc">Save as a Markdown file</string>
+    <string name="chat_export_you">You</string>
+    <string name="chat_export_done">Conversation saved</string>
+    <string name="chat_export_failed">Couldn’t save the conversation</string>
+    <string name="chat_export_empty">Nothing to export yet</string>
     <string name="auto_compact_title">Auto-compact</string>
     <string name="auto_compact_default">Agent default</string>
     <string name="auto_compact_off">Off</string>

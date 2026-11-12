@@ -731,6 +731,17 @@
     <string name="sheet_desc_sleep_job">Pôr para dormir (a conversa continua depois)</string>
     <string name="chat_history_delete_row">Apagar conversas…</string>
     <string name="chat_history_delete_title">Qual conversa apagar?</string>
+    <string name="chat_history_search">Buscar nas conversas</string>
+    <string name="chat_history_search_hint">Palavras para achar</string>
+    <string name="chat_history_search_go">Buscar</string>
+    <string name="chat_history_search_results">Busca: “%1$s”</string>
+    <string name="chat_history_search_none">Nada encontrado</string>
+    <string name="chat_export">Exportar conversa</string>
+    <string name="chat_export_desc">Salvar como arquivo Markdown</string>
+    <string name="chat_export_you">Você</string>
+    <string name="chat_export_done">Conversa salva</string>
+    <string name="chat_export_failed">Não deu para salvar a conversa</string>
+    <string name="chat_export_empty">Ainda não há o que exportar</string>
     <string name="auto_compact_title">Compactação automática</string>
     <string name="auto_compact_default">Padrão do agente</string>
     <string name="auto_compact_off">Desligada</string>
