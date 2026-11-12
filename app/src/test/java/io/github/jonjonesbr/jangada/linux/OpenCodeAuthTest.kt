@@ -94,6 +94,47 @@ class OpenCodeAuthTest {
         assertNull(OpenCodeAuth.parseListed(emptyList()))
     }
 
+    /** Formato real do `opencode auth list --format json` (2.2.7, conferido com contas falsas). */
+    @Test
+    fun listaEmJson() {
+        val json = """
+            [
+              {"id": "anthropic", "name": "Anthropic", "connections": [
+                {"type": "credential", "id": "cred_1", "label": "OAuth", "method": "oauth"}]},
+              {"id": "openrouter", "name": "OpenRouter", "connections": [
+                {"type": "credential", "id": "cred_2", "label": "API key", "method": "key"},
+                {"type": "credential", "id": "cred_3", "label": "Trabalho", "method": "key"}]},
+              {"id": "Inválido!", "name": "x", "connections": [{"label": "a"}]},
+              {"id": "groq", "name": "Groq", "connections": [{"label": ""}]}
+            ]
+        """.trimIndent()
+        assertEquals(
+            listOf(
+                Account("anthropic", "OAuth", true),
+                Account("openrouter", "API key", true),
+                Account("openrouter", "Trabalho", true),
+            ),
+            OpenCodeAuth.parseListJson(json),
+        )
+        assertEquals(emptyList<Account>(), OpenCodeAuth.parseListJson("[]"))
+        assertNull(OpenCodeAuth.parseListJson("No authenticated integrations"))
+        assertNull(OpenCodeAuth.parseListJson("[{quebrado"))
+        // Pela marca, com o aviso do bash antes e o JSON em várias linhas.
+        assertEquals(
+            listOf(Account("anthropic", "OAuth", true)),
+            OpenCodeAuth.parseListed(
+                listOf(
+                    "bash: no job control in this shell",
+                    "JANGADA_ACCOUNTS_JSON",
+                    "[",
+                    "  {\"id\": \"anthropic\", \"connections\": [",
+                    "    {\"label\": \"OAuth\", \"method\": \"oauth\"}]}",
+                    "]",
+                ),
+            ),
+        )
+    }
+
     @Test
     fun idDeIntegracao() {
         assertTrue(OpenCodeAuth.isValidIntegration("opencode-go"))

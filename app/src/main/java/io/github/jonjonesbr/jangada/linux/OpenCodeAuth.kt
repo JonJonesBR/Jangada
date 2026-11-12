@@ -1,6 +1,7 @@
 package io.github.jonjonesbr.jangada.linux
 
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
+import org.json.JSONArray
 import java.io.IOException
 
 /**
@@ -18,7 +19,7 @@ object OpenCodeAuth {
     /** Id da receita do agente no catálogo (assets/agents/opencode.json). */
     const val AGENT_ID = "opencode"
 
-    /** Conta conectada. [integration] é o id (ex.: opencode-go); no caminho sem SQLite, o nome mostrado. */
+    /** Conta conectada. [integration] é o id (ex.: opencode-go); só no caminho da lista de texto, o nome mostrado. */
     data class Account(val integration: String, val label: String, val active: Boolean)
 
     /** Integrações sugeridas no painel (id → nome mostrado). Outro id é digitado pelo usuário. */
@@ -36,6 +37,7 @@ object OpenCodeAuth {
     /** Marcas da primeira linha de [listScript]: de onde veio a lista. */
     private const val MARK_SQL = "JANGADA_ACCOUNTS_SQL"
     private const val MARK_TEXT = "JANGADA_ACCOUNTS_TEXT"
+    private const val MARK_JSON = "JANGADA_ACCOUNTS_JSON"
 
     /** Caminho do banco do OpenCode, dentro do Debian (expandido pelo shell). */
     private const val DB = "\"\$HOME/.local/share/opencode/opencode.db\""
@@ -65,12 +67,13 @@ object OpenCodeAuth {
      */
     fun parseListed(lines: List<String>): List<Account>? {
         // A marca pode não ser a primeira linha: o bash -i do runBash avisa antes ("no job control").
-        val first = lines.indexOfFirst { it.trim() == MARK_SQL || it.trim() == MARK_TEXT }
+        val first = lines.indexOfFirst { it.trim() == MARK_SQL || it.trim() == MARK_TEXT || it.trim() == MARK_JSON }
         if (first < 0) return null
         val rest = lines.drop(first + 1)
         return when (lines[first].trim()) {
             MARK_SQL -> parseAccounts(rest)
             MARK_TEXT -> parseListText(rest)
+            MARK_JSON -> parseListJson(rest.joinToString("\n"))
             else -> null
         }
     }
@@ -101,6 +104,34 @@ object OpenCodeAuth {
         Account(integration = parts[0], label = parts[1], active = true)
     }
 
+    /**
+     * Saída de `opencode auth list --format json`: uma lista de integrações (`id`, `name`) com as
+     * conexões de cada uma (`label`, `method`). A chave não vem nesse JSON; mesmo assim, só id e
+     * rótulo são lidos. O JSON não diz qual conta está em uso: cada uma conta como ativa. Integração
+     * com id inválido ou conexão sem rótulo é ignorada. JSON que não se entende vira null.
+     */
+    fun parseListJson(text: String): List<Account>? = try {
+        val start = text.indexOf('[')
+        if (start < 0) null
+        else {
+            val integrations = JSONArray(text.substring(start))
+            val accounts = ArrayList<Account>()
+            for (i in 0 until integrations.length()) {
+                val integration = integrations.optJSONObject(i) ?: continue
+                val id = integration.optString("id")
+                if (!isValidIntegration(id)) continue
+                val connections = integration.optJSONArray("connections") ?: continue
+                for (j in 0 until connections.length()) {
+                    val label = connections.optJSONObject(j)?.optString("label")?.trim().orEmpty()
+                    if (isSafeText(label)) accounts += Account(integration = id, label = label, active = true)
+                }
+            }
+            accounts
+        }
+    } catch (e: org.json.JSONException) {
+        null
+    }
+
     /** Nome mostrado de um id: o da lista sugerida ou o próprio id. */
     fun displayName(id: String): String = SUGGESTED.firstOrNull { it.first == id }?.second ?: id
 
@@ -116,6 +147,12 @@ object OpenCodeAuth {
         "  rows=${'$'}(sqlite3 -cmd '.timeout 3000' $DB \"select integration_id||'|'||coalesce(label,'')||'|'||coalesce(active,1) from credential\" 2>/dev/null); then",
         "  echo $MARK_SQL",
         "  [ -n \"${'$'}rows\" ] && printf '%s\\n' \"${'$'}rows\"",
+        // Sem sqlite3 (o caso do celular): o JSON do auth list traz o id e o rótulo, sem a chave.
+        // Versão antiga do opencode, sem --format json, cai na lista de texto.
+        "elif json=${'$'}(timeout 20 opencode auth list --format json --standalone </dev/null 2>/dev/null) &&",
+        "  printf '%s' \"${'$'}json\" | grep -q '^ *\\['; then",
+        "  echo $MARK_JSON",
+        "  printf '%s\\n' \"${'$'}json\"",
         "else",
         "  echo $MARK_TEXT",
         "  opencode auth list --standalone </dev/null 2>/dev/null",
@@ -180,11 +217,11 @@ object OpenCodeAuth {
         return loggedIn(linux, id) ?: true
     }
 
-    /** A integração [id] aparece no SQLite do OpenCode? null se não deu para saber (sem sqlite3, erro). */
+    /** A integração [id] aparece no SQLite ou no JSON do OpenCode? null se não deu para saber (lista de texto, erro). */
     private fun loggedIn(linux: LinuxEnv, id: String): Boolean? = try {
         val lines = ArrayList<String>()
         linux.runBash(listScript()) { lines += it }
-        if (lines.none { it.trim() == MARK_SQL }) null
+        if (lines.none { it.trim() == MARK_SQL || it.trim() == MARK_JSON }) null
         else parseListed(lines)?.any { it.integration == id }
     } catch (e: IOException) {
         null
