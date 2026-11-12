@@ -32,7 +32,17 @@ object ChatUi {
             .putExtra(ChatActivity.EXTRA_AGENT_ID, agentId)
             .putExtra(ChatActivity.EXTRA_FOLDER, "")
             .putExtra(ChatActivity.EXTRA_NEW, true)
-        return ActivityScenario.launch(intent)
+        val scenario = ActivityScenario.launch<ChatActivity>(intent)
+        openAnywayIfAsked()
+        return scenario
+    }
+
+    /**
+     * O emulador fica com pouca memória livre depois de instalar o Debian: o app pergunta antes de subir
+     * mais um agente (painel de pouca memória). Como faria uma pessoa, escolhe abrir mesmo assim.
+     */
+    fun openAnywayIfAsked(waitMs: Long = 4_000) {
+        device.wait(Until.findObject(By.text(context.getString(io.github.jonjonesbr.jangada.R.string.memory_low_open))), waitMs)?.click()
     }
 
     /**
@@ -69,12 +79,17 @@ object ChatUi {
         assertNotNull("a caixa do chat não apareceu", input)
         input.text = text
         device.findObject(By.res(PKG, "chat_send")).click()
+        // Acordar um agente que dormiu também confere a memória.
+        openAnywayIfAsked(waitMs = 2_000)
     }
 
     /** Textos visíveis na tela agora (para a mensagem de falha dizer o que o teste estava vendo). */
     fun screenTexts(): String = runCatching {
-        device.findObjects(By.clazz("android.widget.TextView"))
-            .mapNotNull { it.text?.take(200) }
+        // Todas as janelas (diálogos e painéis inclusive), pelo dump da hierarquia.
+        val out = java.io.ByteArrayOutputStream()
+        device.dumpWindowHierarchy(out)
+        Regex(" (?:text|content-desc)=\"([^\"]+)\"").findAll(out.toString())
+            .map { it.groupValues[1].take(200) }
             .filter { it.isNotBlank() }
             .joinToString(" | ")
     }.getOrDefault("(não deu para ler a tela)")
