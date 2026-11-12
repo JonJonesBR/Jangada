@@ -146,11 +146,11 @@ class HomeScreenTest {
                 assumeTrue("sem caches para apagar agora (${motivo.text})", false)
             }
             linha!!.click()
-            val cleaned = context.getString(R.string.storage_cleaned)
-            assertTrue(
-                "a limpeza não terminou em 120 s.\nNa tela: ${ChatUi.screenTexts()}",
-                device.wait(Until.hasObject(By.text(cleaned)), 120_000),
-            )
+            // O fim da limpeza é avisado por um Toast, que o UiAutomator não enxerga: confere o resultado,
+            // o cache do pip criado acima sai do disco.
+            val fim = System.currentTimeMillis() + 120_000
+            while (cache.exists() && System.currentTimeMillis() < fim) Thread.sleep(1_000)
+            assertTrue("a limpeza não apagou o cache do pip em 120 s.\nNa tela: ${ChatUi.screenTexts()}", !cache.exists())
         }
     }
 }
