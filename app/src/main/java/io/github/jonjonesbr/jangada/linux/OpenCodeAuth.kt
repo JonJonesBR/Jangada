@@ -227,6 +227,92 @@ object OpenCodeAuth {
         null
     }
 
+    /** Resultado de perguntar ao provedor se a chave vale. */
+    enum class KeyCheck { VALID, INVALID, UNKNOWN }
+
+    /**
+     * Como perguntar a cada provedor se a chave vale, sem gastar nada (lista de modelos ou dados da
+     * chave). [header] tem um %s no lugar da chave. Conferido em 12/11/2026 com chaves falsas: 401
+     * em todos, menos o Google (400 com "API key not valid"). As rotas do OpenCode respondem 200 sem
+     * chave e 401 com chave errada.
+     */
+    private class KeyProbe(val url: String, val header: String, val extra: String? = null)
+
+    private val PROBES = mapOf(
+        "opencode-go" to KeyProbe("https://opencode.ai/zen/go/v1/models", "Authorization: Bearer %s"),
+        "opencode" to KeyProbe("https://opencode.ai/zen/v1/models", "Authorization: Bearer %s"),
+        "openrouter" to KeyProbe("https://openrouter.ai/api/v1/key", "Authorization: Bearer %s"),
+        "anthropic" to KeyProbe("https://api.anthropic.com/v1/models", "x-api-key: %s", "anthropic-version: 2023-06-01"),
+        "openai" to KeyProbe("https://api.openai.com/v1/models", "Authorization: Bearer %s"),
+        "google" to KeyProbe("https://generativelanguage.googleapis.com/v1beta/models", "x-goog-api-key: %s"),
+    )
+
+    private const val MARK_KEYCHECK = "JANGADA_KEYCHECK"
+
+    /** Dá para conferir a chave da integração [id] antes de conectar. */
+    fun canCheckKey(id: String): Boolean = id in PROBES
+
+    /**
+     * Script que pergunta ao provedor de [id] se a chave vale. A chave vem pela entrada padrão (uma
+     * linha) e vai ao curl pela entrada padrão também (`-H @-`): nunca entra na linha de comando de um
+     * processo. Imprime `JANGADA_KEYCHECK <código http> <1 se a resposta diz chave inválida>`. Null
+     * se o provedor não é conhecido.
+     */
+    fun keyCheckScript(id: String): String? {
+        val probe = PROBES[id] ?: return null
+        val headers = listOfNotNull(probe.header, probe.extra).joinToString("\\n")
+        return listOf(
+            "exec 2>/dev/null",
+            "IFS= read -r JANGADA_KEY",
+            // printf é do próprio bash: a chave não aparece na lista de processos.
+            "out=${'$'}(printf '$headers\\n' \"${'$'}JANGADA_KEY\" | curl -s -m 15 -w '\\n$MARK_KEYCHECK_HTTP %{http_code}' -H @- ${AgentRecipe.q(probe.url)})",
+            "unset JANGADA_KEY",
+            "code=${'$'}{out##*$MARK_KEYCHECK_HTTP }",
+            "bad=0",
+            "case \"${'$'}out\" in *'API key not valid'*|*API_KEY_INVALID*) bad=1 ;; esac",
+            "echo \"$MARK_KEYCHECK ${'$'}code ${'$'}bad\"",
+        ).joinToString("\n")
+    }
+
+    private const val MARK_KEYCHECK_HTTP = "JANGADA_HTTP"
+
+    /**
+     * Lê a saída de [keyCheckScript]: 2xx vale; 401, 403 ou a resposta dizendo que a chave é inválida
+     * (o Google responde 400) não vale; o resto (sem internet, tempo esgotado, 429, 5xx) não se sabe.
+     */
+    fun parseKeyCheck(lines: List<String>): KeyCheck {
+        val line = lines.lastOrNull { it.trim().startsWith("$MARK_KEYCHECK ") } ?: return KeyCheck.UNKNOWN
+        val parts = line.trim().split(Regex("\\s+"))
+        val code = parts.getOrNull(1)?.toIntOrNull() ?: return KeyCheck.UNKNOWN
+        val bad = parts.getOrNull(2) == "1"
+        return when {
+            code in 200..299 -> KeyCheck.VALID
+            code == 401 || code == 403 || bad -> KeyCheck.INVALID
+            else -> KeyCheck.UNKNOWN
+        }
+    }
+
+    /**
+     * Pergunta ao provedor de [id] se [key] vale, sem conectar nada. UNKNOWN se o provedor não é
+     * conhecido ou a pergunta falhou. A chave vai pela entrada padrão e a resposta não é guardada.
+     * Fora da thread principal.
+     */
+    fun checkKey(linux: LinuxEnv, id: String, key: String): KeyCheck {
+        val script = keyCheckScript(id) ?: return KeyCheck.UNKNOWN
+        if (!isValidKey(key)) return KeyCheck.UNKNOWN
+        var process: Process? = null
+        return try {
+            process = linux.startProcess(script, secrets = false)
+            process.outputStream.use { it.write("$key\n".toByteArray(Charsets.UTF_8)) }
+            val lines = process.inputStream.bufferedReader().use { it.readLines() }
+            process.waitFor()
+            parseKeyCheck(lines)
+        } catch (e: IOException) {
+            process?.destroy()
+            KeyCheck.UNKNOWN
+        }
+    }
+
     /** Remove a conta [account]. Verdadeiro se o logout saiu com código 0. Fora da thread principal. */
     fun remove(linux: LinuxEnv, account: Account): Boolean {
         if (!isSafeText(account.integration) || !isSafeText(account.label)) return false

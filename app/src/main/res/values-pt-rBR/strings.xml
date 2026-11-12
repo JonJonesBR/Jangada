@@ -783,6 +783,11 @@
     <string name="opencode_auth_key_invalid">Digite a chave numa linha só, com até 512 caracteres.</string>
     <string name="opencode_auth_connect">Conectar</string>
     <string name="opencode_auth_connecting">Conectando %1$s…</string>
+    <string name="opencode_auth_checking">Conferindo a chave com %1$s…</string>
+    <string name="opencode_auth_key_rejected_title">Chave recusada</string>
+    <string name="opencode_auth_key_rejected">%1$s disse que essa chave não vale. Confira se copiou a chave inteira e se ela é da conta certa.</string>
+    <string name="opencode_auth_key_retype">Digitar de novo</string>
+    <string name="opencode_auth_key_anyway">Conectar mesmo assim</string>
     <string name="opencode_auth_added">Conta conectada. Abra uma Nova conversa para usar a conta.</string>
     <string name="opencode_auth_add_failed">Não foi possível conectar. Confira a chave e tente de novo.</string>
     <string name="opencode_auth_free">Voltar ao plano free</string>

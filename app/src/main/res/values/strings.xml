@@ -787,6 +787,11 @@
     <string name="opencode_auth_key_invalid">Enter the key on one line, up to 512 characters.</string>
     <string name="opencode_auth_connect">Connect</string>
     <string name="opencode_auth_connecting">Connecting %1$s…</string>
+    <string name="opencode_auth_checking">Checking the key with %1$s…</string>
+    <string name="opencode_auth_key_rejected_title">Key rejected</string>
+    <string name="opencode_auth_key_rejected">%1$s said this key isn’t valid. Check that you copied all of it and that it’s from the right account.</string>
+    <string name="opencode_auth_key_retype">Type again</string>
+    <string name="opencode_auth_key_anyway">Connect anyway</string>
     <string name="opencode_auth_added">Account connected. Open a New conversation to use it.</string>
     <string name="opencode_auth_add_failed">Could not connect. Check the key and try again.</string>
     <string name="opencode_auth_free">Back to free plan</string>

@@ -135,6 +135,31 @@ class OpenCodeAuthTest {
         )
     }
 
+    /** Respostas reais com chaves falsas (12/11/2026): 401 nos outros, 400 com marca no Google. */
+    @Test
+    fun conferenciaDaChave() {
+        assertEquals(OpenCodeAuth.KeyCheck.VALID, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 200 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.INVALID, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 401 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.INVALID, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 403 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.INVALID, OpenCodeAuth.parseKeyCheck(listOf("bash: no job control in this shell", "JANGADA_KEYCHECK 400 1")))
+        // Sem internet (curl dá 000 ou nada), limite de pedidos e erro do servidor: não se sabe.
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 000 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK  0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 429 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(listOf("JANGADA_KEYCHECK 400 0")))
+        assertEquals(OpenCodeAuth.KeyCheck.UNKNOWN, OpenCodeAuth.parseKeyCheck(emptyList()))
+
+        assertTrue(OpenCodeAuth.canCheckKey("openrouter"))
+        assertFalse(OpenCodeAuth.canCheckKey("groq"))
+        assertNull(OpenCodeAuth.keyCheckScript("groq"))
+        val script = OpenCodeAuth.keyCheckScript("anthropic")!!
+        // A chave chega pela entrada padrão e vai ao curl pela entrada também: nunca na linha de comando.
+        assertTrue(script.contains("IFS= read -r JANGADA_KEY"))
+        assertTrue(script.contains("-H @-"))
+        assertTrue(script.contains("x-api-key: %s\\nanthropic-version: 2023-06-01\\n"))
+        assertTrue(script.contains("'https://api.anthropic.com/v1/models'"))
+    }
+
     @Test
     fun idDeIntegracao() {
         assertTrue(OpenCodeAuth.isValidIntegration("opencode-go"))

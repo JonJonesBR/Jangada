@@ -2502,12 +2502,39 @@ class ChatActivity : JangadaActivity() {
                 }
                 field.text.clear()
                 dialog.dismiss()
-                runOpenCodeTask(getString(R.string.opencode_auth_connecting, name), { OpenCodeAuth.login(linux, id, key) }) { ok ->
-                    openCodeToast(getString(if (ok == true) R.string.opencode_auth_added else R.string.opencode_auth_add_failed))
+                if (!OpenCodeAuth.canCheckKey(id)) {
+                    connectOpenCodeKey(id, name, key)
+                    return@setOnClickListener
+                }
+                // Antes de conectar, pergunta ao provedor se a chave vale (o opencode aceita qualquer texto).
+                runOpenCodeTask(getString(R.string.opencode_auth_checking, name), { OpenCodeAuth.checkKey(linux, id, key) }) { check ->
+                    if (check == OpenCodeAuth.KeyCheck.INVALID) confirmRejectedKey(id, name, key)
+                    else connectOpenCodeKey(id, name, key)
                 }
             }
         }
         dialog.show()
+    }
+
+    /** Conecta a integração [id] com a chave já conferida (ou que não deu para conferir). */
+    private fun connectOpenCodeKey(id: String, name: String, key: String) {
+        runOpenCodeTask(getString(R.string.opencode_auth_connecting, name), { OpenCodeAuth.login(linux, id, key) }) { ok ->
+            openCodeToast(getString(if (ok == true) R.string.opencode_auth_added else R.string.opencode_auth_add_failed))
+        }
+    }
+
+    /**
+     * O provedor recusou a chave: oferece digitar de novo ou conectar mesmo assim (a resposta do
+     * provedor pode estar errada, ou a chave ainda não ter sido liberada).
+     */
+    private fun confirmRejectedKey(id: String, name: String, key: String) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.opencode_auth_key_rejected_title)
+            .setMessage(getString(R.string.opencode_auth_key_rejected, name))
+            .setPositiveButton(R.string.opencode_auth_key_retype) { _, _ -> askOpenCodeKey(id, name) }
+            .setNeutralButton(R.string.opencode_auth_key_anyway) { _, _ -> connectOpenCodeKey(id, name, key) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     /** Confirma a remoção de uma conta; a conta sai só com o OK. */
