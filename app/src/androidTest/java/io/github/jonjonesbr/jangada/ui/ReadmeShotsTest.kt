@@ -16,7 +16,6 @@ import org.junit.After
 import org.junit.Assume
 import org.junit.Assert.assertNotNull
 import org.junit.Before
-import org.junit.BeforeClass
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -32,13 +31,6 @@ class ReadmeShotsTest {
         private const val FAKE = "claude"
         private const val DIR = "/data/local/tmp/jangada-capturas"
         private const val PROJETO = "meu-app"
-
-        @JvmStatic
-        @BeforeClass
-        fun preparar() {
-            Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("capturas") == "true")
-            LinuxFixture.withFakes
-        }
     }
 
     private val context = ChatUi.context
@@ -52,6 +44,10 @@ class ReadmeShotsTest {
 
     @Before
     fun comecarDoZero() {
+        // Só com -e capturas true. O pulo fica aqui (e não no @BeforeClass) para o teste aparecer como pulado:
+        // pulado na classe, ele some do relatório e o Gradle acusa "Expected 30 tests, received 29".
+        Assume.assumeTrue(InstrumentationRegistry.getArguments().getString("capturas") == "true")
+        LinuxFixture.withFakes
         ChatUi.closeAllChats()
         LinuxFixture.clearFakeLogs()
     }
