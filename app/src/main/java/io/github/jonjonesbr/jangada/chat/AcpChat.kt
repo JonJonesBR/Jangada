@@ -916,8 +916,8 @@ class AcpChat(
          * Python) num celular com pouca memória; folga maior, porque parar um agente lento custa mais.
          */
         const val INIT_TIMEOUT_MS = 120_000L
-        /** Abrir ou recarregar a conversa: mais folga que o início (o replay de uma conversa longa demora). */
-        const val SESSION_TIMEOUT_MS = 300_000L
+        /** Abrir ou recarregar a conversa: mais folga que o início (o replay de uma conversa longa demora). Var: os testes no emulador encurtam. */
+        @Volatile internal var SESSION_TIMEOUT_MS = 300_000L
         /** Campo interno que marca a falha "o agente parou" (não vem do agente). */
         const val STOPPED = "jangadaStopped"
     }

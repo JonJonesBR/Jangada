@@ -28,7 +28,10 @@ class ClaudeCardsTest {
     }
 
     @Before
-    fun limparLogs() = LinuxFixture.clearFakeLogs()
+    fun comecarDoZero() {
+        ChatUi.closeAllChats()
+        LinuxFixture.clearFakeLogs()
+    }
 
     @Test
     fun perguntaRespondidaChegaNasAnswers() {

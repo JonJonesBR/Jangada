@@ -48,7 +48,10 @@ class ClaudeStopAttachTest {
     }
 
     @Before
-    fun limparLogs() = LinuxFixture.clearFakeLogs()
+    fun comecarDoZero() {
+        ChatUi.closeAllChats()
+        LinuxFixture.clearFakeLogs()
+    }
 
     @After
     fun restaurar() {

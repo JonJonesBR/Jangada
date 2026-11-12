@@ -36,7 +36,10 @@ class ClaudeChatTest {
     private val device = UiDevice.getInstance(instrumentation)
 
     @Before
-    fun limparLogs() = LinuxFixture.clearFakeLogs()
+    fun comecarDoZero() {
+        ChatUi.closeAllChats()
+        LinuxFixture.clearFakeLogs()
+    }
 
     private fun openChat(): ActivityScenario<ChatActivity> {
         val intent = Intent(context, ChatActivity::class.java)
@@ -59,7 +62,7 @@ class ClaudeChatTest {
             send("oi")
             val reply = device.wait(Until.findObject(By.textContains("Eco: ok")), 90_000)
             val log = LinuxFixture.fakeLog("claude")
-            assertNotNull("a resposta do claude falso não apareceu. Log do falso:\n$log", reply)
+            assertNotNull("a resposta do claude falso não apareceu.\nNa tela: ${ChatUi.screenTexts()}\nLog do falso:\n$log", reply)
             assertTrue("o falso não recebeu a mensagem. Log:\n$log", log.contains("\"oi\""))
             assertTrue("o app não abriu o Claude no modo stream-json. Log:\n$log", log.contains("--output-format stream-json"))
         }
