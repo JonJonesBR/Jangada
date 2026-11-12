@@ -75,6 +75,7 @@ import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.OpenCodeStats
 import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.ChatView
 import io.github.jonjonesbr.jangada.chat.Markdown
@@ -1994,6 +1995,11 @@ class ChatActivity : JangadaActivity() {
             description = getString(R.string.opencode_auth_row_desc),
             icon = "🔑",
         ) { openOpenCodeAccounts() }
+        if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += Sheet.Row(
+            title = getString(R.string.opencode_usage_row),
+            description = getString(R.string.opencode_usage_row_desc, OpenCodeStats.DAYS),
+            icon = "📊",
+        ) { openOpenCodeUsage() }
         // Sem ajustes do agente (ou sem chat pronto), o painel mostra a pasta e a visualização, que são do app.
         if (!isClaude) rows += optionRows(engine as? AcpChat)
         Sheet(this).title(getString(R.string.chat_settings_title)).rows(rows).show()
@@ -2391,6 +2397,44 @@ class ChatActivity : JangadaActivity() {
     }
 
     /** Contas e chaves do OpenCode: lê as contas fora da thread principal e abre o painel. */
+    /**
+     * Consumo do OpenCode por modelo nos últimos dias (`opencode stats`, ver [OpenCodeStats]): tokens e
+     * custo. Lido fora da thread principal; falha ou formato inesperado avisa e não mostra nada.
+     */
+    private fun openOpenCodeUsage() {
+        runOpenCodeTask(getString(R.string.opencode_usage_loading), {
+            val out = StringBuilder()
+            linux.runBash(OpenCodeStats.SCRIPT) { out.append(it).append('\n') }
+            OpenCodeStats.parse(out.toString())
+        }) { usage ->
+            if (usage == null) {
+                openCodeToast(getString(R.string.opencode_usage_failed))
+                return@runOpenCodeTask
+            }
+            val locale = resources.configuration.locales[0]
+            val k = getString(R.string.opencode_usage_thousand)
+            val m = getString(R.string.opencode_usage_million)
+            fun count(v: Long) = OpenCodeStats.shortCount(v, k, m, locale)
+            val summary = getString(
+                R.string.opencode_usage_summary,
+                OpenCodeStats.DAYS, usage.sessions, count(usage.tokens), OpenCodeStats.dollars(usage.cost, locale),
+            )
+            val rows = usage.models.map { model ->
+                Sheet.Row(
+                    title = model.model,
+                    description = getString(
+                        R.string.opencode_usage_model,
+                        count(model.input), count(model.output + model.reasoning), count(model.cacheRead),
+                    ),
+                    value = OpenCodeStats.dollars(model.cost, locale),
+                ) {}
+            }
+            val sheet = Sheet(this).title(getString(R.string.opencode_usage_title)).message(summary)
+            if (rows.isEmpty()) sheet.message(summary + "\n\n" + getString(R.string.opencode_usage_empty))
+            sheet.rows(rows).show()
+        }
+    }
+
     private fun openOpenCodeAccounts() {
         runOpenCodeTask(getString(R.string.opencode_auth_loading), { OpenCodeAuth.list(linux) }) { accounts ->
             if (accounts == null) openCodeToast(getString(R.string.opencode_auth_read_failed))

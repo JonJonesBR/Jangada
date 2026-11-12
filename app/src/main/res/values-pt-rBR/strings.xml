@@ -757,6 +757,16 @@
     <string name="chat_auto_compacting">Compactando a conversa automaticamente (contexto em %1$d%%).</string>
     <string name="opencode_auth_row">Contas e chaves</string>
     <string name="opencode_auth_row_desc">Conecte provedores com a sua chave, ou volte ao plano free</string>
+    <string name="opencode_usage_row">Consumo</string>
+    <string name="opencode_usage_row_desc">Tokens e custo por modelo nos últimos %1$d dias</string>
+    <string name="opencode_usage_loading">Lendo o consumo do OpenCode…</string>
+    <string name="opencode_usage_failed">Não deu para ler o consumo do OpenCode</string>
+    <string name="opencode_usage_title">Consumo do OpenCode</string>
+    <string name="opencode_usage_summary">Últimos %1$d dias: %2$d sessões · %3$s tokens · %4$s</string>
+    <string name="opencode_usage_model">Entrada %1$s · saída %2$s · cache %3$s</string>
+    <string name="opencode_usage_empty">Nenhum modelo foi usado nesse período.</string>
+    <string name="opencode_usage_thousand">mil</string>
+    <string name="opencode_usage_million">mi</string>
     <string name="opencode_auth_title">Contas e chaves</string>
     <string name="opencode_auth_loading">Lendo as contas…</string>
     <string name="opencode_auth_read_failed">Não foi possível ler as contas.</string>

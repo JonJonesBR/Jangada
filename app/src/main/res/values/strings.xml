@@ -761,6 +761,16 @@
     <string name="chat_auto_compacting">Compacting the conversation automatically (context at %1$d%%).</string>
     <string name="opencode_auth_row">Accounts and keys</string>
     <string name="opencode_auth_row_desc">Connect providers with your own key, or go back to the free plan</string>
+    <string name="opencode_usage_row">Usage</string>
+    <string name="opencode_usage_row_desc">Tokens and cost per model in the last %1$d days</string>
+    <string name="opencode_usage_loading">Reading OpenCode usage…</string>
+    <string name="opencode_usage_failed">Couldn’t read the usage from OpenCode</string>
+    <string name="opencode_usage_title">OpenCode usage</string>
+    <string name="opencode_usage_summary">Last %1$d days: %2$d sessions · %3$s tokens · %4$s</string>
+    <string name="opencode_usage_model">In %1$s · out %2$s · cache %3$s</string>
+    <string name="opencode_usage_empty">No model was used in this period.</string>
+    <string name="opencode_usage_thousand">K</string>
+    <string name="opencode_usage_million">M</string>
     <string name="opencode_auth_title">Accounts and keys</string>
     <string name="opencode_auth_loading">Reading accounts…</string>
     <string name="opencode_auth_read_failed">Could not read the accounts.</string>
