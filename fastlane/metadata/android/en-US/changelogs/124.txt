@@ -1,0 +1,1 @@
+Projects screen (in the storage card): rename, duplicate and delete projects in ~/projetos. Renaming keeps Claude conversations, drafts and settings; deleting asks you to type the name; duplicating copies everything in the background. Changes: update from remote (git pull, fast-forward only).

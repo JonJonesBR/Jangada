@@ -1,0 +1,1 @@
+Tela Projetos (no cartão de armazenamento): renomear, duplicar e excluir projetos de ~/projetos. Renomear leva as conversas do Claude, rascunhos e ajustes; excluir pede o nome digitado; duplicar copia tudo em segundo plano. Mudanças: atualizar do remoto (git pull só avançando a branch).

@@ -1,5 +1,13 @@
 # Novidades
 
+## 1.18.0
+
+- Projetos: tela nova, aberta pelo cartão de armazenamento da tela inicial, com a lista de ~/projetos e, para cada um, Renomear, Duplicar e Excluir. Antes de renomear ou excluir, os chats e terminais da pasta são fechados, e nenhum chat abre nela até o fim.
+- Renomear leva junto as conversas do Claude (o continuar segue funcionando), os rascunhos e a compactação de cada trabalho; as conversas de outros agentes ficam no nome antigo.
+- Excluir pede o nome do projeto digitado e mostra os arquivos sem commit; um trabalho isolado sai pelo git. Apagar as conversas do Claude é opcional. Um repositório com trabalhos isolados não se renomeia nem se exclui antes deles.
+- Duplicar copia a pasta inteira (também o que está fora do git, sem seguir links e sem os trabalhos isolados) em segundo plano, com Cancelar, e confere o espaço livre antes.
+- Mudanças: Atualizar do remoto (git pull só avançando a branch), com explicação quando as branches se separaram ou há mudanças sem commit no caminho.
+
 ## 1.17.0
 
 - Chat do Claude: perguntas do agente (AskUserQuestion) viram um cartão com as opções, uma por pergunta, com "Outra resposta…" para escrever; o plano (ExitPlanMode) aparece formatado, com Aprovar plano ou Continuar planejando, e o aviso não oferece mais "Permitir" para ele.
