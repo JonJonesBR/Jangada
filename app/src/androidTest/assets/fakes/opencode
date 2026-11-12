@@ -11,7 +11,7 @@ case "$1" in
         if [ -s "$ACC" ]; then while IFS=$'\t' read -r i l; do printf '%s  %s  active\n' "$i" "$l"; done < "$ACC"
         else echo "No authenticated integrations"; fi; exit 0 ;;
       login) # $3 = integração; a chave vem pelo terminal (pty do "script")
-        IFS= read -r -s -t 30 key; echo "LOGIN $3 keylen=${#key}" >> "$LOG"
+        IFS= read -r -s key; echo "LOGIN $3 keylen=${#key}" >> "$LOG"
         case "$key" in *invalida*) echo "Invalid key"; exit 1 ;; esac
         sleep "${FAKE_LOGIN_SECS:-1}"; printf '%s\t%s\n' "$3" "api" >> "$ACC"; exit 0 ;;
       logout) echo "LOGOUT $3 $4" >> "$LOG"; grep -v -P "^\Q$3\E\t" "$ACC" > "$ACC.n"; mv "$ACC.n" "$ACC"; exit 0 ;;
@@ -25,14 +25,10 @@ emit() { printf '%s\n' "$1"; }
 reply() { emit '{"jsonrpc":"2.0","id":'"$1"',"result":'"$2"'}'; }
 update() { emit '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"fs-1","update":'"$1"'}}'; }
 chunk() { update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"'"$1"'"}}'; }
-PID_=; MODE=; PERM=; TICKS=0
-while :; do
-  IFS= read -r -t 0.2 line; rc=$?
-  if [ $rc -gt 128 ]; then # sem entrada: anda o relógio do "lento"
-    if [ "$MODE" = lento ]; then TICKS=$((TICKS+1)); [ $TICKS -ge 40 ] && { chunk "Resposta lenta."; reply "$PID_" '{"stopReason":"end_turn"}'; MODE=; PID_=; }; fi
-    continue
-  fi
-  [ $rc -ne 0 ] && break    # fim da entrada (o app fechou)
+PID_=; MODE=; PERM=
+# Leitura comum, sem "read -t": sob o proot do emulador o read com tempo limite não entregava as linhas.
+# O "lento" responde por um temporizador em segundo plano, que desiste se o turno foi cancelado.
+while IFS= read -r line; do
   echo "RECV ${line:0:4000}" >> "$LOG"
   id=$(printf '%s' "$line" | sed -n 's/^{"jsonrpc":"2.0","id":\([0-9]*\),.*/\1/p')
   case "$line" in
@@ -48,14 +44,15 @@ while :; do
     *'"method":"session/cancel"'*)
       echo "CANCEL mode=$MODE" >> "$LOG"
       [ "$MODE" = trava ] && continue                    # agente travado: ignora o cancelamento
-      [ -n "$PID_" ] && { reply "$PID_" '{"stopReason":"cancelled"}'; PID_=; MODE=; } ;;
+      [ -n "$PID_" ] && { touch "$LOGDIR/cancelled-$PID_"; reply "$PID_" '{"stopReason":"cancelled"}'; PID_=; MODE=; } ;;
     *'"method":"session/prompt"'*)
-      PID_=$id; TICKS=0; MODE=
+      PID_=$id; MODE=
       case "$line" in
         *permissao*) MODE=perm; PERM=9001
           emit '{"jsonrpc":"2.0","id":9001,"method":"session/request_permission","params":{"sessionId":"fs-1","toolCall":{"toolCallId":"tc1","title":"Rodar comando","kind":"execute","rawInput":{"command":"echo oi"}},"options":[{"optionId":"once","name":"Permitir","kind":"allow_once"},{"optionId":"no","name":"Recusar","kind":"reject_once"}]}}' ;;
         *trava*) MODE=trava ;;
-        *lento*) MODE=lento ;;
+        *lento*) MODE=lento
+          ( p=$PID_; sleep 8; [ -e "$LOGDIR/cancelled-$p" ] || { chunk "Resposta lenta."; reply "$p" '{"stopReason":"end_turn"}'; } ) & ;;
         *) chunk "Eco: ok"; update '{"sessionUpdate":"usage_update","used":500,"size":1000}'; reply "$PID_" '{"stopReason":"end_turn"}'; PID_= ;;
       esac ;;
     *'"id":9001,'*)               # resposta do app ao pedido de permissão

@@ -50,6 +50,9 @@ jobs:
           arch: x86_64
           target: default
           disable-animations: true
+          # Tela de celular de verdade e teclado físico: o teclado virtual não abre e não cobre os cartões do chat.
+          profile: pixel_6
+          enable-hw-keyboard: true
           # O Debian (~400 MB com o git e o curl) e o apt precisam de espaço e memória.
           ram-size: 4096M
           disk-size: 6000M
