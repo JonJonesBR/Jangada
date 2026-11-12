@@ -1,0 +1,1 @@
+Projetos: tamanho de cada um, conversas do Claude (abrir, apagar as antigas) e apagar dependências. Chat: buscar nas conversas, exportar em Markdown e anexos que ficam no rascunho. OpenCode: confere a chave antes de conectar, mostra o consumo por modelo, os limites do Go e um aviso claro quando o limite grátis acaba. Clone: o progresso volta à tela e a falha abre o log.
