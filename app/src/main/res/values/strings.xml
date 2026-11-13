@@ -888,7 +888,7 @@
     <string name="chat_history_delete_all_confirm">All conversations of this project will be deleted, including the open one. This can’t be undone.</string>
     <string name="chat_history_deleted_all">Conversations deleted</string>
     <plurals name="projects_conversations_all">
-        <item quantity="one">Delete the conversation</item>
+        <item quantity="one">Delete %1$d conversation</item>
         <item quantity="other">Delete all %1$d conversations</item>
     </plurals>
     <plurals name="projects_conversations_all_confirm">

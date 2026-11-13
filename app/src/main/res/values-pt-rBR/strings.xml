@@ -884,7 +884,7 @@
     <string name="chat_history_delete_all_confirm">Todas as conversas deste projeto serão apagadas, inclusive a aberta. Não dá para desfazer.</string>
     <string name="chat_history_deleted_all">Conversas apagadas</string>
     <plurals name="projects_conversations_all">
-        <item quantity="one">Apagar a conversa</item>
+        <item quantity="one">Apagar %1$d conversa</item>
         <item quantity="other">Apagar todas as %1$d conversas</item>
     </plurals>
     <plurals name="projects_conversations_all_confirm">
