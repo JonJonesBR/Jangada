@@ -78,8 +78,10 @@ class ChatHistoryTest {
         val done = items[2] as ChatItem.Tool
         assertTrue(failed.done)
         assertTrue(failed.failed)
+        assertEquals(ToolState.FAILED, failed.state)
         assertTrue(done.done)
         assertFalse(done.failed)
+        assertEquals(ToolState.DONE, done.state)
     }
 
     @Test

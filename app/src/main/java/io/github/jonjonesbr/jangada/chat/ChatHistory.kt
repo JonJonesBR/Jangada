@@ -137,9 +137,12 @@ object ChatHistory {
                         for (i in 0 until content.length()) {
                             val block = content.optJSONObject(i) ?: continue
                             if (block.optString("type") == "tool_result") {
-                                // Resultado de uma ação: a saída fica na ação; se deu erro, ela aparece como falha.
+                                // Resultado de uma ação: a saída fica na ação; erro de verdade é falha.
                                 tools[block.optString("tool_use_id")]?.let { tool ->
-                                    if (block.optBoolean("is_error")) tool.failed = true
+                                    tool.mark(
+                                        if (block.optBoolean("is_error")) ToolState.FAILED else ToolState.DONE,
+                                        0,
+                                    )
                                     tool.output = ToolOutput.fromClaude(block.opt("content"))
                                 }
                                 continue

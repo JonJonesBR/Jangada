@@ -74,6 +74,16 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     /** elapsedRealtime de quando o turno atual começou (0 = sem turno). */
     @Volatile override var turnStartedAtMs: Long = 0L
         private set
+
+    /**
+     * Reinicia os relógios do turno que começa agora (fila): o "pensando há" conta deste turno,
+     * não do anterior, que já terminou. Só na thread principal.
+     */
+    protected fun restartTurnClock() {
+        val now = SystemClock.elapsedRealtime()
+        turnStartedAtMs = now
+        lastEventAtMs = now
+    }
     /** Código de saída de uma queda inesperada do agente; null quando o usuário parou ou não houve. */
     @Volatile override var lastExitCode: Int? = null
         private set

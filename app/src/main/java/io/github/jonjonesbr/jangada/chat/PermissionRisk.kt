@@ -69,6 +69,28 @@ object PermissionRisk {
     private val SHELL_PIPE = Regex("""(curl|wget)[^\n]*\|\s*(ba|z)?sh\b""")
 
     /**
+     * Caminho normalizado para comparar: separa por "/", ignora "." e vazios e resolve ".." com
+     * pilha (preservando a barra inicial). Assim "/projeto/../fora" não passa por dentro do projeto.
+     */
+    fun normalize(path: String): String {
+        val absolute = path.startsWith('/')
+        val parts = mutableListOf<String>()
+        for (part in path.split('/')) {
+            when (part) {
+                "", "." -> Unit
+                ".." -> when {
+                    parts.isNotEmpty() && parts.last() != ".." -> parts.removeAt(parts.lastIndex)
+                    // Relativo pode subir; absoluto para na raiz.
+                    !absolute -> parts += part
+                }
+                else -> parts += part
+            }
+        }
+        val body = parts.joinToString("/")
+        return if (absolute) "/$body" else body
+    }
+
+    /**
      * Riscos de [command] rodando em [workdir] (o cwd que o agente mandou) dentro do projeto [project].
      * Fora do projeto só conta quando os dois caminhos são conhecidos.
      */
@@ -85,8 +107,8 @@ object PermissionRisk {
         }
         if (SHELL_PIPE.containsMatchIn(command)) reasons += Reason.SHELL_PIPE
         if (!workdir.isNullOrBlank() && !project.isNullOrBlank()) {
-            val base = project.trimEnd('/')
-            val dir = workdir.trimEnd('/')
+            val base = normalize(project).trimEnd('/')
+            val dir = normalize(workdir).trimEnd('/')
             if (dir != base && !dir.startsWith("$base/")) reasons += Reason.OUTSIDE
         }
         return Analysis(reasons, split(command))

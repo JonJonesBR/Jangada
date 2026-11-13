@@ -6,6 +6,12 @@ import org.json.JSONObject
 /** Leituras puras das mensagens do protocolo ACP (sem Context, testáveis sem Android). */
 internal object AcpParse {
 
+    /** Recusa do usuário no opencode: a frase inteira, para um "denied" comum não virar recusa. */
+    private val DECLINED = Regex("""the user declined this tool call""", RegexOption.IGNORE_CASE)
+
+    /** Turno parado: "Cancelled"/"canceled" como palavra (cobre "cancelled by user"). */
+    private val CANCELLED = Regex("""\bcancell?ed\b""", RegexOption.IGNORE_CASE)
+
     /** Erro de login: código -32000 ou "auth", "login", "sign in", "credential" ou "api key" na mensagem ou nos dados. */
     fun isAuthError(error: JSONObject?): Boolean {
         error ?: return false
@@ -52,6 +58,7 @@ internal object AcpParse {
      * Um "failed" pode ter sido o próprio usuário: o opencode responde "Cancelled" ao Parar e
      * "The user declined this tool call" quando a permissão é recusada. O texto vem nos itens de
      * content (content.text) ou em rawOutput (aí, o objeto inteiro, além de rawOutput.error).
+     * Erro de verdade (inclusive "permission denied") continua [ToolState.FAILED].
      */
     fun failureState(update: JSONObject): ToolState {
         val text = StringBuilder()
@@ -76,9 +83,10 @@ internal object AcpParse {
         else if (raw != null && raw != JSONObject.NULL) text.append(raw.toString())
         val body = text.toString()
         return when {
-            // Ignora caixa: o opencode escreve "Cancelled" e "canceled" aparece em outros agentes.
-            body.contains("cancel", ignoreCase = true) -> ToolState.CANCELLED
-            body.contains("declined", ignoreCase = true) || body.contains("denied", ignoreCase = true) -> ToolState.REJECTED
+            // Recusa do usuário: só a frase do opencode (um "permission denied" comum é falha real).
+            DECLINED.containsMatchIn(body) -> ToolState.REJECTED
+            // Turno parado: a palavra "Cancelled"/"canceled" (ou "cancelled by user"), nunca "cancel" solto.
+            CANCELLED.containsMatchIn(body) -> ToolState.CANCELLED
             else -> ToolState.FAILED
         }
     }

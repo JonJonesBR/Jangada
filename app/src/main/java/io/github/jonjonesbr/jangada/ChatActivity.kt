@@ -158,13 +158,24 @@ class ChatActivity : JangadaActivity() {
     /**
      * Relógio da faixa de status (ver [updateStatus]): a cada segundo reescreve só o texto dela, para o
      * tempo ("há 0:12") andar sem mensagem nova. Nunca redesenha a lista da conversa. Roda entre
-     * onResume e onPause; um só para a tela, não um por item.
+     * onResume e onPause; um só para a tela, não um por item. Só fica agendado enquanto o tempo anda.
      */
     private val statusClock = object : Runnable {
         override fun run() {
+            // Cada updateStatus decide se o relógio continua (startStatusClock) ou para (stopStatusClock).
             engine?.let { updateStatus(it) }
-            handler.postDelayed(this, STATUS_CLOCK_MS)
         }
+    }
+
+    /** Liga o relógio da faixa (um só para a tela; o updateStatus o mantém enquanto o tempo anda). */
+    private fun startStatusClock() {
+        handler.removeCallbacks(statusClock)
+        handler.postDelayed(statusClock, STATUS_CLOCK_MS)
+    }
+
+    /** Para o relógio da faixa (ocioso ou agente perdido: não há tempo andando). */
+    private fun stopStatusClock() {
+        handler.removeCallbacks(statusClock)
     }
 
     private var service: TerminalService? = null
@@ -460,13 +471,12 @@ class ChatActivity : JangadaActivity() {
         // Ao voltar com "/..." na caixa, as sugestões reaparecem (depois da janela estar pronta).
         input.post { updateCommandSuggestions() }
         // Faixa de status: um relógio só, a cada segundo, para o tempo andar (ver statusClock).
-        handler.removeCallbacks(statusClock)
-        handler.postDelayed(statusClock, STATUS_CLOCK_MS)
+        startStatusClock()
     }
 
     override fun onPause() {
         resumed = false
-        handler.removeCallbacks(statusClock)
+        stopStatusClock()
         // Só larga o aviso se ele ainda for o deste trabalho.
         if (service?.visibleChat == chatKey) service?.visibleChat = null
         // O texto não enviado vira rascunho deste trabalho: ir à tela inicial, trocar de trabalho,
@@ -502,7 +512,7 @@ class ChatActivity : JangadaActivity() {
 
     override fun onDestroy() {
         // Nada que esperava a tela (instalação, por exemplo) roda depois que ela sai.
-        handler.removeCallbacks(statusClock)
+        stopStatusClock()
         handler.removeCallbacksAndMessages(null)
         // Saiu de vez (não vai ser recriada): os anexos guardados não voltam, e a memória é liberada.
         if (isFinishing) keptAttachments.remove(chatKey)
@@ -1146,10 +1156,13 @@ class ChatActivity : JangadaActivity() {
         // Tocar na faixa só faz algo com tarefas em segundo plano (ver showBackgroundSheet).
         status.isClickable = background.isNotEmpty()
         // O relógio só gira se o agente está mesmo trabalhando: pedido de permissão, travamento ou queda
-        // não podem dar a impressão de que algo anda.
-        val working = state is AgentStatus.State.Thinking || state is AgentStatus.State.Running ||
-            state is AgentStatus.State.Reloading
+        // não podem dar a impressão de que algo anda (nem uma ação em andamento sem eventos, que é o travamento).
+        val working = state is AgentStatus.State.Thinking || state is AgentStatus.State.Reloading ||
+            (state is AgentStatus.State.Running && !state.stalled)
         statusSpinner.visibility = if (working) View.VISIBLE else View.GONE
+        // O relógio só corre enquanto o tempo anda: ocioso ou com o agente perdido, ele para.
+        val clock = state != AgentStatus.State.Idle && state !is AgentStatus.State.Lost
+        if (clock && resumed) startStatusClock() else stopStatusClock()
         // Parar interrompe o turno; com o agente perdido não há o que parar.
         stopButton.visibility = if (chat.busy && state !is AgentStatus.State.Lost) View.VISIBLE else View.GONE
         val lines = statusLines(state, background)
@@ -3380,7 +3393,8 @@ class ChatActivity : JangadaActivity() {
                     setTextIsSelectable(true)
                     setPadding(0, dp(6), 0, dp(2))
                 })
-                if (analysis.lines.size > MAX_PERMISSION_LINES) {
+                // Muitas linhas ou uma linha muito longa (que quebra sozinha na tela): dá para abrir.
+                if (analysis.lines.size > MAX_PERMISSION_LINES || command.length > PERMISSION_EXPAND_CHARS) {
                     card.addView(Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
                         text = getString(
                             if (expanded) R.string.chat_permission_hide_full else R.string.chat_permission_show_full,
@@ -3516,7 +3530,10 @@ class ChatActivity : JangadaActivity() {
                 when (option.kind) {
                     PermissionOption.Kind.ALLOW_ONCE, PermissionOption.Kind.REJECT_ONCE -> false
                     PermissionOption.Kind.ALLOW_ALWAYS -> !hideAlways
-                    else -> true
+                    // Tipo fora do protocolo no ACP pode liberar amplo (allow_session), e em alto risco
+                    // não passaria pelo segundo toque: não vira botão.
+                    PermissionOption.Kind.OTHER -> engine !is AcpChat && !analysis.high
+                    PermissionOption.Kind.REJECT_ALWAYS -> true
                 }
             }
             if (extra.isEmpty()) return
@@ -3555,6 +3572,13 @@ class ChatActivity : JangadaActivity() {
                     setTextColor(getColor(R.color.setup_text))
                     ellipsize = TextUtils.TruncateAt.END
                     setPadding(0, dp(6), 0, dp(4))
+                    // Texto cortado (reticências na última linha): tocar mostra o plano inteiro.
+                    setOnClickListener {
+                        val lay = this.layout
+                        if (lay != null && lay.getEllipsisCount(lay.lineCount - 1) > 0) {
+                            showDetails(R.string.chat_permission_full, item.summary)
+                        }
+                    }
                 })
             }
             // Fila: fora a vez, só o cabeçalho e o resumo; a aprovação é do primeiro pedido pendente.
@@ -3588,6 +3612,8 @@ class ChatActivity : JangadaActivity() {
             val buttons = LinearLayout(this@ChatActivity).apply { orientation = LinearLayout.VERTICAL }
             // Permitir primeiro e em destaque; as outras opções como botões de texto.
             for (option in item.options.sortedBy { it.kind.ordinal }) {
+                // Tipo fora do protocolo no ACP pode liberar amplo (allow_session): não vira botão.
+                if (option.kind == PermissionOption.Kind.OTHER && engine is AcpChat) continue
                 val primary = option.kind == PermissionOption.Kind.ALLOW_ONCE
                 val button = if (primary) Button(this@ChatActivity) else Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle)
                 button.text = optionLabel(item, option)
@@ -4043,6 +4069,8 @@ class ChatActivity : JangadaActivity() {
         const val STATUS_CLOCK_MS = 1000L
         /** Linhas do comando mostradas no cartão de permissão fechado (aberto, o comando inteiro). */
         const val MAX_PERMISSION_LINES = 6
+        /** Acima deste tamanho, o comando de uma linha já ganha o botão de abrir (quebra na tela). */
+        const val PERMISSION_EXPAND_CHARS = 200
         /** Janela do segundo toque do Permitir em alto risco. */
         const val CONFIRM_PERMISSION_MS = 10_000L
         /** Sem mensagem do agente há este tempo, a ação em andamento também mostra "sem eventos há…". */

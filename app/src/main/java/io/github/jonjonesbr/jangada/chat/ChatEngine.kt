@@ -198,6 +198,7 @@ class ChatEngine(
         // Turno novo: busy segue true (sem piscar), mas o "silencioso" de um Parar anterior não vale para ele.
         busy = true
         interrupted = false
+        restartTurnClock()
         deliver(next.text, next.attachments)
         changed()
     }

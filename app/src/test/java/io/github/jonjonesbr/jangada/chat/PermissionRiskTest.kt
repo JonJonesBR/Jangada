@@ -67,6 +67,24 @@ class PermissionRiskTest {
         assertTrue(analysis.high)
     }
 
+    @Test
+    fun caminhoNormalizadoNaoBurlarOProjeto() {
+        // "." e ".." resolvidos com pilha; a barra inicial fica.
+        assertEquals("/a/c", PermissionRisk.normalize("/a/./b/../c"))
+        assertEquals("/", PermissionRisk.normalize("/.."))
+        assertEquals("../x", PermissionRisk.normalize("a/../../x"))
+        // ".." não pode fazer um caminho de fora passar por dentro do projeto.
+        assertEquals(
+            listOf(PermissionRisk.Reason.OUTSIDE),
+            PermissionRisk.analyze("ls", "/projeto/../fora", "/projeto").reasons,
+        )
+        assertFalse(PermissionRisk.analyze("ls", "/projeto/src/../lib", "/projeto").high)
+        assertEquals(
+            listOf(PermissionRisk.Reason.OUTSIDE),
+            PermissionRisk.analyze("ls", "/projeto/..", "/projeto").reasons,
+        )
+    }
+
     /**
      * O aviso do sistema não oferece Permitir em alto risco (o segundo toque só existe no cartão);
      * o serviço consulta esta análise antes de montar o botão.

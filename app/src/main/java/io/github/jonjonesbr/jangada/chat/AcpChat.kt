@@ -485,6 +485,7 @@ class AcpChat(
         // e a conversa já não está "parada no meio" (a carga do histórico pode ter marcado isso).
         busy = true
         interrupted = false
+        restartTurnClock()
         prompt(next.text, next.attachments)
         changed()
     }

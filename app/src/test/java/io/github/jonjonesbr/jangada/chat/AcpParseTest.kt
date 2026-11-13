@@ -190,13 +190,22 @@ class AcpParseTest {
             """{"status":"failed","content":[{"type":"content","content":{"type":"text","text":"The user declined this tool call"}}]}""",
         )
         assertEquals(ToolState.REJECTED, AcpParse.failureState(declined))
-        assertEquals(ToolState.REJECTED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":"Permission denied"}""")))
+        // Caixa não importa: a frase do opencode continua sendo recusa.
+        assertEquals(
+            ToolState.REJECTED,
+            AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":{"error":"the user DECLINED this tool call"}}""")),
+        )
+        // "Permission denied" é falha real do sistema, não recusa do usuário.
+        assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":"Permission denied"}""")))
+        assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":"PERMISSION DENIED"}""")))
     }
 
     @Test
     fun falhaComumContinuaFalha() {
         assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":{"error":"ENOENT: no such file"}}""")))
         assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("{}")))
+        // "cancel" solto (fora da palavra) não é turno parado.
+        assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":"cancel request rejected"}""")))
     }
 
     @Test
