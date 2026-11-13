@@ -49,15 +49,33 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     /** Turno em andamento: vira false também ao acabar sozinho (aí avisa, na thread principal). */
     @Volatile override var busy = false
         protected set(value) {
+            val started = !field && value
             val ended = field && !value
             field = value
+            val now = SystemClock.elapsedRealtime()
             // Quando o chat ficou parado (ou começou a trabalhar): base do "dormir depois de X minutos".
-            idleSinceMs = SystemClock.elapsedRealtime()
+            idleSinceMs = now
+            // Base do tempo do turno atual (a tela mostra desde quando ele espera o agente).
+            if (started) {
+                turnStartedAtMs = now
+                // Turno novo sem sinal ainda: o silêncio conta de agora, não desde a mensagem anterior
+                // (senão a tela mostraria "travado" assim que a mensagem sai).
+                lastEventAtMs = now
+            }
             if (value) silentTurn = false
             if (ended && !silentTurn) main.post { turnEnded() }
         }
     /** elapsedRealtime da última atividade: o chat parou de trabalhar, o agente subiu ([launch]) ou mandou algo. */
     @Volatile final override var idleSinceMs: Long = SystemClock.elapsedRealtime()
+        private set
+    /** elapsedRealtime da última mensagem recebida do agente (0 = nenhuma nesta execução). */
+    @Volatile override var lastEventAtMs: Long = 0L
+        private set
+    /** elapsedRealtime de quando o turno atual começou (0 = sem turno). */
+    @Volatile override var turnStartedAtMs: Long = 0L
+        private set
+    /** Código de saída de uma queda inesperada do agente; null quando o usuário parou ou não houve. */
+    @Volatile override var lastExitCode: Int? = null
         private set
     /** Dormindo: o processo foi fechado por [sleep] para liberar memória. Some quando o agente volta ([launch]). */
     @Volatile final override var asleep = false
@@ -126,7 +144,11 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         val c = Connection()
         connection = c
         asleep = false
-        idleSinceMs = SystemClock.elapsedRealtime()
+        val now = SystemClock.elapsedRealtime()
+        idleSinceMs = now
+        // Execução nova: nenhuma mensagem recebida ainda (o silêncio conta de agora) e nenhuma saída anterior.
+        lastEventAtMs = now
+        lastExitCode = null
         running = true
         synchronized(stderrTail) { stderrTail.clear() }
         changed()
@@ -183,6 +205,8 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         val c = connection
         connection = null
         running = false
+        // Parado pelo usuário: não é uma saída inesperada do agente.
+        lastExitCode = null
         // Parado pelo usuário: o turno interrompido não avisa que terminou.
         silentTurn = true
         cancelling = false
@@ -272,7 +296,10 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                         if (connection !== c) return@post
                         // O agente falou (até sem turno nosso, como o fim de um comando em segundo plano):
                         // o tempo parado recomeça, para não dormir no meio do que ele faz.
-                        idleSinceMs = SystemClock.elapsedRealtime()
+                        val now = SystemClock.elapsedRealtime()
+                        idleSinceMs = now
+                        // Base do "sem sinal há X": a tela distingue pensar de travar por este instante.
+                        lastEventAtMs = now
                         // Mensagem fora do esperado (agente de terceiros) não derruba o app; no log só o tipo do erro.
                         runCatching { handle(json) }.onFailure {
                             Log.w("JangadaChat", "mensagem ignorada: ${it.javaClass.simpleName}")
@@ -294,6 +321,10 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                 // Turno em andamento que o usuário não parou: o agente saiu no meio da resposta (antes de finish, que zera busy).
                 val midTurn = busy && !silentTurn && !loginBefore
                 finish(c)
+                // Saída inesperada (erro ou no meio da resposta, sem o usuário ter parado): a tela mostra o
+                // estado "perdido" com o código. O post só chega aqui se esta execução ainda é a atual, então
+                // o Parar (que desliga a conexão) nunca deixa um código para trás.
+                if (code != 0 || midTurn) lastExitCode = code
                 // A mensagem da saída (inclusive a de resposta pela metade) fica com onExited: um texto só.
                 onExited(code, synchronized(stderrTail) { stderrTail.joinToString("\n") }, midTurn)
                 // O AcpChat pode mostrar o cartão de login na saída: aí o cartão é o único aviso.
@@ -373,8 +404,8 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
             } else if (item is ChatItem.Assistant) {
                 item.streaming = false
             } else if (item is ChatItem.Tool) {
-                // Ação que não terminou não fica com "…" para sempre.
-                item.done = true
+                // Ação que não terminou não fica com "…" para sempre: o turno parou antes de ela responder.
+                if (!item.done) item.mark(ToolState.CANCELLED, SystemClock.elapsedRealtime())
             }
         }
     }

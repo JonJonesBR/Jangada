@@ -1,5 +1,6 @@
 package io.github.jonjonesbr.jangada.chat
 
+import android.os.SystemClock
 import android.util.Log
 import io.github.jonjonesbr.jangada.R
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
@@ -521,6 +522,9 @@ class ChatEngine(
                     }
                     if (tools.containsKey(id)) continue
                     val tool = ChatItem.Tool(id, block.optString("name"), ToolText.summary(block.optString("name"), block.optJSONObject("input")))
+                    // O nome do Claude já é a ferramenta ("Bash", "Read"): serve para as duas coisas.
+                    tool.toolName = block.optString("name")
+                    tool.mark(ToolState.PENDING, SystemClock.elapsedRealtime())
                     tools[id] = tool
                     items += tool
                 }
@@ -552,8 +556,7 @@ class ChatEngine(
             val block = content.optJSONObject(i) ?: continue
             if (block.optString("type") != "tool_result") continue
             tools[block.optString("tool_use_id")]?.let {
-                it.done = true
-                it.failed = block.optBoolean("is_error")
+                it.mark(if (block.optBoolean("is_error")) ToolState.FAILED else ToolState.DONE, SystemClock.elapsedRealtime())
                 it.output = ToolOutput.fromClaude(block.opt("content"))
             }
         }

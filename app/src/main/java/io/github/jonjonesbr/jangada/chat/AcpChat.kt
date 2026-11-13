@@ -1,5 +1,6 @@
 package io.github.jonjonesbr.jangada.chat
 
+import android.os.SystemClock
 import android.util.Log
 import io.github.jonjonesbr.jangada.R
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
@@ -523,6 +524,12 @@ class AcpChat(
             }
             // Fim do turno: o Codex gravou o que gastou, então lê os limites de novo.
             refreshLimits(LIMITS_DELAY_MS)
+            // Parado pelo usuário: o agente confirma com stopReason "cancelled" e as ações em andamento
+            // não terminam sozinhas. Um aviso só (o turno termina silencioso; sem ele não havia explicação).
+            if (AcpParse.cancelled(result) && (cancelled || silentTurn)) {
+                markRunningToolsCancelled()
+                add(ChatItem.Info(context.getString(R.string.chat_interrupted)))
+            }
             val refused = error == null && result?.optString("stopReason") == "refusal"
             if (error != null) {
                 // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar,
@@ -777,11 +784,21 @@ class AcpChat(
             return
         }
         val toolCall = params.optJSONObject("toolCall") ?: JSONObject()
+        // O agente pode repetir o mesmo pedido: fica o primeiro cartão (responder duas vezes seria erro).
+        if (items.any { it is ChatItem.Permission && it.requestId == id }) return
         val known = tools[toolCall.optString("toolCallId")]
         val title = toolCall.optString("title").ifEmpty { known?.name ?: context.getString(R.string.chat_action) }
         val summary = summaryOf(toolCall).ifEmpty { known?.summary.orEmpty() }
         val parsed = AcpParse.permissionOptions(params.optJSONArray("options"))
-        add(ChatItem.Permission(id, title, summary, parsed, diff = DiffText.fromAcpContent(toolCall.optJSONArray("content"))))
+        add(
+            ChatItem.Permission(
+                id, title, summary, parsed,
+                // A ferramenta de verdade (o título é o rótulo humano).
+                toolName = toolCall.optString("name"),
+                diff = DiffText.fromAcpContent(toolCall.optJSONArray("content")),
+                workdir = AcpParse.permissionWorkdir(toolCall),
+            ).apply { requestedAtMs = SystemClock.elapsedRealtime() },
+        )
     }
 
     private fun handleUpdate(params: JSONObject?) {
@@ -839,20 +856,27 @@ class AcpChat(
                 userDraft = null
                 thoughtDraft = null
                 val id = update.optString("toolCallId")
-                val tool = tools[id] ?: ChatItem.Tool(id, update.optString("title"), summaryOf(update)).also {
+                val title = update.optString("title")
+                val tool = tools[id] ?: ChatItem.Tool(id, title, summaryOf(update)).also {
+                    // O título é o rótulo humano; o nome é a ferramenta de verdade (ex.: "shell").
+                    it.toolName = AcpParse.toolName(update)
+                    it.kind = update.optString("kind")
+                    it.mark(ToolState.PENDING, SystemClock.elapsedRealtime())
                     tools[id] = it
                     items += it
                 }
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
-                applyStatus(tool, update.optString("status"))
+                applyStatus(tool, update)
                 changed()
             }
             "tool_call_update" -> {
                 val tool = tools[update.optString("toolCallId")] ?: return
+                update.optString("name").takeIf { it.isNotEmpty() }?.let { tool.toolName = it }
                 update.optString("title").takeIf { it.isNotEmpty() }?.let { tool.name = it }
+                update.optString("kind").takeIf { it.isNotEmpty() }?.let { tool.kind = it }
                 summaryOf(update).takeIf { it.isNotEmpty() }?.let { tool.summary = it }
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
-                applyStatus(tool, update.optString("status"))
+                applyStatus(tool, update)
                 changed()
             }
             "plan" -> {
@@ -885,12 +909,16 @@ class AcpChat(
         }
     }
 
-    private fun applyStatus(tool: ChatItem.Tool, status: String) {
-        when (status) {
-            "completed" -> tool.done = true
-            "failed" -> { tool.done = true; tool.failed = true }
+    private fun applyStatus(tool: ChatItem.Tool, update: JSONObject) {
+        val now = SystemClock.elapsedRealtime()
+        val state = AcpParse.toolState(update.optString("status"))
+        // Status desconhecido: o estado anterior fica (agente fora do protocolo não apaga o que já veio).
+        if (state != null) {
+            // "failed" pode ser o próprio usuário (Parar ou recusa): o texto do agente diz qual é.
+            tool.mark(if (state == ToolState.FAILED) AcpParse.failureState(update) else state, now)
         }
-        if (loadingHistory) tool.done = true
+        // Replay de uma conversa já terminada: a ação está concluída mesmo que o agente não repita o status.
+        if (loadingHistory && !tool.done) tool.mark(ToolState.DONE, now)
     }
 
     private fun finishDrafts() {
@@ -898,6 +926,14 @@ class AcpChat(
         draft = null
         userDraft = null
         thoughtDraft = null
+    }
+
+    /** Marca como canceladas as ações ainda em andamento (o turno parou antes de elas responderem). */
+    private fun markRunningToolsCancelled() {
+        val now = SystemClock.elapsedRealtime()
+        for (item in items) {
+            if (item is ChatItem.Tool && item.state == ToolState.RUNNING) item.mark(ToolState.CANCELLED, now)
+        }
     }
 
     private fun textOf(content: JSONObject?): String? =

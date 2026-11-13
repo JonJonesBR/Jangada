@@ -150,4 +150,69 @@ class AcpParseTest {
         val parsed = AcpParse.permissionOptions(JSONArray("""[3,{"optionId":"ok","kind":"allow_once"}]"""))
         assertEquals(listOf("ok"), parsed.map { it.id })
     }
+
+    @Test
+    fun nomeDaFerramentaVenceOTitulo() {
+        assertEquals("shell", AcpParse.toolName(JSONObject("""{"name":"shell","title":"Run command"}""")))
+        // Agente mais antigo só manda o título.
+        assertEquals("Run command", AcpParse.toolName(JSONObject("""{"title":"Run command"}""")))
+        assertEquals("", AcpParse.toolName(JSONObject("{}")))
+    }
+
+    @Test
+    fun estadoDoToolCall() {
+        assertEquals(ToolState.PENDING, AcpParse.toolState("pending"))
+        assertEquals(ToolState.RUNNING, AcpParse.toolState("in_progress"))
+        assertEquals(ToolState.DONE, AcpParse.toolState("completed"))
+        assertEquals(ToolState.FAILED, AcpParse.toolState("failed"))
+        // Fora do protocolo: o app mantém o estado que já tinha.
+        assertNull(AcpParse.toolState("queued"))
+        assertNull(AcpParse.toolState(""))
+    }
+
+    @Test
+    fun falhaCanceladaPeloUsuario() {
+        // Formato do opencode ao Parar: o tool vira failed com o texto "Cancelled".
+        val update = JSONObject(
+            """{"status":"failed","content":[{"type":"content","content":{"type":"text","text":"Cancelled"}}]}""",
+        )
+        assertEquals(ToolState.CANCELLED, AcpParse.failureState(update))
+        // Variante com uma letra só ("canceled"), em minúsculas e em rawOutput.
+        assertEquals(
+            ToolState.CANCELLED,
+            AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":{"error":"canceled by user"}}""")),
+        )
+    }
+
+    @Test
+    fun falhaRecusadaPeloUsuario() {
+        val declined = JSONObject(
+            """{"status":"failed","content":[{"type":"content","content":{"type":"text","text":"The user declined this tool call"}}]}""",
+        )
+        assertEquals(ToolState.REJECTED, AcpParse.failureState(declined))
+        assertEquals(ToolState.REJECTED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":"Permission denied"}""")))
+    }
+
+    @Test
+    fun falhaComumContinuaFalha() {
+        assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("""{"status":"failed","rawOutput":{"error":"ENOENT: no such file"}}""")))
+        assertEquals(ToolState.FAILED, AcpParse.failureState(JSONObject("{}")))
+    }
+
+    @Test
+    fun pastaDoPedidoDePermissao() {
+        val comCwd = JSONObject("""{"rawInput":{"command":"ls","cwd":"/root/projetos/x"}}""")
+        assertEquals("/root/projetos/x", AcpParse.permissionWorkdir(comCwd))
+        assertNull(AcpParse.permissionWorkdir(JSONObject("""{"rawInput":{"command":"ls"}}""")))
+        assertNull(AcpParse.permissionWorkdir(JSONObject("""{"rawInput":{"cwd":""}}""")))
+        assertNull(AcpParse.permissionWorkdir(JSONObject("{}")))
+    }
+
+    @Test
+    fun respostaCancelada() {
+        assertTrue(AcpParse.cancelled(JSONObject("""{"stopReason":"cancelled"}""")))
+        assertFalse(AcpParse.cancelled(JSONObject("""{"stopReason":"end_turn"}""")))
+        assertFalse(AcpParse.cancelled(JSONObject("{}")))
+        assertFalse(AcpParse.cancelled(null))
+    }
 }

@@ -538,6 +538,7 @@
     <string name="chat_acp_init_timeout">The agent didn’t respond when starting. Close the job and open it again; if it keeps happening, reinstall the agent on the home screen.</string>
     <string name="chat_acp_session_timeout">The agent didn’t open the conversation after 5 minutes and was stopped. Send a message to try again.</string>
     <string name="chat_force_stopped">The agent didn’t respond to Stop and was closed. Send a message to continue the conversation.</string>
+    <string name="chat_interrupted">Interrupted: the actions that were running were cancelled.</string>
     <string name="chat_login_timeout">The login timed out. Try again.</string>
     <string name="chat_prepare_retry">Try again</string>
     <string name="chat_prepare_details">Details</string>

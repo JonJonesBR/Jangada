@@ -2,6 +2,12 @@ package io.github.jonjonesbr.jangada.chat
 
 import org.json.JSONObject
 
+/**
+ * Ciclo de vida de uma ação do agente ([ChatItem.Tool]). CANCELLED é o turno parado antes de a ação
+ * responder; REJECTED é o usuário recusando o pedido de permissão dela (os dois chegam como "failed").
+ */
+enum class ToolState { PENDING, RUNNING, DONE, FAILED, CANCELLED, REJECTED }
+
 /** Um item da conversa mostrada no chat (igual para todos os agentes). */
 sealed class ChatItem {
     class User(val text: String, val attachments: List<String> = emptyList()) : ChatItem() {
@@ -16,6 +22,34 @@ sealed class ChatItem {
         var failed = false
         /** O que a ação devolveu (ver [ToolOutput]), mostrado num toque; null = nada. */
         var output: String? = null
+        /** Estado do ciclo de vida (o protocolo informa o status; ver [AcpParse.toolState]). */
+        var state = ToolState.PENDING
+        /** elapsedRealtime de quando a ação começou a rodar (0 = ainda não rodou). */
+        var startedAtMs = 0L
+        /** elapsedRealtime de quando a ação terminou (0 = ainda não terminou). */
+        var endedAtMs = 0L
+        /** Nome da ferramenta como o agente a chama (ex.: "shell"); [name] é o rótulo humano. */
+        var toolName = ""
+        /** Tipo da ferramenta no protocolo (ex.: "execute", "edit"); vazio quando o agente não informa. */
+        var kind = ""
+
+        /**
+         * Aplica um estado novo, com a hora recebida (função pura: a tela e os testes passam o [now]).
+         * Os tempos são gravados uma vez só — o primeiro RUNNING marca o início e o primeiro estado
+         * terminal marca o fim —, para a duração não mudar quando o agente repete a atualização.
+         * [done] vale para todo estado terminal; [failed] só para FAILED (cancelado e recusado não são falha).
+         */
+        fun mark(state: ToolState, now: Long) {
+            this.state = state
+            when (state) {
+                ToolState.RUNNING -> if (startedAtMs == 0L) startedAtMs = now
+                ToolState.DONE, ToolState.FAILED, ToolState.CANCELLED, ToolState.REJECTED ->
+                    if (endedAtMs == 0L) endedAtMs = now
+                ToolState.PENDING -> Unit
+            }
+            done = state != ToolState.PENDING && state != ToolState.RUNNING
+            failed = state == ToolState.FAILED
+        }
     }
 
     /**
@@ -36,10 +70,18 @@ sealed class ChatItem {
         val questions: List<Question> = emptyList(),
         /** O resumo é Markdown (plano do ExitPlanMode). */
         val markdown: Boolean = false,
+        /** Pasta de trabalho do pedido (o "cwd" que o agente mandou); null quando ele não informa. */
+        val workdir: String? = null,
     ) : ChatItem() {
         var chosen: PermissionOption? = null
         /** Respostas enviadas (pergunta → resposta); null enquanto não respondeu. */
         var answers: Map<String, String>? = null
+        /** elapsedRealtime de quando o pedido chegou (0 = desconhecido); base do tempo de espera. */
+        var requestedAtMs: Long = 0L
+        /** Estado da tela: o cartão está aberto mostrando o comando/diff inteiro. */
+        var expanded: Boolean = false
+        /** Estado da tela: até quando (elapsedRealtime) o botão de recusa espera um segundo toque; 0 = sem confirmação. */
+        var confirmUntilMs: Long = 0L
         /** Estado da tela (só na thread principal): pergunta → índices das opções marcadas. */
         val selected: MutableMap<Int, MutableSet<Int>> = HashMap()
         /** Estado da tela (só na thread principal): pergunta → texto de "Outra resposta". */
@@ -208,6 +250,15 @@ interface AgentChat {
     val canResume: Boolean get() = false
     /** elapsedRealtime de quando o chat ficou parado (sem turno em andamento). */
     val idleSinceMs: Long get() = 0L
+    /** elapsedRealtime da última mensagem recebida do agente (0 = nenhuma ainda). */
+    val lastEventAtMs: Long get() = 0L
+    /** elapsedRealtime de quando o turno atual começou (0 = sem turno nesta execução). */
+    val turnStartedAtMs: Long get() = 0L
+    /**
+     * Código de saída de uma queda inesperada do agente (erro ou no meio da resposta); null quando o
+     * usuário parou ou não houve saída. Ver [AgentStatus.State.Lost].
+     */
+    val lastExitCode: Int? get() = null
     /** Identificador do trabalho para o relatório de memória (ver JobMemory); null se não há. */
     val jobId: String? get() = null
     /** Janela do plano que passou de 90% no último aviso [ChatAttention.LIMIT]; null se não há. */
