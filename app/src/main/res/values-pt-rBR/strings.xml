@@ -385,6 +385,22 @@
     </plurals>
     <string name="chat_tool_group_title">Ações</string>
     <string name="chat_tool_group_description">%1$s. Toque para ver cada ação.</string>
+    <string name="chat_child_title">Subagente</string>
+    <string name="chat_child_state_running">Em andamento</string>
+    <string name="chat_child_state_done">Concluído</string>
+    <string name="chat_child_state_failed">Falhou</string>
+    <string name="chat_child_state_interrupted">Interrompido</string>
+    <string name="chat_child_show_actions">Toque para mostrar as ações</string>
+    <string name="chat_child_hide_actions">Toque para ocultar as ações</string>
+    <string name="chat_child_description">%1$s. %2$s.</string>
+    <plurals name="chat_child_actions">
+        <item quantity="one">%1$d ação</item>
+        <item quantity="other">%1$d ações</item>
+    </plurals>
+    <plurals name="chat_child_summary">
+        <item quantity="one">%1$d subagente · %2$d em andamento</item>
+        <item quantity="other">%1$d subagentes · %2$d em andamento</item>
+    </plurals>
     <string name="effort_low">Baixo</string>
     <string name="effort_medium">Médio</string>
     <string name="effort_high">Alto</string>

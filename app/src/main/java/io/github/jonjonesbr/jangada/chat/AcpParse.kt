@@ -109,6 +109,27 @@ internal object AcpParse {
     fun permissionWorkdir(toolCall: JSONObject): String? =
         toolCall.optJSONObject("rawInput")?.optString("cwd")?.takeIf { it.isNotEmpty() }
 
+    /**
+     * Agente filho que a ação de subagente abriu (ex.: "explore"): rawInput.agent e, em agentes
+     * mais antigos, rawInput.subagent_type. Vazio quando não há.
+     */
+    fun subagentAgent(update: JSONObject): String {
+        val input = update.optJSONObject("rawInput") ?: return ""
+        return input.optString("agent").ifEmpty { input.optString("subagent_type") }
+    }
+
+    /**
+     * Sessão filha que a ação de subagente abriu: o metadata do tool call (rawOutput.metadata) traz
+     * o id em "sessionID" (às vezes "sessionId"); agentes mais antigos, em rawOutput.sessionID.
+     * É a fonte confiável para ligar o cartão da filha ao tool do pai. Vazio quando não há.
+     */
+    fun subagentSession(update: JSONObject): String {
+        val raw = update.optJSONObject("rawOutput") ?: return ""
+        val metadata = raw.optJSONObject("metadata")
+        val id = metadata?.optString("sessionID").orEmpty().ifEmpty { metadata?.optString("sessionId").orEmpty() }
+        return id.ifEmpty { raw.optString("sessionID") }
+    }
+
     /** A resposta do session/prompt foi de um turno parado (stopReason "cancelled"). */
     fun cancelled(result: JSONObject?): Boolean = result?.optString("stopReason") == "cancelled"
 

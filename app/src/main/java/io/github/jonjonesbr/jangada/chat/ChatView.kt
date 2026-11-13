@@ -12,11 +12,16 @@ object ChatView {
      * O que a tela mostra no [mode]. No Resumo, as ações seguidas viram um
      * único [ChatItem.ToolGroup] (inclusive quando é uma só).
      */
-    fun arrange(items: List<ChatItem>, mode: String): List<ChatItem> = when (mode) {
-        AppSettings.VIEW_DETAILED -> items
-        AppSettings.VIEW_SUMMARY -> summarize(items)
-        // Normal, e qualquer valor desconhecido guardado nas preferências.
-        else -> items.filter { it !is ChatItem.Thinking }
+    fun arrange(items: List<ChatItem>, mode: String): List<ChatItem> {
+        // O tool do pai que já deu lugar a um cartão de filha não aparece — nem se o cartão sair
+        // pelo limite de 8 (ver hiddenByChild); sem a notificação da filha, ele continua visível.
+        val shown = items.filter { it !is ChatItem.Tool || !it.hiddenByChild }
+        return when (mode) {
+            AppSettings.VIEW_DETAILED -> shown
+            AppSettings.VIEW_SUMMARY -> summarize(shown)
+            // Normal, e qualquer valor desconhecido guardado nas preferências.
+            else -> shown.filter { it !is ChatItem.Thinking }
+        }
     }
 
     private fun summarize(items: List<ChatItem>): List<ChatItem> {

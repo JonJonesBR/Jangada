@@ -138,6 +138,8 @@ class AcpChat(
             .put("terminal", false)
             // O app sabe abrir o agente num terminal para o login (tela de terminal do Jangada).
             .put("auth", JSONObject().put("terminal", true))
+        // Só o OpenCode manda as sessões filhas, e só quando o app diz que sabe mostrá-las.
+        if (agentId == OPENCODE_ID) capabilities.put("_meta", JSONObject().put(ChildAgents.CAPABILITY, true))
         // Agente que não responde ao início: sem isso, a fila ficaria presa para sempre. Cancelado na resposta e no stop.
         val timeout = Runnable {
             initTimeout = null
@@ -762,7 +764,12 @@ class AcpChat(
         val hasId = json.has("id") && !json.isNull("id")
         when {
             method.isNotEmpty() && hasId -> handleRequest(json.get("id"), method, json.optJSONObject("params"))
-            method.isNotEmpty() -> if (method == "session/update") handleUpdate(json.optJSONObject("params"))
+            method.isNotEmpty() -> when (method) {
+                "session/update" -> handleUpdate(json.optJSONObject("params"))
+                // Notificação das sessões filhas (subagentes), que só o OpenCode manda.
+                ChildAgents.METHOD -> handleChildUpdate(json.optJSONObject("params"))
+                else -> Unit
+            }
             hasId -> {
                 val callback = pending.remove(json.optInt("id")) ?: return
                 callback(json.optJSONObject("result") ?: if (json.has("result")) JSONObject() else null, json.optJSONObject("error"))
@@ -869,6 +876,7 @@ class AcpChat(
                 }
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
                 applyStatus(tool, update)
+                applySubagent(tool, update)
                 changed()
             }
             "tool_call_update" -> {
@@ -879,6 +887,7 @@ class AcpChat(
                 summaryOf(update).takeIf { it.isNotEmpty() }?.let { tool.summary = it }
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
                 applyStatus(tool, update)
+                applySubagent(tool, update)
                 changed()
             }
             "plan" -> {
@@ -911,6 +920,25 @@ class AcpChat(
         }
     }
 
+    /**
+     * Notificação de uma sessão filha (subagente): cria o cartão dela ou aplica a mensagem, e
+     * redesenha quando algo visível mudou. Na thread principal, como o resto do [handle].
+     */
+    private fun handleChildUpdate(params: JSONObject?) {
+        params ?: return
+        // Recarga da conversa que já está na tela: o replay não refaz os cartões.
+        if (loadingHistory && skipReplay) return
+        val now = SystemClock.elapsedRealtime()
+        val id = params.optString("childSessionId")
+        val card = items.firstOrNull { it is ChatItem.Child && it.sessionId == id } as? ChatItem.Child
+        val visible = if (card != null) ChildAgents.apply(card, params, now) else ChildAgents.addCard(items, params, now)
+        if (visible) changed(throttle = true)
+    }
+
+    /** Subagentes da conversa (cartões próprios), na faixa de status e no estado do chat. */
+    override val childAgents: ChildSummary?
+        get() = ChildAgents.summary(items.toList().filterIsInstance<ChatItem.Child>())
+
     private fun applyStatus(tool: ChatItem.Tool, update: JSONObject) {
         val now = SystemClock.elapsedRealtime()
         val state = AcpParse.toolState(update.optString("status"))
@@ -940,6 +968,17 @@ class AcpChat(
 
     private fun textOf(content: JSONObject?): String? =
         content?.takeIf { it.optString("type") == "text" }?.optString("text")
+
+    /**
+     * Ação de subagente: guarda o agente filho e a sessão filha (do rawOutput) e liga os cartões
+     * dela ao tool do pai. Roda antes do changed(), para a tela já ver a ligação.
+     */
+    private fun applySubagent(tool: ChatItem.Tool, update: JSONObject) {
+        if (tool.toolName.lowercase() !in SUBAGENT_TOOLS) return
+        AcpParse.subagentAgent(update).takeIf { it.isNotEmpty() }?.let { tool.subagent = it }
+        AcpParse.subagentSession(update).takeIf { it.isNotEmpty() }?.let { tool.childSessionId = it }
+        ChildAgents.refresh(items)
+    }
 
     /** Resumo curto de uma ação: o comando, o arquivo ou o endereço envolvido. */
     private fun summaryOf(call: JSONObject): String {
@@ -1007,6 +1046,8 @@ class AcpChat(
         const val CODEX_ID = "codex"
         /** Id do OpenCode na receita: lê os limites do Go pela API do próprio opencode. */
         const val OPENCODE_ID = "opencode"
+        /** Ferramentas do pai que abrem um subagente (o nome do agente filho vem no rawInput delas). */
+        val SUBAGENT_TOOLS = setOf("subagent", "task")
         /** Intervalo mínimo entre leituras dos limites do OpenCode Go (cada uma abre outro opencode). */
         const val OPENCODE_LIMITS_EVERY_MS = 10 * 60_000L
         /** Pergunta os limites ao opencode, com servidor próprio (sai no fim) e tempo limite. */

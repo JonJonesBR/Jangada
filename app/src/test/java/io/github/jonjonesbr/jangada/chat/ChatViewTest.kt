@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada.chat
 
 import io.github.jonjonesbr.jangada.AppSettings
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -93,5 +94,30 @@ class ChatViewTest {
         assertEquals(listOf(before), (shown[0] as ChatItem.ToolGroup).tools)
         assertTrue(shown[1] === error)
         assertEquals(listOf(after), (shown[2] as ChatItem.ToolGroup).tools)
+    }
+
+    /** O cartão da filha marca o tool do pai como escondido; sem isso, o tool continua aparecendo. */
+    @Test
+    fun filhaEscondeOToolDoPaiEmTodosOsModos() {
+        val parent = ChatItem.Tool("p", "Subagent", "explorar").apply {
+            toolName = "subagent"
+            hiddenByChild = true
+        }
+        val child = ChatItem.Child("", "c1", "s1", 1).apply { parentTool = parent }
+        val other = tool("o")
+        val items = listOf(parent, child, other)
+
+        for (mode in listOf(AppSettings.VIEW_NORMAL, AppSettings.VIEW_DETAILED, AppSettings.VIEW_SUMMARY)) {
+            val shown = ChatView.arrange(items, mode)
+            assertFalse(mode, shown.any { it === parent })
+            assertTrue(mode, shown.any { it === child })
+        }
+        // No Resumo a outra ação continua agrupada.
+        val summary = ChatView.arrange(items, AppSettings.VIEW_SUMMARY)
+        assertEquals(listOf(other), (summary[1] as ChatItem.ToolGroup).tools)
+
+        // Sem a notificação da filha (tool não escondido), o cartão do pai não some.
+        val visible = ChatItem.Tool("p2", "Subagent", "outro").apply { toolName = "subagent" }
+        assertTrue(ChatView.arrange(listOf(visible, other), AppSettings.VIEW_NORMAL).any { it === visible })
     }
 }

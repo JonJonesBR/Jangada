@@ -247,4 +247,16 @@ class AcpParseTest {
         assertFalse(AcpParse.cancelled(JSONObject("{}")))
         assertFalse(AcpParse.cancelled(null))
     }
+
+    /** Sessão filha que o tool de subagente abriu: vem no metadata do rawOutput. */
+    @Test
+    fun sessaoFilhaDoToolDoPai() {
+        assertEquals("ses_1", AcpParse.subagentSession(JSONObject("""{"rawOutput":{"metadata":{"sessionID":"ses_1"}}}""")))
+        // Algumas versões gravam "sessionId".
+        assertEquals("ses_2", AcpParse.subagentSession(JSONObject("""{"rawOutput":{"metadata":{"sessionId":"ses_2"}}}""")))
+        // Agentes mais antigos: direto no rawOutput.
+        assertEquals("ses_3", AcpParse.subagentSession(JSONObject("""{"rawOutput":{"sessionID":"ses_3"}}""")))
+        assertEquals("", AcpParse.subagentSession(JSONObject("""{"rawOutput":{"metadata":{}}}""")))
+        assertEquals("", AcpParse.subagentSession(JSONObject("""{"status":"completed"}""")))
+    }
 }

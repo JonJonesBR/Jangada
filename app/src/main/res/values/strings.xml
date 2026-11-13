@@ -387,6 +387,22 @@
     </plurals>
     <string name="chat_tool_group_title">Actions</string>
     <string name="chat_tool_group_description">%1$s. Tap to see each action.</string>
+    <string name="chat_child_title">Subagent</string>
+    <string name="chat_child_state_running">Running</string>
+    <string name="chat_child_state_done">Done</string>
+    <string name="chat_child_state_failed">Failed</string>
+    <string name="chat_child_state_interrupted">Interrupted</string>
+    <string name="chat_child_show_actions">Tap to show the actions</string>
+    <string name="chat_child_hide_actions">Tap to hide the actions</string>
+    <string name="chat_child_description">%1$s. %2$s.</string>
+    <plurals name="chat_child_actions">
+        <item quantity="one">%1$d action</item>
+        <item quantity="other">%1$d actions</item>
+    </plurals>
+    <plurals name="chat_child_summary">
+        <item quantity="one">%1$d subagent · %2$d running</item>
+        <item quantity="other">%1$d subagents · %2$d running</item>
+    </plurals>
     <string name="effort_low">Low</string>
     <string name="effort_medium">Medium</string>
     <string name="effort_high">High</string>

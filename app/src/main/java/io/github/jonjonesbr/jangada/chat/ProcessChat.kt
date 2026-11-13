@@ -416,6 +416,12 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
             } else if (item is ChatItem.Tool) {
                 // Ação que não terminou não fica com "…" para sempre: o turno parou antes de ela responder.
                 if (!item.done) item.mark(ToolState.CANCELLED, SystemClock.elapsedRealtime())
+            } else if (item is ChatItem.Child) {
+                // Subagente que ainda rodava quando o agente parou: interrompido, com o fim gravado.
+                if (item.state == ChildState.RUNNING) {
+                    item.state = ChildState.INTERRUPTED
+                    if (item.endedAtMs == 0L) item.endedAtMs = SystemClock.elapsedRealtime()
+                }
             }
         }
     }
@@ -432,10 +438,10 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * Recusa (false) com turno em andamento, sem como retomar, ou com pedido de permissão ou login
      * sem resposta ou em andamento: nesses casos parar perderia o que o usuário precisa responder
      * (no login em andamento, o agente espera a volta do navegador). Também recusa com tarefas
-     * em segundo plano: pararia o que o agente ainda está fazendo.
+     * em segundo plano ou subagente rodando: pararia o que o agente ainda está fazendo.
      */
     override fun sleep(): Boolean {
-        if (!running || busy || background.isNotEmpty() || !canResume) return false
+        if (!running || busy || background.isNotEmpty() || (childAgents?.running ?: 0) > 0 || !canResume) return false
         val waiting = items.any { item ->
             (item is ChatItem.Permission && item.chosen == null) ||
                 (item is ChatItem.Login &&

@@ -78,6 +78,8 @@ import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.ChildState
+import io.github.jonjonesbr.jangada.chat.ChildSummary
 import io.github.jonjonesbr.jangada.chat.OpenCodeStats
 import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.ChatView
@@ -157,13 +159,15 @@ class ChatActivity : JangadaActivity() {
 
     /**
      * Relógio da faixa de status (ver [updateStatus]): a cada segundo reescreve só o texto dela, para o
-     * tempo ("há 0:12") andar sem mensagem nova. Nunca redesenha a lista da conversa. Roda entre
+     * tempo ("há 0:12") andar sem mensagem nova, e o tempo dos cartões de subagente que ainda rodam
+     * (ver `ChatAdapter.refreshChildTimes`). Nunca redesenha a lista da conversa. Roda entre
      * onResume e onPause; um só para a tela, não um por item. Só fica agendado enquanto o tempo anda.
      */
     private val statusClock = object : Runnable {
         override fun run() {
             // Cada updateStatus decide se o relógio continua (startStatusClock) ou para (stopStatusClock).
             engine?.let { updateStatus(it) }
+            adapter.refreshChildTimes()
         }
     }
 
@@ -1141,6 +1145,8 @@ class ChatActivity : JangadaActivity() {
      */
     private fun updateStatus(chat: AgentChat) {
         val background = chat.background
+        val children = chat.childAgents
+        val runningChildren = children?.running ?: 0
         val state = AgentStatus.of(
             items = chat.items.toList(),
             busy = chat.busy,
@@ -1152,7 +1158,7 @@ class ChatActivity : JangadaActivity() {
             now = SystemClock.elapsedRealtime(),
             stallMs = settings.chatStallSeconds * 1000L,
         )
-        status.visibility = if (state != AgentStatus.State.Idle || background.isNotEmpty()) View.VISIBLE else View.GONE
+        status.visibility = if (state != AgentStatus.State.Idle || background.isNotEmpty() || runningChildren > 0) View.VISIBLE else View.GONE
         // Tocar na faixa só faz algo com tarefas em segundo plano (ver showBackgroundSheet).
         status.isClickable = background.isNotEmpty()
         // O relógio só gira se o agente está mesmo trabalhando: pedido de permissão, travamento ou queda
@@ -1160,18 +1166,19 @@ class ChatActivity : JangadaActivity() {
         val working = state is AgentStatus.State.Thinking || state is AgentStatus.State.Reloading ||
             (state is AgentStatus.State.Running && !state.stalled)
         statusSpinner.visibility = if (working) View.VISIBLE else View.GONE
-        // O relógio só corre enquanto o tempo anda: ocioso ou com o agente perdido, ele para.
-        val clock = state != AgentStatus.State.Idle && state !is AgentStatus.State.Lost
+        // O relógio só corre enquanto o tempo anda: ocioso ou com o agente perdido, ele para — mas
+        // com subagente rodando ele segue, para o tempo dos cartões deles andar.
+        val clock = (state != AgentStatus.State.Idle && state !is AgentStatus.State.Lost) || runningChildren > 0
         if (clock && resumed) startStatusClock() else stopStatusClock()
         // Parar interrompe o turno; com o agente perdido não há o que parar.
         stopButton.visibility = if (chat.busy && state !is AgentStatus.State.Lost) View.VISIBLE else View.GONE
-        val lines = statusLines(state, background)
+        val lines = statusLines(state, background, children)
         statusText.maxLines = if (compactLayout) 1 else 3
         statusText.text = lines.joinToString(if (compactLayout) " · " else "\n")
     }
 
-    /** Texto da faixa para o [state] e as tarefas em [background]; vazio quando não há o que dizer. */
-    private fun statusLines(state: AgentStatus.State, background: List<BackgroundTask>): List<String> {
+    /** Texto da faixa para o [state], as tarefas em [background] e os [children]; vazio quando não há o que dizer. */
+    private fun statusLines(state: AgentStatus.State, background: List<BackgroundTask>, children: ChildSummary?): List<String> {
         val lines = mutableListOf<String>()
         when (state) {
             AgentStatus.State.Idle -> Unit
@@ -1212,6 +1219,10 @@ class ChatActivity : JangadaActivity() {
             val names = background.map { it.description.trim() }.filter { it.isNotEmpty() }
             val what = names.joinToString(", ").ifEmpty { getString(R.string.chat_background_tasks) }
             lines += getString(R.string.chat_background_many, background.size, what)
+        }
+        // Subagentes: quantos e quantos ainda rodam (a faixa aparece mesmo com o agente ocioso).
+        if (children != null) {
+            lines += resources.getQuantityString(R.plurals.chat_child_summary, children.total, children.total, children.running)
         }
         // Com o agente ocioso, avisa que dá para tocar e parar. No compacto não cabe a dica.
         if (background.isNotEmpty() && state == AgentStatus.State.Idle && !compactLayout) {
@@ -3068,8 +3079,11 @@ class ChatActivity : JangadaActivity() {
         /** Respostas já separadas em partes e formatadas, por item (cache do adaptador). */
         private val answers = WeakHashMap<ChatItem.Assistant, Rendered>()
 
+        /** Linha de estado de cada cartão de subagente montado (para o tempo andar sem redesenhar). */
+        private val stateViews = WeakHashMap<ChatItem.Child, TextView>()
+
         /** Um tipo de linha para cada tipo de item (o Android reaproveita só dentro do mesmo tipo). */
-        override fun getViewTypeCount() = 9
+        override fun getViewTypeCount() = 10
 
         override fun getItemViewType(position: Int): Int = when (snapshot[position]) {
             is ChatItem.User -> 0
@@ -3081,6 +3095,7 @@ class ChatActivity : JangadaActivity() {
             is ChatItem.Info -> 6
             is ChatItem.Thinking -> 7
             is ChatItem.ToolGroup -> 8
+            is ChatItem.Child -> 9
         }
 
         /**
@@ -3111,6 +3126,7 @@ class ChatActivity : JangadaActivity() {
                     is ChatItem.Info -> infoText(item, old as? TextView)
                     is ChatItem.Thinking -> thinkingView(item, old as? TextView)
                     is ChatItem.ToolGroup -> toolGroupLine(item, old as? TextView)
+                    is ChatItem.Child -> childCard(item)
                 },
             )
             return row
@@ -3344,6 +3360,132 @@ class ChatActivity : JangadaActivity() {
             setBackgroundResource(selectableBackground)
             setOnClickListener { showToolGroup(item) }
             contentDescription = getString(R.string.chat_tool_group_description, summary + running?.let { ". " + toolLabel(it) + " " + it.summary }.orEmpty())
+        }
+
+        /**
+         * Cartão de um subagente (sessão filha do opencode): estado com o tempo, descrição, ações e,
+         * ao terminar, o resultado. Só exibição: o toque abre e fecha as ações, sem mexer na conversa.
+         */
+        private fun childCard(item: ChatItem.Child): View {
+            val card = LinearLayout(this@ChatActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                setPadding(dp(14), dp(12), dp(14), dp(10))
+            }
+            // Cabeçalho: "Subagente · explore" (o agente filho só quando o pai informa).
+            val head = if (item.agent.isEmpty()) getString(R.string.chat_child_title)
+            else getString(R.string.chat_child_title) + " · " + item.agent
+            // Estado e tempo: "… Em andamento · 0:12"; o tempo para quando ele termina.
+            val state = childStateLine(item)
+            card.addView(childText(head, 15f, R.color.setup_text).apply {
+                setTypeface(typeface, Typeface.BOLD)
+                contentDescription = getString(R.string.chat_child_description, head, state)
+            })
+            // A linha de estado é guardada para o relógio da faixa reescrever só ela (ver refreshChildTimes).
+            val stateView = childText(state, 12f, R.color.setup_muted).apply { tag = item }
+            stateViews[item] = stateView
+            card.addView(stateView)
+            if (item.description.isNotEmpty()) {
+                card.addView(childText(item.description, 14f, R.color.setup_text).apply {
+                    maxLines = 3
+                    ellipsize = TextUtils.TruncateAt.END
+                    setPadding(0, dp(4), 0, 0)
+                })
+            }
+            if (item.actions.isNotEmpty()) {
+                val count = resources.getQuantityString(R.plurals.chat_child_actions, item.actions.size, item.actions.size)
+                // Fechado, a ação em andamento (ou a última) já aparece na linha.
+                val current = item.actions.lastOrNull { it.state == ToolState.RUNNING } ?: item.actions.last()
+                val detail = ToolText.label(this@ChatActivity, current.name) + "  " + current.summary
+                card.addView(childText("$count · $detail", 12f, R.color.setup_muted).apply {
+                    maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
+                    gravity = Gravity.CENTER_VERTICAL
+                    minHeight = dp(48)
+                    setPadding(dp(4), 0, dp(4), 0)
+                    setBackgroundResource(selectableBackground)
+                    setOnClickListener {
+                        item.expanded = !item.expanded
+                        notifyDataSetChanged()
+                    }
+                    val hint = getString(if (item.expanded) R.string.chat_child_hide_actions else R.string.chat_child_show_actions)
+                    contentDescription = count + ". " + hint
+                })
+                if (item.expanded) {
+                    for (action in item.actions) {
+                        card.addView(childText(actionMark(action.state) + " " + ToolText.label(this@ChatActivity, action.name) + "  " + action.summary, 12f, R.color.setup_muted).apply {
+                            maxLines = 2
+                            ellipsize = TextUtils.TruncateAt.END
+                            setPadding(dp(4), dp(2), dp(4), dp(2))
+                        })
+                    }
+                }
+            }
+            if (item.state != ChildState.RUNNING) {
+                // O erro vem antes do resultado; o resultado aparece inteiro com o cartão aberto.
+                item.error?.takeIf { it.isNotBlank() }?.let {
+                    card.addView(childText(it, 13f, R.color.setup_error).apply { setPadding(0, dp(6), 0, 0) })
+                }
+                if (item.result.isNotEmpty()) {
+                    card.addView(childText(item.result, 13f, R.color.setup_text).apply {
+                        maxLines = if (item.expanded) Int.MAX_VALUE else 6
+                        ellipsize = TextUtils.TruncateAt.END
+                        setTextIsSelectable(true)
+                        setPadding(0, dp(6), 0, 0)
+                    })
+                }
+            }
+            return card
+        }
+
+        /** Linha de texto do cartão de subagente. */
+        private fun childText(body: String, size: Float, color: Int) = TextView(this@ChatActivity).apply {
+            text = body
+            textSize = size * chatScale
+            setTextColor(getColor(color))
+        }
+
+        /** Linha de estado do cartão de subagente: marca, estado e o tempo decorrido. */
+        private fun childStateLine(item: ChatItem.Child): String {
+            val until = if (item.endedAtMs > 0) item.endedAtMs else SystemClock.elapsedRealtime()
+            // Sem o início informado, o tempo conta de zero (e não desde o boot do aparelho).
+            val since = if (item.startedAtMs > 0) item.startedAtMs else until
+            return childMark(item.state) + " " + getString(
+                when (item.state) {
+                    ChildState.RUNNING -> R.string.chat_child_state_running
+                    ChildState.DONE -> R.string.chat_child_state_done
+                    ChildState.FAILED -> R.string.chat_child_state_failed
+                    ChildState.INTERRUPTED -> R.string.chat_child_state_interrupted
+                },
+            ) + " · " + AgentStatus.elapsed(until - since)
+        }
+
+        /**
+         * Reescreve só a linha de estado dos cartões que ainda rodam (chamado pelo relógio da faixa,
+         * uma vez por segundo): nada de redesenhar a lista por causa do tempo.
+         */
+        fun refreshChildTimes() {
+            for ((card, view) in stateViews) {
+                // A view pode ter sido reaproveitada para outro cartão (o tag diz de quem ela é).
+                if (card.state != ChildState.RUNNING || view.tag !== card) continue
+                view.text = childStateLine(card)
+            }
+        }
+
+        /** Marca de um subagente: … rodando, ✓ terminou, ✕ falhou, – interrompido. */
+        private fun childMark(state: ChildState) = when (state) {
+            ChildState.RUNNING -> "…"
+            ChildState.DONE -> "✓"
+            ChildState.FAILED -> "✕"
+            ChildState.INTERRUPTED -> "–"
+        }
+
+        /** Marca de uma ação do subagente (mesmo critério das ações do chat). */
+        private fun actionMark(state: ToolState) = when (state) {
+            ToolState.DONE -> "✓"
+            ToolState.FAILED -> "✕"
+            ToolState.CANCELLED, ToolState.REJECTED -> "–"
+            ToolState.PENDING, ToolState.RUNNING -> "…"
         }
 
         /**

@@ -8,6 +8,12 @@ import org.json.JSONObject
  */
 enum class ToolState { PENDING, RUNNING, DONE, FAILED, CANCELLED, REJECTED }
 
+/**
+ * Ciclo de vida de um subagente (sessão filha que o agente abriu): rodando, concluído, falhou ou
+ * foi interrompido (o turno parou antes de ele terminar).
+ */
+enum class ChildState { RUNNING, DONE, FAILED, INTERRUPTED }
+
 /** Um item da conversa mostrada no chat (igual para todos os agentes). */
 sealed class ChatItem {
     class User(val text: String, val attachments: List<String> = emptyList()) : ChatItem() {
@@ -32,6 +38,12 @@ sealed class ChatItem {
         var toolName = ""
         /** Tipo da ferramenta no protocolo (ex.: "execute", "edit"); vazio quando o agente não informa. */
         var kind = ""
+        /** Agente filho que esta ação abriu (ex.: "explore"); só faz sentido no subagent. */
+        var subagent = ""
+        /** Sessão filha que esta ação abriu (rawOutput.metadata do subagent); vazio quando não há. */
+        var childSessionId = ""
+        /** O cartão da filha tomou o lugar desta ação: continua escondida mesmo se o cartão sair. */
+        var hiddenByChild = false
 
         /**
          * Aplica um estado novo, com a hora recebida (função pura: a tela e os testes passam o [now]).
@@ -118,7 +130,50 @@ sealed class ChatItem {
      * `chat.items`; [ChatView.arrange] monta na hora, a partir das ações de verdade.
      */
     class ToolGroup(val tools: List<Tool>) : ChatItem()
+
+    /**
+     * Subagente que o agente abriu (sessão filha; hoje só o opencode manda). Só de exibição: o
+     * cartão do pai ([parentTool]) some da conversa e dá lugar a este (ver [ChatView.arrange]).
+     * [title] é o título da sessão filha (quase sempre automático, por isso não serve de descrição);
+     * [description] e [agent] vêm do tool call do pai. Só a thread principal mexe neste item.
+     */
+    class Child(
+        var title: String,
+        val sessionId: String,
+        val parentSessionId: String,
+        val depth: Int,
+    ) : ChatItem() {
+        /** Agente filho (ex.: "explore"), do rawInput do tool call do pai. */
+        var agent = ""
+        /** O que o subagente faz (a descrição do tool call do pai). */
+        var description = ""
+        var state = ChildState.RUNNING
+        /** elapsedRealtime de quando ele começou (0 = ainda não informado). */
+        var startedAtMs = 0L
+        /** elapsedRealtime de quando ele terminou (0 = ainda rodando). */
+        var endedAtMs = 0L
+        /** Mensagem de erro, quando falhou. */
+        var error: String? = null
+        /** Ações dele, na ordem em que chegaram (no máximo [ChildAgents.MAX_ACTIONS]). */
+        val actions = mutableListOf<ChildAction>()
+        /** O que ele respondeu (só aparece quando termina). */
+        var result = ""
+        /** messageId do trecho de resposta em [result]; um id novo recomeça o texto. */
+        var resultMessageId: String? = null
+        /** [result] já foi cortado no limite: o resto que chegar é ignorado. */
+        var resultTruncated = false
+        /** Estado da tela: o cartão está aberto (ações e resultado inteiro). */
+        var expanded = false
+        /** O cartão `subagent` do pai que abriu esta filha; null quando não deu para ligar. */
+        var parentTool: Tool? = null
+    }
 }
+
+/** Uma ação de um subagente ([ChatItem.Child]); nome e resumo são os do tool call da filha. */
+class ChildAction(val id: String, var name: String, var summary: String, var state: ToolState)
+
+/** Quantos subagentes a conversa tem e quantos ainda rodam (linha da faixa de status). */
+class ChildSummary(val total: Int, val running: Int)
 
 /** Quando o chat pede a atenção do usuário (o serviço decide se mostra um aviso). */
 enum class ChatAttention { PERMISSION, LOGIN, FINISHED, FAILED, LIMIT }
@@ -142,7 +197,8 @@ fun chatState(chat: AgentChat): ChatState {
     return when {
         waiting -> ChatState.WAITING
         // Tarefas em segundo plano contam como trabalho, para não dormir nem parecer pronto.
-        chat.busy || chat.background.isNotEmpty() -> ChatState.WORKING
+        // Subagente rodando também: o turno do pai pode ter acabado enquanto ele continua.
+        chat.busy || chat.background.isNotEmpty() || (chat.childAgents?.running ?: 0) > 0 -> ChatState.WORKING
         else -> ChatState.READY
     }
 }
@@ -240,6 +296,8 @@ interface AgentChat {
     val commands: List<SlashCommand> get() = emptyList()
     /** Tarefas que o agente deixou rodando em segundo plano (subagentes, comandos). Vazia se não há ou se o agente não informa. */
     val background: List<BackgroundTask> get() = emptyList()
+    /** Subagentes da conversa (cartões próprios); null quando não há nenhum ou o agente não informa. */
+    val childAgents: ChildSummary? get() = null
     /** Para uma tarefa em segundo plano (ver [background]). Sem efeito se o agente não sabe parar tarefas. */
     fun stopBackground(taskId: String) {}
     /** O agente está recarregando a conversa anterior (session/load): ainda não aceita turno; mensagens ficam na fila. */

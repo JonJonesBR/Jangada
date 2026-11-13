@@ -16,7 +16,10 @@ object ChatExport {
                     for (name in item.attachments) append("\n- anexo: ").append(name)
                 }
                 is ChatItem.Assistant -> "**$agentLabel:**\n\n${item.text}"
-                is ChatItem.Tool -> "> ${item.name}: ${item.summary}"
+                // O tool do pai que deu lugar a um cartão de filha não é exportado.
+                is ChatItem.Tool -> if (item.hiddenByChild) null else "> ${item.name}: ${item.summary}"
+                // Subagente: descrição (ou título), ações e o que respondeu.
+                is ChatItem.Child -> childBlock(item)
                 is ChatItem.Plan -> item.entries.joinToString("\n") { entry ->
                     (if (entry.status == "completed") "- [x] " else "- [ ] ") + entry.text
                 }
@@ -26,5 +29,14 @@ object ChatExport {
             if (block != null && block.isNotBlank()) blocks += block
         }
         return blocks.joinToString("\n\n") + "\n"
+    }
+
+    /** Cartão de um subagente em Markdown: descrição (ou título), ações (uma linha cada) e resultado. */
+    private fun childBlock(child: ChatItem.Child): String = buildString {
+        // O título automático da sessão filha não entra; sem descrição nem título, o rótulo genérico.
+        append("**").append(child.description.ifEmpty { child.title.ifEmpty { "Subagent" } }).append("**")
+        if (child.agent.isNotEmpty()) append(" (").append(child.agent).append(")")
+        for (action in child.actions) append("\n> ").append(action.name).append(": ").append(action.summary)
+        if (child.result.isNotEmpty()) append("\n\n").append(child.result)
     }
 }
