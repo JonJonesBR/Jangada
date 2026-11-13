@@ -170,7 +170,7 @@ object ChatHistory {
                                 val tool = ChatItem.Tool(
                                     block.optString("id"), block.optString("name"),
                                     ToolText.summary(block.optString("name"), block.optJSONObject("input")),
-                                ).apply { done = true }
+                                ).apply { mark(ToolState.DONE, 0) }
                                 tools[tool.id] = tool
                                 add(tool)
                             }

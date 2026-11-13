@@ -788,7 +788,8 @@ class AcpChat(
         if (items.any { it is ChatItem.Permission && it.requestId == id }) return
         val known = tools[toolCall.optString("toolCallId")]
         val title = toolCall.optString("title").ifEmpty { known?.name ?: context.getString(R.string.chat_action) }
-        val summary = summaryOf(toolCall).ifEmpty { known?.summary.orEmpty() }
+        // O comando inteiro (sem corte): o cartão e o risco dependem dele.
+        val summary = AcpParse.permissionSummary(toolCall).ifEmpty { known?.summary.orEmpty() }
         val parsed = AcpParse.permissionOptions(params.optJSONArray("options"))
         add(
             ChatItem.Permission(

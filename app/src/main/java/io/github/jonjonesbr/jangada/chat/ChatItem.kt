@@ -80,7 +80,7 @@ sealed class ChatItem {
         var requestedAtMs: Long = 0L
         /** Estado da tela: o cartão está aberto mostrando o comando/diff inteiro. */
         var expanded: Boolean = false
-        /** Estado da tela: até quando (elapsedRealtime) o botão de recusa espera um segundo toque; 0 = sem confirmação. */
+        /** Estado da tela: até quando (elapsedRealtime) o Permitir espera o segundo toque; 0 = sem confirmação. */
         var confirmUntilMs: Long = 0L
         /** Estado da tela (só na thread principal): pergunta → índices das opções marcadas. */
         val selected: MutableMap<Int, MutableSet<Int>> = HashMap()

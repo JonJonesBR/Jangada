@@ -747,20 +747,23 @@ object ToolText {
     fun label(context: android.content.Context, name: String): String =
         labelRes(name)?.let { context.getString(it) } ?: name
 
-    /** Texto de cada ferramenta conhecida do Claude Code; null mantém o nome original. */
+    /**
+     * Texto de cada ferramenta conhecida; null mantém o nome original. Os nomes do Claude Code vêm
+     * capitalizados ("Bash"); os do ACP, minúsculos ("shell").
+     */
     fun labelRes(name: String): Int? = when (name) {
-        "Bash" -> R.string.tool_bash
-        "Read" -> R.string.tool_read
-        "Write" -> R.string.tool_write
-        "Edit", "MultiEdit" -> R.string.tool_edit
+        "Bash", "shell" -> R.string.tool_bash
+        "Read", "read" -> R.string.tool_read
+        "Write", "write" -> R.string.tool_write
+        "Edit", "MultiEdit", "edit", "patch" -> R.string.tool_edit
         "NotebookEdit" -> R.string.tool_notebook
-        "Glob" -> R.string.tool_glob
-        "Grep" -> R.string.tool_grep
-        "WebFetch" -> R.string.tool_web_fetch
-        "WebSearch" -> R.string.tool_web_search
-        "TodoWrite" -> R.string.tool_todo
-        "Task", "Agent" -> R.string.tool_agent
-        "AskUserQuestion" -> R.string.tool_question
+        "Glob", "glob" -> R.string.tool_glob
+        "Grep", "grep" -> R.string.tool_grep
+        "WebFetch", "webfetch" -> R.string.tool_web_fetch
+        "WebSearch", "websearch" -> R.string.tool_web_search
+        "TodoWrite", "todowrite" -> R.string.tool_todo
+        "Task", "Agent", "subagent" -> R.string.tool_agent
+        "AskUserQuestion", "question" -> R.string.tool_question
         "ExitPlanMode" -> R.string.tool_plan
         else -> null
     }

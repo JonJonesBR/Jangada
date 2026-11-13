@@ -83,6 +83,20 @@ internal object AcpParse {
         }
     }
 
+    /**
+     * Comando (ou caminho/endereço/consulta) de um pedido de permissão, inteiro: aqui não vale o
+     * limite de 400 do [ToolText.summary], porque o cartão mostra o comando completo.
+     * Vazio quando o agente não manda nada disso.
+     */
+    fun permissionSummary(toolCall: JSONObject): String {
+        val input = toolCall.optJSONObject("rawInput") ?: return ""
+        for (key in listOf("command", "file_path", "path", "url", "query", "pattern", "description")) {
+            val value = input.optString(key)
+            if (value.isNotEmpty()) return value
+        }
+        return ""
+    }
+
     /** Pasta de trabalho que o agente mandou no pedido de permissão (rawInput.cwd), se houver. */
     fun permissionWorkdir(toolCall: JSONObject): String? =
         toolCall.optJSONObject("rawInput")?.optString("cwd")?.takeIf { it.isNotEmpty() }

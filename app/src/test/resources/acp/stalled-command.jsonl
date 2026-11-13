@@ -1,0 +1,2 @@
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sessao-teste","update":{"sessionUpdate":"tool_call","toolCallId":"call-2","title":"npm run build","name":"shell","kind":"execute","status":"pending","rawInput":{"command":"npm run build","cwd":"/projeto"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sessao-teste","update":{"sessionUpdate":"tool_call_update","toolCallId":"call-2","status":"in_progress","rawInput":{"command":"npm run build","cwd":"/projeto"}}}}

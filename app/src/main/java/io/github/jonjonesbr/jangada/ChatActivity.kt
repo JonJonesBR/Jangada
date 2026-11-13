@@ -84,7 +84,9 @@ import io.github.jonjonesbr.jangada.chat.ChatView
 import io.github.jonjonesbr.jangada.chat.Markdown
 import io.github.jonjonesbr.jangada.chat.chatState
 import io.github.jonjonesbr.jangada.chat.PermissionOption
+import io.github.jonjonesbr.jangada.chat.PermissionRisk
 import io.github.jonjonesbr.jangada.chat.SlashCommand
+import io.github.jonjonesbr.jangada.chat.ToolState
 import io.github.jonjonesbr.jangada.chat.ToolText
 import io.github.jonjonesbr.jangada.chat.friendlyModel
 import io.github.jonjonesbr.jangada.linux.Git
@@ -142,9 +144,6 @@ class ChatActivity : JangadaActivity() {
     private lateinit var permissionBar: View
     private lateinit var permissionTitle: TextView
     private lateinit var permissionText: TextView
-    private lateinit var permissionMore: TextView
-    private lateinit var permissionAllow: Button
-    private lateinit var permissionDeny: Button
     private lateinit var permissionDetails: Button
     private lateinit var attachmentsRow: LinearLayout
     private lateinit var prepareActions: LinearLayout
@@ -310,9 +309,6 @@ class ChatActivity : JangadaActivity() {
         permissionBar = findViewById(R.id.chat_permission_bar)
         permissionTitle = findViewById(R.id.chat_permission_title)
         permissionText = findViewById(R.id.chat_permission_text)
-        permissionMore = findViewById(R.id.chat_permission_more)
-        permissionAllow = findViewById(R.id.chat_permission_allow)
-        permissionDeny = findViewById(R.id.chat_permission_deny)
         permissionDetails = findViewById(R.id.chat_permission_details)
         attachmentsRow = findViewById(R.id.chat_attachments)
         prepareActions = findViewById(R.id.chat_prepare_actions)
@@ -376,9 +372,9 @@ class ChatActivity : JangadaActivity() {
         chipContext.setOnClickListener { engine?.let { showContextSheet(it) } }
         chipLimits.setOnClickListener { showLimitsSheet() }
         chipChanges.setOnClickListener { openChanges() }
-        permissionAllow.setOnClickListener { answerBarPermission(PermissionOption.Kind.ALLOW_ONCE) }
-        permissionDeny.setOnClickListener { answerBarPermission(PermissionOption.Kind.REJECT_ONCE) }
         permissionDetails.setOnClickListener { showBarPermission() }
+        // A faixa inteira também leva ao cartão (o botão Detalhes é só o convite).
+        permissionBar.setOnClickListener { showBarPermission() }
         // Teclado aberto (adjustResize) ou janela baixa (paisagem): a conversa tem prioridade.
         // Só a altura não bastava: com o teclado aberto a janela ainda passa de 420dp em muitos celulares,
         // e com fonte grande a caixa come a tela. Não depende do que está dentro da janela, então não há vai e volta.
@@ -818,22 +814,30 @@ class ChatActivity : JangadaActivity() {
             .show()
     }
 
-    /** Marca de uma ação: … em andamento, ✕ se falhou, ✓ se terminou. */
+    /**
+     * Marca de uma ação: … em andamento, ✕ se falhou, – se cancelada ou recusada (o usuário parou),
+     * ✓ se terminou.
+     */
     private fun toolMark(tool: ChatItem.Tool) = when {
-        !tool.done -> "…"
-        tool.failed -> "✕"
-        else -> "✓"
+        tool.state == ToolState.FAILED -> "✕"
+        tool.state == ToolState.CANCELLED || tool.state == ToolState.REJECTED -> "–"
+        tool.done -> "✓"
+        else -> "…"
     }
 
+    /** Rótulo humano da ferramenta: o nome do protocolo (ex.: "shell") quando o título é genérico. */
+    private fun toolLabel(tool: ChatItem.Tool): String =
+        ToolText.label(this, tool.toolName.ifEmpty { tool.name })
+
     /** Linha de uma ação: marca, rótulo e o comando ou arquivo envolvido. */
-    private fun toolLineText(tool: ChatItem.Tool) = "${toolMark(tool)} ${ToolText.label(this, tool.name)}  ${tool.summary}"
+    private fun toolLineText(tool: ChatItem.Tool) = "${toolMark(tool)} ${toolLabel(tool)}  ${tool.summary}"
 
     /** Modo Resumo: as ações do grupo, uma por linha; a que tem saída abre num toque. */
     private fun showToolGroup(item: ChatItem.ToolGroup) {
         // Cada ação: rótulo e resumo, com a marca (…, ✕, ✓) como ícone; a que tem saída abre num toque.
         val rows = item.tools.map { tool ->
             Sheet.Row(
-                title = ToolText.label(this, tool.name) + "  " + tool.summary,
+                title = toolLabel(tool) + "  " + tool.summary,
                 icon = toolMark(tool),
                 enabled = tool.output != null,
             ) {
@@ -1227,8 +1231,8 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Faixa fixa com o primeiro pedido de permissão pendente (o cartão completo continua na conversa).
-     * Some quando não há pedido. Os botões só aparecem se a opção existe no pedido.
+     * Faixa fixa com o primeiro pedido de permissão pendente (o cartão completo continua na conversa
+     * e é o único lugar com Permitir/Recusar). Some quando não há pedido.
      */
     private fun updatePermissionBar(chat: AgentChat) {
         // Cópia da lista: ela muda na thread principal enquanto se percorre.
@@ -1237,30 +1241,12 @@ class ChatActivity : JangadaActivity() {
         barPermission = first
         permissionBar.visibility = if (first == null) View.GONE else View.VISIBLE
         if (first == null) return
-        permissionTitle.text = getString(R.string.chat_permission_bar_title, agentName)
-        // Tela baixa: sem a linha do título, e o texto em até duas linhas (a faixa não empurra a conversa para fora).
+        permissionTitle.text = getString(R.string.chat_permission_bar_count, 1, pending.size)
+        // Tela baixa: sem a linha do título, e o comando em até duas linhas (a faixa não empurra a conversa para fora).
         permissionTitle.visibility = if (compactLayout) View.GONE else View.VISIBLE
-        permissionText.maxLines = if (compactLayout) 2 else 3
-        permissionText.text = listOf(first.title, first.summary).filter { it.isNotBlank() }.joinToString("\n")
-        val more = pending.size - 1
-        permissionMore.visibility = if (more > 0) View.VISIBLE else View.GONE
-        if (more > 0) permissionMore.text = resources.getQuantityString(R.plurals.chat_permission_more, more, more)
-        // Pergunta: a resposta é pelo cartão (campos e opções), não pelo Permitir da faixa.
-        permissionAllow.visibility = if (first.questions.isEmpty() && first.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) View.VISIBLE else View.GONE
-        // Plano: os mesmos nomes do cartão (Aprovar plano / Continuar planejando).
-        val plan = first.toolName == ChatEngine.PLAN_TOOL
-        permissionAllow.text = getString(if (plan) R.string.chat_plan_approve else R.string.chat_allow)
-        permissionDeny.text = getString(if (plan) R.string.chat_plan_keep else R.string.chat_deny)
-        permissionDeny.visibility = if (first.options.any { it.kind == PermissionOption.Kind.REJECT_ONCE }) View.VISIBLE else View.GONE
-    }
-
-    /** Permitir ou Recusar pela faixa: o mesmo caminho do cartão (engine.answer). */
-    private fun answerBarPermission(kind: PermissionOption.Kind) {
-        val item = barPermission ?: return
-        // Já respondido pelo cartão (a faixa ainda não foi redesenhada): nada a fazer.
-        if (item.chosen != null) return
-        val option = item.options.firstOrNull { it.kind == kind } ?: return
-        engine?.answer(item, option)
+        permissionText.maxLines = 2
+        // O comando inteiro fica no cartão; aqui cabe só o começo, para a faixa não crescer.
+        permissionText.text = first.summary.ifBlank { first.title }
     }
 
     /**
@@ -3007,6 +2993,52 @@ class ChatActivity : JangadaActivity() {
         PermissionOption.Kind.OTHER -> option.label.ifEmpty { option.id }
     }
 
+    /** Motivo de risco do pedido, traduzido (linha "⚠ Alto risco: …"). */
+    private fun riskReason(reason: PermissionRisk.Reason): String = getString(
+        when (reason) {
+            PermissionRisk.Reason.PUSH -> R.string.chat_risk_push
+            PermissionRisk.Reason.MERGE -> R.string.chat_risk_merge
+            PermissionRisk.Reason.TAG -> R.string.chat_risk_tag
+            PermissionRisk.Reason.RELEASE -> R.string.chat_risk_release
+            PermissionRisk.Reason.API -> R.string.chat_risk_api
+            PermissionRisk.Reason.WORKFLOW -> R.string.chat_risk_workflow
+            PermissionRisk.Reason.DELETE -> R.string.chat_risk_delete
+            PermissionRisk.Reason.OUTSIDE -> R.string.chat_risk_outside
+            PermissionRisk.Reason.SHELL_PIPE -> R.string.chat_risk_shell_pipe
+        },
+    )
+
+    /** Pedidos de permissão ainda sem resposta (cópia da lista: ela muda na thread principal). */
+    private fun pendingPermissions(): List<ChatItem.Permission> =
+        engine?.items?.filterIsInstance<ChatItem.Permission>()?.filter { it.chosen == null }.orEmpty()
+
+    /** Só o primeiro pedido pendente responde; os outros só mostram o pedido e esperam a vez. */
+    private fun isFirstPending(item: ChatItem.Permission): Boolean = pendingPermissions().firstOrNull() === item
+
+    /**
+     * Permitir do cartão. Em alto risco o primeiro toque só arma a confirmação (por [CONFIRM_PERMISSION_MS]);
+     * o segundo, dentro do prazo, responde. Fora do prazo, o toque recomeça a confirmação.
+     * Recusar não passa por aqui (responde em um toque).
+     */
+    private fun askPermission(
+        item: ChatItem.Permission,
+        option: PermissionOption,
+        analysis: PermissionRisk.Analysis,
+    ) {
+        if (!analysis.high) {
+            engine?.answer(item, option)
+            return
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (now < item.confirmUntilMs) {
+            item.confirmUntilMs = 0L
+            engine?.answer(item, option)
+            return
+        }
+        item.confirmUntilMs = now + CONFIRM_PERMISSION_MS
+        adapter.notifyDataSetChanged()
+    }
+
     /** Monta cada item da conversa (sem XML: são poucos tipos e bem simples). */
     private inner class ChatAdapter : BaseAdapter() {
         var snapshot: List<ChatItem> = emptyList()
@@ -3270,75 +3302,100 @@ class ChatActivity : JangadaActivity() {
         private fun toolGroupLine(item: ChatItem.ToolGroup, old: TextView?) = (old ?: TextView(this@ChatActivity)).apply {
             val tools = item.tools
             // A última ação ainda em andamento aparece embaixo, para ver o que está rodando.
-            val running = tools.lastOrNull { !it.done }
+            val running = tools.lastOrNull { it.state == ToolState.RUNNING } ?: tools.lastOrNull { !it.done }
+            // Só falha pinta o grupo de vermelho; cancelado/recusado é neutro.
+            val failed = tools.any { it.state == ToolState.FAILED }
             val mark = when {
+                failed -> "✕"
                 running != null -> "…"
-                tools.any { it.failed } -> "✕"
+                // Cancelado ou recusado não é sucesso nem falha: marca neutra.
+                tools.any { it.state == ToolState.CANCELLED || it.state == ToolState.REJECTED } -> "–"
                 else -> "✓"
             }
-            val counts = tools.groupBy { ToolText.label(this@ChatActivity, it.name) }
+            val counts = tools.groupBy { toolLabel(it) }
                 .entries.sortedByDescending { it.value.size }
                 .take(3)
                 .joinToString(", ") { "${it.value.size}× ${it.key}" }
             val summary = resources.getQuantityString(R.plurals.chat_tool_group, tools.size, tools.size) + " · " + counts
-            val second = running?.let { "\n" + ToolText.label(this@ChatActivity, it.name) + "  " + it.summary }
+            val second = running?.let { "\n" + toolLabel(it) + "  " + it.summary }
             text = "$mark $summary  ›" + second.orEmpty()
             // A linha de cima pode quebrar em duas; com a ação em andamento embaixo, cabem três.
             maxLines = if (second != null) 3 else 2
             ellipsize = TextUtils.TruncateAt.END
             typeface = Typeface.MONOSPACE
             textSize = 12f * chatScale
-            setTextColor(getColor(if (tools.any { it.failed }) R.color.setup_error else R.color.setup_muted))
+            setTextColor(getColor(if (failed) R.color.setup_error else R.color.setup_muted))
             setPadding(dp(4), dp(2), dp(4), dp(2))
             gravity = Gravity.CENTER_VERTICAL
             minHeight = dp(48)
             setBackgroundResource(selectableBackground)
             setOnClickListener { showToolGroup(item) }
-            contentDescription = getString(R.string.chat_tool_group_description, summary + running?.let { ". " + ToolText.label(this@ChatActivity, it.name) + " " + it.summary }.orEmpty())
+            contentDescription = getString(R.string.chat_tool_group_description, summary + running?.let { ". " + toolLabel(it) + " " + it.summary }.orEmpty())
         }
 
+        /**
+         * Cartão do pedido de permissão: o único lugar com Permitir e Recusar (a faixa fixa só mostra o
+         * pedido). Mostra o comando inteiro, encadeado, a pasta de trabalho, o risco e a fila de pedidos;
+         * em alto risco o Permitir pede um segundo toque.
+         */
         private fun permissionCard(item: ChatItem.Permission): View {
             if (item.questions.isNotEmpty()) return questionCard(item)
+            // Plano: cartão próprio (Markdown, aprovação no cartão), como sempre foi.
+            if (item.markdown || item.toolName == ChatEngine.PLAN_TOOL) return planCard(item)
             val card = LinearLayout(this@ChatActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundResource(R.drawable.card_bg)
                 setPadding(dp(14), dp(12), dp(14), dp(10))
             }
             card.addView(TextView(this@ChatActivity).apply {
-                text = if (item.toolName == ChatEngine.PLAN_TOOL) {
-                    getString(R.string.chat_plan_wants, agentName)
-                } else {
-                    getString(R.string.chat_wants_agent, agentName, item.title)
-                }
+                text = getString(R.string.chat_permission_wants, agentName)
                 setTextColor(getColor(R.color.setup_text))
                 textSize = 15f * chatScale
                 setTypeface(typeface, Typeface.BOLD)
             })
-            if (item.summary.isNotEmpty()) {
+            // De que ferramenta é o pedido: o nome do protocolo vira o rótulo humano (ex.: "shell" → Rodar comando).
+            card.addView(TextView(this@ChatActivity).apply {
+                text = ToolText.label(this@ChatActivity, item.toolName.ifEmpty { item.title })
+                setTextColor(getColor(R.color.setup_muted))
+                textSize = 12f * chatScale
+                setPadding(0, dp(2), 0, 0)
+            })
+            val command = item.summary.ifBlank { item.title }
+            // Edição/escrita não traz cwd: o próprio comando é o caminho do arquivo (vale para "fora do projeto").
+            val analysis = PermissionRisk.analyze(
+                command,
+                PermissionRisk.workPath(item.workdir, item.toolName, command),
+                engine?.cwd,
+            )
+            if (analysis.lines.isNotEmpty()) {
+                val expanded = item.expanded
                 card.addView(TextView(this@ChatActivity).apply {
-                    // Plano em Markdown (sem monospace); comando ou caminho continuam em monospace.
-                    if (item.markdown) {
-                        text = Markdown.render(item.summary, getColor(R.color.code_bg))
-                        textSize = 14f * chatScale
-                        maxLines = 25
-                        setTextColor(getColor(R.color.setup_text))
-                    } else {
-                        text = item.summary
-                        typeface = Typeface.MONOSPACE
-                        textSize = 12f * chatScale
-                        maxLines = 8
-                        setTextColor(getColor(R.color.setup_muted))
-                    }
+                    text = analysis.lines.joinToString("\n")
+                    typeface = Typeface.MONOSPACE
+                    textSize = 12f * chatScale
+                    // Fechado, no máximo 6 linhas; aberto, o comando inteiro (sem corte).
+                    maxLines = if (expanded) Int.MAX_VALUE else MAX_PERMISSION_LINES
                     ellipsize = TextUtils.TruncateAt.END
-                    setPadding(0, dp(6), 0, dp(4))
-                    // Texto cortado (reticências na última linha): tocar mostra o pedido inteiro.
-                    setOnClickListener {
-                        val lay = this.layout
-                        if (lay != null && lay.getEllipsisCount(lay.lineCount - 1) > 0) {
-                            showDetails(R.string.chat_permission_full, item.summary)
-                        }
-                    }
+                    setTextColor(getColor(R.color.setup_muted))
+                    setTextIsSelectable(true)
+                    setPadding(0, dp(6), 0, dp(2))
                 })
+                if (analysis.lines.size > MAX_PERMISSION_LINES) {
+                    card.addView(Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
+                        text = getString(
+                            if (expanded) R.string.chat_permission_hide_full else R.string.chat_permission_show_full,
+                        )
+                        isAllCaps = false
+                        textSize = 13f * chatScale
+                        minHeight = dp(48)
+                        setTextColor(getColor(R.color.accent_text))
+                        setOnClickListener {
+                            item.expanded = !item.expanded
+                            // Só o adaptador: um refresh() da tela pularia a rolagem da conversa.
+                            this@ChatAdapter.notifyDataSetChanged()
+                        }
+                    })
+                }
             }
             item.diff?.let { card.addView(diffView(it)) }
             if (item.detail.isNotEmpty()) {
@@ -3349,34 +3406,203 @@ class ChatActivity : JangadaActivity() {
                     setPadding(0, 0, 0, dp(4))
                 })
             }
+            if (!item.workdir.isNullOrBlank()) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(R.string.chat_permission_workdir, item.workdir)
+                    typeface = Typeface.MONOSPACE
+                    textSize = 11f * chatScale
+                    setTextColor(getColor(R.color.setup_muted))
+                    setPadding(0, dp(2), 0, dp(2))
+                })
+            }
+            if (analysis.high) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(
+                        R.string.chat_permission_risk,
+                        analysis.reasons.joinToString(", ") { riskReason(it) },
+                    )
+                    textSize = 13f * chatScale
+                    setTextColor(getColor(R.color.setup_error))
+                    setPadding(0, dp(4), 0, dp(2))
+                })
+            }
             val chosen = item.chosen
-            if (chosen == null) {
-                val buttons = LinearLayout(this@ChatActivity).apply { orientation = LinearLayout.VERTICAL }
-                // Permitir primeiro e em destaque; as outras opções como botões de texto.
-                for (option in item.options.sortedBy { it.kind.ordinal }) {
-                    val primary = option.kind == PermissionOption.Kind.ALLOW_ONCE
-                    val button = if (primary) Button(this@ChatActivity) else Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle)
-                    button.text = optionLabel(item, option)
-                    button.isAllCaps = false
-                    button.textSize = 14f * chatScale
-                    if (primary) {
-                        button.backgroundTintList = ColorStateList.valueOf(getColor(R.color.key_active))
-                        button.setTextColor(getColor(R.color.setup_on_accent))
-                    } else {
-                        button.setTextColor(getColor(if (option.allows) R.color.accent_text else R.color.setup_error))
-                    }
-                    button.setOnClickListener { engine?.answer(item, option) }
-                    buttons.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                }
-                card.addView(buttons)
-            } else {
+            if (chosen != null) {
                 card.addView(TextView(this@ChatActivity).apply {
                     text = optionLabel(item, chosen)
                     setTextColor(getColor(if (chosen.allows) R.color.setup_done else R.color.setup_error))
                     textSize = 13f * chatScale
                     setPadding(0, dp(4), 0, 0)
                 })
+                return card
             }
+            // Fila: só o primeiro pedido pendente tem botões; os outros esperam a resposta dele.
+            val pending = pendingPermissions()
+            val position = pending.indexOfFirst { it === item } + 1
+            if (pending.size > 1 && position > 0) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(R.string.chat_permission_queue, position, pending.size)
+                    textSize = 12f * chatScale
+                    setTextColor(getColor(R.color.setup_muted))
+                    setPadding(0, dp(2), 0, 0)
+                })
+            }
+            if (position > 1) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(R.string.chat_permission_wait_previous, 1, pending.size)
+                    textSize = 12f * chatScale
+                    setTextColor(getColor(R.color.setup_muted))
+                    setPadding(0, dp(4), 0, 0)
+                })
+            } else {
+                addPermissionButtons(card, item, analysis)
+            }
+            return card
+        }
+
+        /**
+         * Permitir e Recusar lado a lado (só o primeiro pedido pendente), com as demais opções como
+         * botões de texto embaixo. "Sempre" some no ACP e em alto risco.
+         */
+        private fun addPermissionButtons(
+            card: LinearLayout,
+            item: ChatItem.Permission,
+            analysis: PermissionRisk.Analysis,
+        ) {
+            val allow = item.options.firstOrNull { it.kind == PermissionOption.Kind.ALLOW_ONCE }
+            val deny = item.options.firstOrNull { it.kind == PermissionOption.Kind.REJECT_ONCE }
+            if (allow != null || deny != null) {
+                val row = LinearLayout(this@ChatActivity).apply { orientation = LinearLayout.HORIZONTAL }
+                if (allow != null) {
+                    val confirming = item.confirmUntilMs > SystemClock.elapsedRealtime()
+                    val button = Button(this@ChatActivity).apply {
+                        text = if (confirming) getString(R.string.chat_permission_confirm) else optionLabel(item, allow)
+                        isAllCaps = false
+                        textSize = 14f * chatScale
+                        minHeight = dp(48)
+                        backgroundTintList = ColorStateList.valueOf(getColor(R.color.key_active))
+                        setTextColor(getColor(R.color.setup_on_accent))
+                        setOnClickListener { askPermission(item, allow, analysis) }
+                    }
+                    row.addView(
+                        button,
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) },
+                    )
+                }
+                if (deny != null) {
+                    val button = Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
+                        text = getString(R.string.chat_deny)
+                        isAllCaps = false
+                        textSize = 14f * chatScale
+                        minHeight = dp(48)
+                        setTextColor(getColor(R.color.setup_error))
+                        setOnClickListener { engine?.answer(item, deny) }
+                    }
+                    row.addView(
+                        button,
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+                    )
+                }
+                card.addView(
+                    row,
+                    LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ),
+                )
+            }
+            val hideAlways = engine is AcpChat || analysis.high
+            val extra = item.options.filter { option ->
+                when (option.kind) {
+                    PermissionOption.Kind.ALLOW_ONCE, PermissionOption.Kind.REJECT_ONCE -> false
+                    PermissionOption.Kind.ALLOW_ALWAYS -> !hideAlways
+                    else -> true
+                }
+            }
+            if (extra.isEmpty()) return
+            val more = LinearLayout(this@ChatActivity).apply { orientation = LinearLayout.VERTICAL }
+            for (option in extra) {
+                val button = Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
+                    text = optionLabel(item, option)
+                    isAllCaps = false
+                    textSize = 14f * chatScale
+                    setTextColor(getColor(if (option.allows) R.color.accent_text else R.color.setup_error))
+                    setOnClickListener { engine?.answer(item, option) }
+                }
+                more.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            card.addView(more)
+        }
+
+        /** Plano do ExitPlanMode: resumo em Markdown e aprovação no cartão (sem risco nem fila). */
+        private fun planCard(item: ChatItem.Permission): View {
+            val card = LinearLayout(this@ChatActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundResource(R.drawable.card_bg)
+                setPadding(dp(14), dp(12), dp(14), dp(10))
+            }
+            card.addView(TextView(this@ChatActivity).apply {
+                text = getString(R.string.chat_plan_wants, agentName)
+                setTextColor(getColor(R.color.setup_text))
+                textSize = 15f * chatScale
+                setTypeface(typeface, Typeface.BOLD)
+            })
+            if (item.summary.isNotEmpty()) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = Markdown.render(item.summary, getColor(R.color.code_bg))
+                    textSize = 14f * chatScale
+                    maxLines = 25
+                    setTextColor(getColor(R.color.setup_text))
+                    ellipsize = TextUtils.TruncateAt.END
+                    setPadding(0, dp(6), 0, dp(4))
+                })
+            }
+            // Fila: fora a vez, só o cabeçalho e o resumo; a aprovação é do primeiro pedido pendente.
+            if (item.chosen == null && !isFirstPending(item)) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(R.string.chat_permission_wait_previous, 1, pendingPermissions().size)
+                    textSize = 12f * chatScale
+                    setTextColor(getColor(R.color.setup_muted))
+                    setPadding(0, dp(4), 0, 0)
+                })
+                return card
+            }
+            if (item.detail.isNotEmpty()) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = item.detail
+                    textSize = 12f * chatScale
+                    setTextColor(getColor(R.color.setup_muted))
+                    setPadding(0, 0, 0, dp(4))
+                })
+            }
+            val chosen = item.chosen
+            if (chosen != null) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = optionLabel(item, chosen)
+                    setTextColor(getColor(if (chosen.allows) R.color.setup_done else R.color.setup_error))
+                    textSize = 13f * chatScale
+                    setPadding(0, dp(4), 0, 0)
+                })
+                return card
+            }
+            val buttons = LinearLayout(this@ChatActivity).apply { orientation = LinearLayout.VERTICAL }
+            // Permitir primeiro e em destaque; as outras opções como botões de texto.
+            for (option in item.options.sortedBy { it.kind.ordinal }) {
+                val primary = option.kind == PermissionOption.Kind.ALLOW_ONCE
+                val button = if (primary) Button(this@ChatActivity) else Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle)
+                button.text = optionLabel(item, option)
+                button.isAllCaps = false
+                button.textSize = 14f * chatScale
+                if (primary) {
+                    button.backgroundTintList = ColorStateList.valueOf(getColor(R.color.key_active))
+                    button.setTextColor(getColor(R.color.setup_on_accent))
+                } else {
+                    button.setTextColor(getColor(if (option.allows) R.color.accent_text else R.color.setup_error))
+                }
+                button.setOnClickListener { engine?.answer(item, option) }
+                buttons.addView(button, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            card.addView(buttons)
             return card
         }
 
@@ -3418,6 +3644,32 @@ class ChatActivity : JangadaActivity() {
                         setPadding(0, dp(6), 0, dp(2))
                     })
                 }
+                return card
+            }
+            // Fila: fora a vez, só o título da pergunta; opções e o botão Responder ficam para o primeiro.
+            if (!isFirstPending(item)) {
+                for (question in item.questions) {
+                    if (question.header.isNotEmpty()) {
+                        card.addView(TextView(this@ChatActivity).apply {
+                            text = question.header
+                            setTextColor(getColor(R.color.setup_muted))
+                            textSize = 12f * chatScale
+                            setPadding(0, dp(8), 0, 0)
+                        })
+                    }
+                    card.addView(TextView(this@ChatActivity).apply {
+                        text = question.text
+                        setTextColor(getColor(R.color.setup_text))
+                        textSize = 15f * chatScale
+                        setPadding(0, dp(4), 0, dp(2))
+                    })
+                }
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = getString(R.string.chat_permission_wait_previous, 1, pendingPermissions().size)
+                    textSize = 12f * chatScale
+                    setTextColor(getColor(R.color.setup_muted))
+                    setPadding(0, dp(4), 0, 0)
+                })
                 return card
             }
             item.questions.forEachIndexed { q, question ->
@@ -3789,6 +4041,10 @@ class ChatActivity : JangadaActivity() {
         const val JUMP_SCROLL_MS = 250
         /** Intervalo do relógio da faixa de status (só reescreve o texto dela; ver [statusClock]). */
         const val STATUS_CLOCK_MS = 1000L
+        /** Linhas do comando mostradas no cartão de permissão fechado (aberto, o comando inteiro). */
+        const val MAX_PERMISSION_LINES = 6
+        /** Janela do segundo toque do Permitir em alto risco. */
+        const val CONFIRM_PERMISSION_MS = 10_000L
         /** Sem mensagem do agente há este tempo, a ação em andamento também mostra "sem eventos há…". */
         const val SILENT_HINT_MS = 30_000L
         /** Passos no máximo para chegar ao fim do último item (cada um anda quase uma tela). */

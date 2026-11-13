@@ -36,6 +36,7 @@ import io.github.jonjonesbr.jangada.chat.LimitWindow
 import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.limitKindName
 import io.github.jonjonesbr.jangada.chat.PermissionOption
+import io.github.jonjonesbr.jangada.chat.PermissionRisk
 import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
 import io.github.jonjonesbr.jangada.linux.CACHE_FREED_PREFIX
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
@@ -1298,7 +1299,8 @@ class TerminalService : Service() {
             )
             return
         }
-        val pending = if (attention == ChatAttention.PERMISSION) chats[key]?.let { pendingPermission(it.chat) } else null
+        val slot = chats[key]
+        val pending = if (attention == ChatAttention.PERMISSION) slot?.let { pendingPermission(it.chat) } else null
         if (pending != null) {
             // Pedido de permissão: mostra o que o agente quer e deixa responder daqui.
             val wants = if (pending.summary.isEmpty()) {
@@ -1309,7 +1311,8 @@ class TerminalService : Service() {
             val full = if (pending.detail.isEmpty()) wants else wants + "\n" + pending.detail
             attentionNotification(
                 requestCode, NOTIFICATION_CHAT, getString(title, name), clip(wants, NOTIFY_TEXT_MAX), open,
-                tag = key, big = clip(full, NOTIFY_BIG_MAX), actions = permissionActions(key, pending),
+                tag = key, big = clip(full, NOTIFY_BIG_MAX),
+                actions = permissionActions(key, pending, slot?.chat?.cwd),
             )
             permissionNotices += key
         } else {
@@ -1380,20 +1383,31 @@ class TerminalService : Service() {
         }
     }
 
-    /** Pedido de permissão mais recente ainda sem resposta do trabalho (cópia da lista: a conversa muda). */
+    /**
+     * Pedido de permissão mais antigo ainda sem resposta do trabalho (cópia da lista: a conversa muda).
+     * O primeiro é o que o cartão deixa responder; a faixa e o aviso falam dele.
+     */
     private fun pendingPermission(chat: AgentChat): ChatItem.Permission? =
-        chat.items.toList().filterIsInstance<ChatItem.Permission>().lastOrNull { it.chosen == null }
+        chat.items.toList().filterIsInstance<ChatItem.Permission>().firstOrNull { it.chosen == null }
 
     /**
      * Botões Permitir e Recusar do aviso: só "uma vez" (nunca "sempre"). Cada botão aparece
-     * só se o pedido tem a opção correspondente.
+     * só se o pedido tem a opção correspondente. Em alto risco o Permitir não aparece aqui:
+     * o aviso não consegue pedir o segundo toque que o cartão exige.
      */
-    private fun permissionActions(key: String, pending: ChatItem.Permission): List<Notification.Action> {
+    private fun permissionActions(key: String, pending: ChatItem.Permission, project: String?): List<Notification.Action> {
         // Pergunta e plano: o aviso só abre o chat (a resposta é nos campos do cartão; o plano se lê antes de aprovar).
         if (pending.questions.isNotEmpty() || pending.toolName == ChatEngine.PLAN_TOOL) return emptyList()
+        val command = pending.summary.ifBlank { pending.title }
+        // Edição/escrita não traz cwd: o próprio comando é o caminho do arquivo (vale para "fora do projeto").
+        val risk = PermissionRisk.analyze(
+            command,
+            PermissionRisk.workPath(pending.workdir, pending.toolName, command),
+            project,
+        )
         val actions = mutableListOf<Notification.Action>()
         val requestId = pending.requestId.toString()
-        if (pending.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) {
+        if (!risk.high && pending.options.any { it.kind == PermissionOption.Kind.ALLOW_ONCE }) {
             actions += answerAction(key, requestId, allow = true, requestCode = key.hashCode() * 31 + 1)
         }
         if (pending.options.any { it.kind == PermissionOption.Kind.REJECT_ONCE }) {

@@ -200,6 +200,29 @@ class AcpParseTest {
     }
 
     @Test
+    fun resumoDoPedidoNaoECortado() {
+        // O comando vai inteiro (o limite de 400 é só do ToolText.summary, não do pedido de permissão).
+        val command = "git push origin main && echo " + "x".repeat(500)
+        val toolCall = JSONObject().put("rawInput", JSONObject().put("command", command))
+        assertEquals(command, AcpParse.permissionSummary(toolCall))
+        // Sem comando: o caminho, o endereço, a consulta, o padrão ou a descrição, na ordem.
+        assertEquals(
+            "/projeto/a.kt",
+            AcpParse.permissionSummary(JSONObject().put("rawInput", JSONObject().put("file_path", "/projeto/a.kt"))),
+        )
+        assertEquals(
+            "https://exemplo/x",
+            AcpParse.permissionSummary(JSONObject().put("rawInput", JSONObject().put("url", "https://exemplo/x"))),
+        )
+        assertEquals(
+            "texto",
+            AcpParse.permissionSummary(JSONObject().put("rawInput", JSONObject().put("description", "texto"))),
+        )
+        assertEquals("", AcpParse.permissionSummary(JSONObject().put("rawInput", JSONObject())))
+        assertEquals("", AcpParse.permissionSummary(JSONObject()))
+    }
+
+    @Test
     fun pastaDoPedidoDePermissao() {
         val comCwd = JSONObject("""{"rawInput":{"command":"ls","cwd":"/root/projetos/x"}}""")
         assertEquals("/root/projetos/x", AcpParse.permissionWorkdir(comCwd))
