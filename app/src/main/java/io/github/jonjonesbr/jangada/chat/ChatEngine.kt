@@ -81,7 +81,13 @@ class ChatEngine(
             runCatching { linux.refreshIntegration(trustFolder = cwd) }.onFailure { Log.w(TAG, "integração", it) }
             // "Continuar a última" vira o id da conversa mais recente: mais seguro que
             // o --continue do Claude, que nem sempre enxerga conversas do outro modo.
-            val id = resume ?: if (continueLast) ChatHistory.list(linux, cwd, limit = 1).firstOrNull()?.id else null
+            var id = resume ?: if (continueLast) ChatHistory.list(linux, cwd, limit = 1).firstOrNull()?.id else null
+            // Conversa sem arquivo (apagada, ou o agente fechou antes de gravar a primeira mensagem): o
+            // --resume faria o Claude sair com código 1 ("No conversation found") a cada mensagem. Começa uma nova.
+            if (id != null && ChatHistory.file(linux, cwd, id)?.length().let { it == null || it == 0L }) {
+                id = null
+                sessionId = null
+            }
             if (id != null) sessionId = id
             if (history && id != null) {
                 if (id == previousId && previousItems.isNotEmpty()) {

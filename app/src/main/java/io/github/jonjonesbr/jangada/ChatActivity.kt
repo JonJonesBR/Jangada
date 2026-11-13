@@ -1822,7 +1822,34 @@ class ChatActivity : JangadaActivity() {
                 }
             }
         }
-        Sheet(this).title(getString(R.string.chat_history_delete_title)).rows(rows).show()
+        val all = if (isClaude) listOf(
+            Sheet.Row(title = getString(R.string.chat_history_delete_all), destructive = true) { confirmDeleteAll(conversations.map { it.id }) },
+        ) else emptyList()
+        Sheet(this).title(getString(R.string.chat_history_delete_title)).rows(all + rows).show()
+    }
+
+    /** Apaga todas as conversas do Claude da pasta (fecha o chat aberto antes) e abre uma conversa nova. */
+    private fun confirmDeleteAll(ids: List<String>) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.chat_history_delete_all)
+            .setMessage(R.string.chat_history_delete_all_confirm)
+            .setPositiveButton(R.string.chat_delete) { _, _ ->
+                val svc = service ?: return@setPositiveButton
+                val cwd = chatCwd
+                svc.closeChat(agentId, folder) {
+                    thread(name = "chat-delete-all") {
+                        // Um erro num arquivo não pode derrubar o app nem impedir os outros.
+                        for (id in ids) runCatching { ChatHistory.delete(linux, cwd, id) }
+                        runOnUiThread {
+                            if (isDestroyed) return@runOnUiThread
+                            Toast.makeText(this, R.string.chat_history_deleted_all, Toast.LENGTH_SHORT).show()
+                            withRoom(svc) { attach(svc.openChat(agentId, folder = folder, restart = true)) }
+                        }
+                    }
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun confirmDelete(conversation: ChatHistory.Conversation, isCurrent: Boolean, done: () -> Unit) {

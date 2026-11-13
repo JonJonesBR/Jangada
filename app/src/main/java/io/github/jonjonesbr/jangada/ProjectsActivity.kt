@@ -370,9 +370,19 @@ class ProjectsActivity : JangadaActivity() {
                 )
             }
         }.toMutableList()
+        val busy = name in openFolders()
+        if (found.isNotEmpty()) {
+            val busyNote = if (busy) getString(R.string.projects_conversations_clean_open) else null
+            rows += Sheet.Row(getString(R.string.projects_conversations_one), busyNote, enabled = !busy, destructive = true) {
+                showDeleteOne(item, found)
+            }
+            rows += Sheet.Row(
+                resources.getQuantityString(R.plurals.projects_conversations_all, found.size, found.size), busyNote,
+                enabled = !busy, destructive = true,
+            ) { confirmDeleteAll(item, found.map { it.id }) }
+        }
         val stale = ProjectSize.staleIds(convs.all, System.currentTimeMillis())
         if (stale.isNotEmpty()) {
-            val busy = name in openFolders()
             rows += Sheet.Row(
                 resources.getQuantityString(R.plurals.projects_conversations_clean, stale.size, stale.size),
                 if (busy) getString(R.string.projects_conversations_clean_open) else null,
@@ -383,6 +393,31 @@ class ProjectsActivity : JangadaActivity() {
         val sheet = Sheet(this).title(getString(R.string.projects_conversations_title, name))
         if (found.isEmpty()) sheet.message(getString(R.string.chat_history_empty))
         sheet.rows(rows).show()
+    }
+
+    /** Lista para apagar uma conversa: tocar numa pede a confirmação. */
+    private fun showDeleteOne(item: Workspace.Folder, found: List<ChatHistory.Conversation>) {
+        val rows = found.map { conversation ->
+            Sheet.Row(conversation.title, DateUtils.getRelativeTimeSpanString(conversation.updatedAt), destructive = true) {
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.chat_delete_title)
+                    .setMessage(conversation.title)
+                    .setPositiveButton(R.string.chat_delete) { _, _ -> cleanStale(item, listOf(conversation.id)) }
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .show()
+            }
+        }
+        Sheet(this).title(getString(R.string.chat_history_delete_title)).rows(rows).show()
+    }
+
+    /** Pede a confirmação de apagar todas as conversas do projeto. */
+    private fun confirmDeleteAll(item: Workspace.Folder, ids: List<String>) {
+        AlertDialog.Builder(this)
+            .setTitle(resources.getQuantityString(R.plurals.projects_conversations_all, ids.size, ids.size))
+            .setMessage(resources.getQuantityString(R.plurals.projects_conversations_all_confirm, ids.size, ids.size))
+            .setPositiveButton(R.string.projects_conversations_clean_ok) { _, _ -> cleanStale(item, ids) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     /** Pede a confirmação de apagar as conversas paradas. */
@@ -417,7 +452,7 @@ class ProjectsActivity : JangadaActivity() {
                 if (!isDestroyed) {
                     Toast.makeText(
                         applicationContext,
-                        if (failed == 0) R.string.projects_conversations_cleaned else R.string.projects_conversations_clean_failed,
+                        if (failed == 0) R.string.chat_history_deleted_all else R.string.projects_conversations_clean_failed,
                         Toast.LENGTH_LONG,
                     ).show()
                 }

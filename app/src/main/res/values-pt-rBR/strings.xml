@@ -873,7 +873,6 @@
         <item quantity="other">%1$d conversas sem uso há mais de 30 dias serão apagadas. Não dá para desfazer.</item>
     </plurals>
     <string name="projects_conversations_clean_ok">Apagar</string>
-    <string name="projects_conversations_cleaned">Conversas antigas apagadas</string>
     <string name="projects_conversations_clean_failed">Algumas conversas não puderam ser apagadas</string>
     <string name="projects_deps_clean">Apagar dependências</string>
     <string name="projects_deps_clean_desc">%1$s em node_modules, .venv e parecidos; reinstale depois (npm install, pip…)</string>
@@ -881,4 +880,16 @@
     <string name="projects_deps_confirm">Estas pastas serão apagadas:\n\n%1$s\n\nElas se refazem ao reinstalar as dependências.</string>
     <string name="projects_deps_cleaned">Dependências apagadas</string>
     <string name="projects_deps_clean_failed">Algumas pastas não puderam ser apagadas</string>
+    <string name="chat_history_delete_all">Apagar todas as conversas</string>
+    <string name="chat_history_delete_all_confirm">Todas as conversas deste projeto serão apagadas, inclusive a aberta. Não dá para desfazer.</string>
+    <string name="chat_history_deleted_all">Conversas apagadas</string>
+    <plurals name="projects_conversations_all">
+        <item quantity="one">Apagar a conversa</item>
+        <item quantity="other">Apagar todas as %1$d conversas</item>
+    </plurals>
+    <plurals name="projects_conversations_all_confirm">
+        <item quantity="one">%1$d conversa será apagada. Não dá para desfazer.</item>
+        <item quantity="other">%1$d conversas serão apagadas. Não dá para desfazer.</item>
+    </plurals>
+    <string name="projects_conversations_one">Apagar uma conversa…</string>
 </resources>

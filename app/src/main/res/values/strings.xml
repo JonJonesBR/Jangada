@@ -877,7 +877,6 @@
         <item quantity="other">%1$d conversations with no activity for over 30 days will be deleted. This can’t be undone.</item>
     </plurals>
     <string name="projects_conversations_clean_ok">Delete</string>
-    <string name="projects_conversations_cleaned">Old conversations deleted</string>
     <string name="projects_conversations_clean_failed">Some conversations couldn’t be deleted</string>
     <string name="projects_deps_clean">Delete dependencies</string>
     <string name="projects_deps_clean_desc">%1$s in node_modules, .venv and similar; reinstall them later (npm install, pip…)</string>
@@ -885,4 +884,16 @@
     <string name="projects_deps_confirm">These folders will be deleted:\n\n%1$s\n\nThey can be rebuilt by reinstalling the dependencies.</string>
     <string name="projects_deps_cleaned">Dependencies deleted</string>
     <string name="projects_deps_clean_failed">Some folders couldn’t be deleted</string>
+    <string name="chat_history_delete_all">Delete all conversations</string>
+    <string name="chat_history_delete_all_confirm">All conversations of this project will be deleted, including the open one. This can’t be undone.</string>
+    <string name="chat_history_deleted_all">Conversations deleted</string>
+    <plurals name="projects_conversations_all">
+        <item quantity="one">Delete the conversation</item>
+        <item quantity="other">Delete all %1$d conversations</item>
+    </plurals>
+    <plurals name="projects_conversations_all_confirm">
+        <item quantity="one">%1$d conversation will be deleted. This can’t be undone.</item>
+        <item quantity="other">%1$d conversations will be deleted. This can’t be undone.</item>
+    </plurals>
+    <string name="projects_conversations_one">Delete one conversation…</string>
 </resources>
