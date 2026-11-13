@@ -69,10 +69,10 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     @Volatile final override var idleSinceMs: Long = SystemClock.elapsedRealtime()
         private set
     /** elapsedRealtime da última mensagem recebida do agente (0 = nenhuma nesta execução). */
-    @Volatile override var lastEventAtMs: Long = 0L
+    @Volatile final override var lastEventAtMs: Long = 0L
         private set
     /** elapsedRealtime de quando o turno atual começou (0 = sem turno). */
-    @Volatile override var turnStartedAtMs: Long = 0L
+    @Volatile final override var turnStartedAtMs: Long = 0L
         private set
 
     /**
@@ -85,7 +85,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         lastEventAtMs = now
     }
     /** Código de saída de uma queda inesperada do agente; null quando o usuário parou ou não houve. */
-    @Volatile override var lastExitCode: Int? = null
+    @Volatile final override var lastExitCode: Int? = null
         private set
     /** Dormindo: o processo foi fechado por [sleep] para liberar memória. Some quando o agente volta ([launch]). */
     @Volatile final override var asleep = false
