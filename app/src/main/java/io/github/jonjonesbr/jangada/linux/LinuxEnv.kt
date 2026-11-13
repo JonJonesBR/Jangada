@@ -192,14 +192,18 @@ class LinuxEnv(context: Context) {
     fun scriptCommand(script: String): List<String> =
         guestEnv(secrets = false) + listOf("DEBIAN_FRONTEND=noninteractive", "/bin/sh", "-c", script)
 
-    /** Ambiente limpo do Debian. As chaves de API (SecretStore) só entram se [secrets] for true. */
-    private fun guestEnv(secrets: Boolean): List<String> = listOf(
+    /**
+     * Ambiente limpo do Debian. As chaves de API (SecretStore) só entram se [secrets] for true.
+     * [agentEnv] acrescenta as guardas de [AgentEnv] (só para os processos dos agentes: no
+     * terminal interativo o usuário precisa do prompt de credencial do git/gh).
+     */
+    private fun guestEnv(secrets: Boolean, agentEnv: Boolean = false): List<String> = listOf(
         "/usr/bin/env", "-i",
         "HOME=/root", "USER=root", "LOGNAME=root",
         "LANG=C.UTF-8", "TERM=xterm-256color", "COLORTERM=truecolor", "TMPDIR=/tmp",
         "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
         "BROWSER=/usr/local/bin/jangada-open",
-    ) + if (secrets) {
+    ) + (if (agentEnv) AgentEnv.GUARDS else emptyList()) + if (secrets) {
         runCatching { io.github.jonjonesbr.jangada.SecretStore(app).environment() }.getOrDefault(emptyList())
     } else {
         emptyList()
@@ -220,8 +224,15 @@ class LinuxEnv(context: Context) {
      * Inicia [script] num bash de login dentro do Debian e devolve o processo
      * (para conversar com ele por stdin/stdout, como faz o chat).
      * [secrets]: se o processo recebe as chaves de API (o chat precisa; o backup não).
+     * [agentEnv]: guardas de [AgentEnv]; só o chat dos agentes liga (o terminal do usuário, não).
      */
-    fun startProcess(script: String, interactive: Boolean = false, login: Boolean = true, secrets: Boolean = true): Process {
+    fun startProcess(
+        script: String,
+        interactive: Boolean = false,
+        login: Boolean = true,
+        secrets: Boolean = true,
+        agentEnv: Boolean = false,
+    ): Process {
         // interactive: lê o ~/.bashrc inteiro, onde alguns instaladores põem o PATH.
         // login = false: shell "limpo", para quando a saída precisa ser só a do comando (backup).
         val bash = when {
@@ -229,7 +240,7 @@ class LinuxEnv(context: Context) {
             interactive -> listOf("/bin/bash", "--login", "-i", "-c", script)
             else -> listOf("/bin/bash", "--login", "-c", script)
         }
-        val builder = ProcessBuilder(*prootArgv(guestEnv(secrets) + bash))
+        val builder = ProcessBuilder(*prootArgv(guestEnv(secrets, agentEnv) + bash))
             .directory(files)
         builder.environment().apply {
             clear()

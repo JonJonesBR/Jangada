@@ -155,7 +155,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         c.writer.execute {
             val proc = try {
                 val script = prepare()
-                linux.startProcess(script, interactive = interactive)
+                linux.startProcess(script, interactive = interactive, agentEnv = true)
             } catch (e: Exception) {
                 Log.w(tag, "falha ao iniciar", e)
                 main.post {
