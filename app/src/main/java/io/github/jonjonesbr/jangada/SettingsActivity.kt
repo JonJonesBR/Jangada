@@ -215,6 +215,28 @@ class SettingsActivity : JangadaActivity() {
                 .show()
         }
 
+        // Possível travamento: quanto tempo sem mensagem do agente para a faixa do chat avisar (ver AgentStatus).
+        val stallButton = findViewById<Button>(R.id.settings_chat_stall)
+        fun stallLabel(seconds: Int): String = getString(R.string.settings_sleep_after_minutes, seconds / 60)
+        fun showStall() {
+            stallButton.text = getString(R.string.settings_chat_stall, stallLabel(settings.chatStallSeconds))
+        }
+        showStall()
+        stallButton.setOnClickListener {
+            val options = AppSettings.CHAT_STALL_OPTIONS
+            AlertDialog.Builder(this)
+                .setTitle(R.string.settings_chat_stall_title)
+                .setSingleChoiceItems(
+                    options.map { stallLabel(it) }.toTypedArray(),
+                    options.indexOf(settings.chatStallSeconds),
+                ) { dialog, which ->
+                    settings.chatStallSeconds = options[which]
+                    dialog.dismiss()
+                    showStall()
+                }
+                .show()
+        }
+
         // ---- Backup e Sobre ----
         findViewById<View>(R.id.settings_backup_export).setOnClickListener { chooseBackup() }
         findViewById<View>(R.id.settings_backup_import).setOnClickListener { pickBackup() }

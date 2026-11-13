@@ -164,9 +164,20 @@ class AppSettings(context: Context) {
         get() = prefs.getFloat(KEY_CHAT_TEXT_SCALE, 1f).takeIf { it in CHAT_TEXT_SCALES } ?: 1f
         set(value) = prefs.edit().putFloat(KEY_CHAT_TEXT_SCALE, value).apply()
 
+    /**
+     * Segundos sem nenhuma mensagem do agente a partir dos quais a faixa do chat avisa possível
+     * travamento (ver AgentStatus). O ajuste usa [CHAT_STALL_OPTIONS]; fora de 30 s a 15 min, o valor
+     * guardado é limitado a essa faixa.
+     */
+    var chatStallSeconds: Int
+        get() = prefs.getInt(KEY_CHAT_STALL, 120).coerceIn(30, 900)
+        set(value) = prefs.edit().putInt(KEY_CHAT_STALL, value).apply()
+
     companion object {
         /** Escolhas do tamanho do texto do chat (multiplicam o tamanho padrão). */
         val CHAT_TEXT_SCALES = listOf(0.85f, 1f, 1.15f, 1.3f, 1.5f)
+        /** Escolhas de [chatStallSeconds], em segundos (1, 2, 5 e 10 minutos). */
+        val CHAT_STALL_OPTIONS = listOf(60, 120, 300, 600)
         /** Escolhas de [sleepAfterMinutes] (0 = nunca). */
         val SLEEP_AFTER_MINUTES = listOf(0, 15, 30, 60, 120)
         const val THEME_SYSTEM = "system"
@@ -194,6 +205,7 @@ class AppSettings(context: Context) {
         private const val KEY_COMPOSE_VISIBLE = "compose_visible"
         private const val KEY_HAPTIC_FINISH = "haptic_on_finish"
         private const val KEY_CHAT_TEXT_SCALE = "chat_text_scale"
+        const val KEY_CHAT_STALL = "chat_stall_seconds"
         private const val KEY_AGENT_MEMORY_TIPS = "agent_memory_tips"
         private const val KEY_MAX_AGENTS = "max_agents"
         private const val KEY_SLEEP_AFTER = "sleep_after_minutes"

@@ -178,6 +178,7 @@
         android:visibility="gone">
 
         <ProgressBar
+            android:id="@+id/chat_status_spinner"
             android:layout_width="18dp"
             android:layout_height="18dp"
             android:indeterminateTint="@color/key_active" />

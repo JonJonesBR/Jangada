@@ -152,6 +152,15 @@
     <string name="chat_terminal">Terminal</string>
     <string name="chat_working">Trabalhando…</string>
     <string name="chat_reloading">Recarregando conversa…</string>
+    <string name="chat_status_thinking">Pensando… há %1$s</string>
+    <string name="chat_status_running">Executando %1$s há %2$s</string>
+    <string name="chat_status_running_many">Executando %1$s e mais %2$d há %3$s</string>
+    <string name="chat_status_silent_suffix">sem eventos há %1$s</string>
+    <string name="chat_status_stalled_suffix">possível travamento</string>
+    <string name="chat_status_waiting">Aguardando sua permissão (%1$d) há %2$s</string>
+    <string name="chat_status_stalled">Sem eventos há %1$s — possível travamento</string>
+    <string name="chat_status_stalled_tip">Toque em Parar de novo para encerrar o agente.</string>
+    <string name="chat_status_lost">Conexão perdida: o agente encerrou (código %1$d)</string>
     <string name="chat_jump_end">Ir para a última mensagem</string>
     <string name="chat_background_one">Em segundo plano: %1$s</string>
     <string name="chat_background_many">Em segundo plano (%1$d): %2$s</string>
@@ -450,6 +459,8 @@
     <string name="settings_chat_text_large">Grande</string>
     <string name="settings_chat_text_larger">Maior</string>
     <string name="settings_chat_text_huge">Enorme</string>
+    <string name="settings_chat_stall">Possível travamento após %1$s</string>
+    <string name="settings_chat_stall_title">Possível travamento</string>
     <string name="settings_max_agents">Agentes ao mesmo tempo: %1$s</string>
     <string name="settings_max_agents_title">Agentes ao mesmo tempo</string>
     <string name="settings_max_agents_desc">Cada agente rodando usa memória do celular. No automático, o limite depende da RAM do aparelho. Agentes dormindo não contam.</string>

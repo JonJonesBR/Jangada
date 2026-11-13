@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.text.Editable
 import android.text.InputType
 import android.text.SpannableStringBuilder
@@ -57,6 +58,7 @@ import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.chat.AcpChat
 import io.github.jonjonesbr.jangada.chat.AgentChat
+import io.github.jonjonesbr.jangada.chat.AgentStatus
 import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AutoCompact
@@ -70,6 +72,7 @@ import io.github.jonjonesbr.jangada.chat.limitName
 import io.github.jonjonesbr.jangada.chat.limitsSummary
 import io.github.jonjonesbr.jangada.chat.AuthOption
 import io.github.jonjonesbr.jangada.chat.Attachments
+import io.github.jonjonesbr.jangada.chat.BackgroundTask
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
@@ -118,6 +121,8 @@ class ChatActivity : JangadaActivity() {
     private lateinit var empty: TextView
     private lateinit var status: View
     private lateinit var statusText: TextView
+    /** Só gira enquanto o agente trabalha: em pedido de permissão ou travamento a faixa não pode parecer ativa. */
+    private lateinit var statusSpinner: View
     private lateinit var stopButton: View
     private lateinit var input: EditText
     /** Nome do agente acima do subtítulo; some no modo compacto (ver [applyCompact]). */
@@ -150,6 +155,18 @@ class ChatActivity : JangadaActivity() {
     private var recipe: AgentRecipe? = null
     private val adapter = ChatAdapter()
     private val handler = Handler(Looper.getMainLooper())
+
+    /**
+     * Relógio da faixa de status (ver [updateStatus]): a cada segundo reescreve só o texto dela, para o
+     * tempo ("há 0:12") andar sem mensagem nova. Nunca redesenha a lista da conversa. Roda entre
+     * onResume e onPause; um só para a tela, não um por item.
+     */
+    private val statusClock = object : Runnable {
+        override fun run() {
+            engine?.let { updateStatus(it) }
+            handler.postDelayed(this, STATUS_CLOCK_MS)
+        }
+    }
 
     private var service: TerminalService? = null
     /** A tela está ligada ao serviço (bindService feito e ainda não desfeito). */
@@ -276,6 +293,7 @@ class ChatActivity : JangadaActivity() {
         empty = findViewById(R.id.chat_empty)
         status = findViewById(R.id.chat_status)
         statusText = findViewById(R.id.chat_status_text)
+        statusSpinner = findViewById(R.id.chat_status_spinner)
         stopButton = findViewById(R.id.chat_stop)
         input = findViewById(R.id.chat_input)
         titleView = findViewById(R.id.chat_title)
@@ -445,10 +463,14 @@ class ChatActivity : JangadaActivity() {
         readFolderInfo()
         // Ao voltar com "/..." na caixa, as sugestões reaparecem (depois da janela estar pronta).
         input.post { updateCommandSuggestions() }
+        // Faixa de status: um relógio só, a cada segundo, para o tempo andar (ver statusClock).
+        handler.removeCallbacks(statusClock)
+        handler.postDelayed(statusClock, STATUS_CLOCK_MS)
     }
 
     override fun onPause() {
         resumed = false
+        handler.removeCallbacks(statusClock)
         // Só larga o aviso se ele ainda for o deste trabalho.
         if (service?.visibleChat == chatKey) service?.visibleChat = null
         // O texto não enviado vira rascunho deste trabalho: ir à tela inicial, trocar de trabalho,
@@ -484,6 +506,7 @@ class ChatActivity : JangadaActivity() {
 
     override fun onDestroy() {
         // Nada que esperava a tela (instalação, por exemplo) roda depois que ela sai.
+        handler.removeCallbacks(statusClock)
         handler.removeCallbacksAndMessages(null)
         // Saiu de vez (não vai ser recriada): os anexos guardados não voltam, e a memória é liberada.
         if (isFinishing) keptAttachments.remove(chatKey)
@@ -1095,20 +1118,72 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Faixa de status: "Trabalhando…" no turno e, com tarefas em segundo plano (subagentes, comandos),
-     * o que elas são, mesmo depois que o turno acabou. Parar só aparece com turno: ele interrompe o turno.
-     * No modo compacto (ver [applyCompact]) a faixa tem uma linha só: as partes vão separadas por " · "
-     * e a dica de toque some.
+     * Faixa de status com o que o chat está fazendo agora ([AgentStatus]): pensando, executando uma ação
+     * (com o tempo dela e, se houver, outras ao mesmo tempo), esperando sua permissão, recarregando, sem
+     * eventos (possível travamento) ou com a conexão perdida. Ocioso não tem texto: a faixa só aparece
+     * para mostrar tarefas em segundo plano (subagentes, comandos), mesmo depois do turno.
+     * O relógio gira só quando o agente trabalha de fato, e Parar some quando ele sumiu.
+     * No modo compacto (ver [applyCompact]) a faixa tem uma linha só: as partes vão separadas por " · ".
      */
     private fun updateStatus(chat: AgentChat) {
         val background = chat.background
-        status.visibility = if (chat.busy || chat.reloading || background.isNotEmpty()) View.VISIBLE else View.GONE
+        val state = AgentStatus.of(
+            items = chat.items.toList(),
+            busy = chat.busy,
+            reloading = chat.reloading,
+            running = chat.running,
+            lastEventAtMs = chat.lastEventAtMs,
+            turnStartedAtMs = chat.turnStartedAtMs,
+            lastExitCode = chat.lastExitCode,
+            now = SystemClock.elapsedRealtime(),
+            stallMs = settings.chatStallSeconds * 1000L,
+        )
+        status.visibility = if (state != AgentStatus.State.Idle || background.isNotEmpty()) View.VISIBLE else View.GONE
+        // Tocar na faixa só faz algo com tarefas em segundo plano (ver showBackgroundSheet).
         status.isClickable = background.isNotEmpty()
-        stopButton.visibility = if (chat.busy) View.VISIBLE else View.GONE
+        // O relógio só gira se o agente está mesmo trabalhando: pedido de permissão, travamento ou queda
+        // não podem dar a impressão de que algo anda.
+        val working = state is AgentStatus.State.Thinking || state is AgentStatus.State.Running ||
+            state is AgentStatus.State.Reloading
+        statusSpinner.visibility = if (working) View.VISIBLE else View.GONE
+        // Parar interrompe o turno; com o agente perdido não há o que parar.
+        stopButton.visibility = if (chat.busy && state !is AgentStatus.State.Lost) View.VISIBLE else View.GONE
+        val lines = statusLines(state, background)
+        statusText.maxLines = if (compactLayout) 1 else 3
+        statusText.text = lines.joinToString(if (compactLayout) " · " else "\n")
+    }
+
+    /** Texto da faixa para o [state] e as tarefas em [background]; vazio quando não há o que dizer. */
+    private fun statusLines(state: AgentStatus.State, background: List<BackgroundTask>): List<String> {
         val lines = mutableListOf<String>()
-        // Recarregando a conversa anterior: o agente ainda não aceita turno (a mensagem enviada espera na fila).
-        if (chat.reloading) lines += getString(R.string.chat_reloading)
-        else if (chat.busy) lines += getString(R.string.chat_working)
+        when (state) {
+            AgentStatus.State.Idle -> Unit
+            AgentStatus.State.Reloading -> lines += getString(R.string.chat_reloading)
+            is AgentStatus.State.Thinking ->
+                lines += getString(R.string.chat_status_thinking, AgentStatus.elapsed(state.sinceMs))
+            is AgentStatus.State.Running -> {
+                val time = AgentStatus.elapsed(state.sinceMs)
+                var line = if (state.others > 0) {
+                    getString(R.string.chat_status_running_many, state.label, state.others, time)
+                } else {
+                    getString(R.string.chat_status_running, state.label, time)
+                }
+                // Sem mensagem do agente há um tempo: o tempo da ação pode esconder que ela parou.
+                if (state.silentMs >= SILENT_HINT_MS) {
+                    line += " · " + getString(R.string.chat_status_silent_suffix, AgentStatus.elapsed(state.silentMs))
+                }
+                if (state.stalled) line += " · " + getString(R.string.chat_status_stalled_suffix)
+                lines += line
+            }
+            is AgentStatus.State.Waiting ->
+                lines += getString(R.string.chat_status_waiting, state.count, AgentStatus.elapsed(state.sinceMs))
+            is AgentStatus.State.Stalled -> {
+                lines += getString(R.string.chat_status_stalled, AgentStatus.elapsed(state.silentMs))
+                // A dica não cabe na linha única do modo compacto.
+                if (!compactLayout) lines += getString(R.string.chat_status_stalled_tip)
+            }
+            is AgentStatus.State.Lost -> lines += getString(R.string.chat_status_lost, state.code)
+        }
         if (background.size == 1) {
             val task = background[0]
             // Sem descrição nenhuma, o rótulo genérico: a faixa nunca fica "Em segundo plano: " vazio.
@@ -1121,11 +1196,11 @@ class ChatActivity : JangadaActivity() {
             val what = names.joinToString(", ").ifEmpty { getString(R.string.chat_background_tasks) }
             lines += getString(R.string.chat_background_many, background.size, what)
         }
-        // Com turno em andamento a faixa já diz "Trabalhando…"; sem ele, avisa que dá para tocar e parar.
-        // No compacto não cabe a dica: a faixa é uma linha só.
-        if (background.isNotEmpty() && !chat.busy && !compactLayout) lines += getString(R.string.chat_background_tap)
-        statusText.maxLines = if (compactLayout) 1 else 3
-        statusText.text = lines.joinToString(if (compactLayout) " · " else "\n")
+        // Com o agente ocioso, avisa que dá para tocar e parar. No compacto não cabe a dica.
+        if (background.isNotEmpty() && state == AgentStatus.State.Idle && !compactLayout) {
+            lines += getString(R.string.chat_background_tap)
+        }
+        return lines
     }
 
     /** Painel das tarefas em segundo plano: parar uma (a descrição é o que ela faz agora) ou todas. */
@@ -3712,6 +3787,10 @@ class ChatActivity : JangadaActivity() {
         const val END_SLACK_PX = 4
         /** Duração, em ms, da rolagem suave até o fim do último item. */
         const val JUMP_SCROLL_MS = 250
+        /** Intervalo do relógio da faixa de status (só reescreve o texto dela; ver [statusClock]). */
+        const val STATUS_CLOCK_MS = 1000L
+        /** Sem mensagem do agente há este tempo, a ação em andamento também mostra "sem eventos há…". */
+        const val SILENT_HINT_MS = 30_000L
         /** Passos no máximo para chegar ao fim do último item (cada um anda quase uma tela). */
         const val END_MAX_STEPS = 100
         /** Tamanho dos atalhos acima da caixa (sp), antes da escala. */
