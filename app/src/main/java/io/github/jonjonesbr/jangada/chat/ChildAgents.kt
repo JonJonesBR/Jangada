@@ -32,6 +32,9 @@ internal object ChildAgents {
     /** Título automático da sessão filha: não serve de descrição. */
     private val AUTO_TITLE = Regex("""^(New|Child) session - \d{4}-\d{2}-\d{2}T""")
 
+    /** Título automático ("Child session - 2026-11-13T…Z"): não descreve o que a filha faz. */
+    private fun isAutoTitle(title: String) = AUTO_TITLE.containsMatchIn(title)
+
     /** Quantos subagentes a conversa tem (e quantos rodam); null quando não há nenhum. */
     fun summary(cards: List<ChatItem.Child>): ChildSummary? {
         if (cards.isEmpty()) return null
