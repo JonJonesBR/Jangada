@@ -241,6 +241,8 @@ class ChatActivity : JangadaActivity() {
     /** Comandos "/" que o próprio app atende (além dos do agente); o popup os põe primeiro. */
     private enum class AppCommand(val command: String, val descRes: Int) {
         NEW("new", R.string.chat_cmd_new),
+        CLEAR("clear", R.string.chat_cmd_clear),
+        RESET("reset", R.string.chat_cmd_reset),
         RESUME("resume", R.string.chat_cmd_resume),
         COMPACT("compact", R.string.chat_cmd_compact),
     }
@@ -1430,7 +1432,7 @@ class ChatActivity : JangadaActivity() {
 
     /** Os comandos do app que o popup oferece com este agente. */
     private fun offersApp(app: AppCommand, chat: AgentChat): Boolean = when (app) {
-        AppCommand.NEW -> true
+        AppCommand.NEW, AppCommand.CLEAR, AppCommand.RESET -> true
         AppCommand.RESUME -> chat.supportsHistory
         AppCommand.COMPACT -> chat.commands.any { it.name.equals("compact", ignoreCase = true) }
     }
@@ -1444,7 +1446,7 @@ class ChatActivity : JangadaActivity() {
             applyCommand(agent)
         } else if (app != null) {
             when (app) {
-                AppCommand.NEW -> startNewConversationFromBox()
+                AppCommand.NEW, AppCommand.CLEAR, AppCommand.RESET -> startNewConversationFromBox()
                 AppCommand.RESUME -> openHistoryFromBox()
                 AppCommand.COMPACT -> {
                     // Sem o serviço ligado, nada enviaria: o texto fica na caixa.

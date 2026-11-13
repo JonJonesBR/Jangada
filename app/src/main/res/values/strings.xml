@@ -147,6 +147,8 @@
     <string name="chat_wait_turn">Wait for the agent to finish (or tap Stop) to change this.</string>
     <string name="chat_wait_background">Background tasks are still running: wait for them to finish, or tap the status bar to stop them, before changing this.</string>
     <string name="chat_cmd_new">New conversation</string>
+    <string name="chat_cmd_clear">Clear the conversation and start a new one</string>
+    <string name="chat_cmd_reset">Same as /new</string>
     <string name="chat_cmd_resume">Resume an earlier conversation</string>
     <string name="chat_cmd_compact">Summarize the conversation to free up room</string>
     <string name="chat_terminal">Terminal</string>
