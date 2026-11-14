@@ -2,12 +2,8 @@ package io.github.jonjonesbr.jangada
 
 import android.app.ActivityManager
 import android.app.AlertDialog
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.IBinder
 import android.view.View
 import android.widget.Button
 import android.widget.RadioGroup
@@ -20,6 +16,7 @@ import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.terminal.TerminalThemes
+import io.github.jonjonesbr.jangada.ui.ServiceBind
 import io.github.jonjonesbr.jangada.ui.Sheet
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -314,30 +311,26 @@ class SettingsActivity : JangadaActivity() {
      * pode parar no meio). Se o serviço recusar (tarefa de agente ou outra limpeza), mostra
      * [R.string.storage_clean_busy]. Ao acabar, o que liberou vem do próprio script.
      */
-    private inner class CacheCleaner(private val progress: AlertDialog) : ServiceConnection {
-        private var bound = false
+    private inner class CacheCleaner(private val progress: AlertDialog) {
         private var finished = false
+        private val link = ServiceBind(
+            applicationContext,
+            onConnected = { binder ->
+                val service = (binder as? TerminalService.LocalBinder)?.service
+                val started = service?.cleanCaches { freedKb -> finish(busy = false, freedKb = freedKb) } == true
+                if (!started) finish(busy = true)
+            },
+            onDisconnected = { finish(busy = true) },
+        )
 
         fun start() {
-            bound = runCatching {
-                applicationContext.bindService(Intent(applicationContext, TerminalService::class.java), this, Context.BIND_AUTO_CREATE)
-            }.getOrDefault(false)
-            if (!bound) finish(busy = true)
+            if (!link.bind(Intent(applicationContext, TerminalService::class.java))) finish(busy = true)
         }
-
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            val service = (binder as? TerminalService.LocalBinder)?.service
-            val started = service?.cleanCaches { freedKb -> finish(busy = false, freedKb = freedKb) } == true
-            if (!started) finish(busy = true)
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) = finish(busy = true)
 
         private fun finish(busy: Boolean, freedKb: Long = 0L) {
             if (finished) return
             finished = true
-            if (bound) runCatching { applicationContext.unbindService(this) }
-            bound = false
+            link.unbind()
             runCatching { progress.dismiss() }
             if (isDestroyed) return
             if (busy) {
@@ -452,31 +445,28 @@ class SettingsActivity : JangadaActivity() {
      * ([TerminalService.holdForeground]) antes de chamar [then], na thread principal. [then] recebe a função
      * que solta o serviço e desfaz o bind (uma vez só). Sem serviço, [then] roda assim mesmo, sem primeiro plano.
      */
-    private inner class ForegroundHold(private val then: (release: () -> Unit) -> Unit) : ServiceConnection {
-        private var bound = false
+    private inner class ForegroundHold(private val then: (release: () -> Unit) -> Unit) {
         private var started = false
         private var service: TerminalService? = null
         private var held = false
         private var released = false
+        private val link = ServiceBind(
+            applicationContext,
+            onConnected = { binder ->
+                service = (binder as? TerminalService.LocalBinder)?.service
+                held = service?.holdForeground() == true
+                begin()
+            },
+            // O processo do serviço caiu: a tarefa segue (ou já caiu junto); só não há o que soltar.
+            onDisconnected = {
+                service = null
+                held = false
+                begin()
+            },
+        )
 
         fun start() {
-            bound = runCatching {
-                applicationContext.bindService(Intent(applicationContext, TerminalService::class.java), this, Context.BIND_AUTO_CREATE)
-            }.getOrDefault(false)
-            if (!bound) begin()
-        }
-
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            service = (binder as? TerminalService.LocalBinder)?.service
-            held = service?.holdForeground() == true
-            begin()
-        }
-
-        // O processo do serviço caiu: a tarefa segue (ou já caiu junto); só não há o que soltar.
-        override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
-            held = false
-            begin()
+            if (!link.bind(Intent(applicationContext, TerminalService::class.java))) begin()
         }
 
         private fun begin() {
@@ -490,8 +480,7 @@ class SettingsActivity : JangadaActivity() {
             released = true
             if (held) service?.releaseForeground()
             held = false
-            if (bound) runCatching { applicationContext.unbindService(this) }
-            bound = false
+            link.unbind()
         }
     }
 
@@ -537,30 +526,26 @@ class SettingsActivity : JangadaActivity() {
      * então chama [then], na thread principal. O bind é desfeito uma vez só.
      * [then] roda mesmo se a tela já tiver sido destruída: quem usa a tela checa isDestroyed.
      */
-    private inner class ServiceCloser(private val then: () -> Unit) : ServiceConnection {
-        private var bound = false
+    private inner class ServiceCloser(private val then: () -> Unit) {
         private var finished = false
+        private val link = ServiceBind(
+            applicationContext,
+            onConnected = { binder ->
+                val service = (binder as? TerminalService.LocalBinder)?.service
+                if (service == null) done() else service.closeEverything { done() }
+            },
+            onDisconnected = { done() },
+        )
 
         fun start() {
             // Pelo contexto do app: o bind sobrevive à tela e é desfeito pelo mesmo contexto em done().
-            bound = runCatching {
-                applicationContext.bindService(Intent(applicationContext, TerminalService::class.java), this, Context.BIND_AUTO_CREATE)
-            }.getOrDefault(false)
-            if (!bound) done()
+            if (!link.bind(Intent(applicationContext, TerminalService::class.java))) done()
         }
-
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            val service = (binder as? TerminalService.LocalBinder)?.service
-            if (service == null) done() else service.closeEverything { done() }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) = done()
 
         private fun done() {
             if (finished) return
             finished = true
-            if (bound) runCatching { applicationContext.unbindService(this) }
-            bound = false
+            link.unbind()
             then()
         }
     }

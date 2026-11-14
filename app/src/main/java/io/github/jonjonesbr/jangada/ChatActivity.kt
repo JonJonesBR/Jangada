@@ -4,17 +4,13 @@ import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import android.text.Editable
@@ -98,6 +94,7 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.OpenCodeAuth
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
+import io.github.jonjonesbr.jangada.ui.ServiceBind
 import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.askCloneRepo
 import io.github.jonjonesbr.jangada.ui.askNewProject
@@ -186,8 +183,6 @@ class ChatActivity : JangadaActivity() {
     }
 
     private var service: TerminalService? = null
-    /** A tela está ligada ao serviço (bindService feito e ainda não desfeito). */
-    private var bound = false
     /** A tela está iniciada (entre onStart e onStop). */
     private var started = false
     /** A tela está em primeiro plano (entre onResume e onPause). */
@@ -504,18 +499,14 @@ class ChatActivity : JangadaActivity() {
         val intent = Intent(this, TerminalService::class.java)
         startService(intent)
         // Mesmo quando bindService devolve false, a ligação fica registrada e precisa do unbindService.
-        bindService(intent, connection, Context.BIND_AUTO_CREATE)
-        bound = true
+        connection.bind(intent)
     }
 
     override fun onStop() {
         started = false
         engine?.onChanged = null
         // Sempre desfaz o bind feito em onStart, mesmo que o serviço ainda não tenha respondido.
-        if (bound) {
-            bound = false
-            runCatching { unbindService(connection) }
-        }
+        connection.unbind()
         service = null
         super.onStop()
     }
@@ -529,16 +520,12 @@ class ChatActivity : JangadaActivity() {
         super.onDestroy()
     }
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            // Pode chegar depois de a tela ter parado: nesse caso, só desfaz o bind.
-            if (!started) {
-                if (bound) {
-                    bound = false
-                    runCatching { unbindService(this) }
-                }
-                return
-            }
+    /** Ligação ao serviço (onStart liga, onStop desliga). */
+    private val connection = ServiceBind(
+        this,
+        // Pode chegar depois de a tela ter parado: nesse caso, só desfaz o bind.
+        wanted = { started },
+        onConnected = { binder ->
             val svc = (binder as TerminalService.LocalBinder).service
             service = svc
             // Se a tela já estava em primeiro plano quando o serviço chegou, o onResume não pôde avisar.
@@ -550,16 +537,16 @@ class ChatActivity : JangadaActivity() {
                     pendingRemoval = null
                     removeWorktree(svc, job, force)
                 }
-                return
+                return@ServiceBind
             }
             // A pasta está sendo excluída ou renomeada (tela Projetos): o chat dela não abre agora.
             if (svc.folderBusy(folder)) {
                 Toast.makeText(this@ChatActivity, R.string.projects_folder_busy, Toast.LENGTH_LONG).show()
                 finish()
-                return
+                return@ServiceBind
             }
             // Um pedido anterior (de antes de a tela parar e voltar) ainda espera o adaptador: ele abre o chat.
-            if (opening) return
+            if (opening) return@ServiceBind
             val resume = intent.getStringExtra(EXTRA_RESUME)
             val fresh = intent.getBooleanExtra(EXTRA_NEW, false)
             intent.removeExtra(EXTRA_RESUME)
@@ -583,12 +570,9 @@ class ChatActivity : JangadaActivity() {
                     }
                 }
             }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
-        }
-    }
+        },
+        onDisconnected = { service = null },
+    )
 
     /**
      * Abre o chat ao ligar no serviço, depois do adaptador pronto. Se a tela

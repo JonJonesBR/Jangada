@@ -5,16 +5,13 @@ import android.app.AlertDialog
 import android.app.Dialog
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
-import android.os.IBinder
 import android.os.Looper
 import android.os.StatFs
 import android.os.SystemClock
@@ -54,6 +51,7 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.measure
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
+import io.github.jonjonesbr.jangada.ui.ServiceBind
 import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.SpaceBar
 import io.github.jonjonesbr.jangada.ui.askCloneRepo
@@ -117,8 +115,6 @@ class HomeActivity : JangadaActivity() {
     /** Versão mais nova publicada, por id do agente (quando há fonte). Fica no cache do processo. */
     private val latestVersions = LatestVersionCache.versions
     private var service: TerminalService? = null
-    /** true desde o bindService até o unbindService (feitos em onStart e onStop). */
-    private var bound = false
 
     /** Pasta do clone ou cópia que falhou (extra do aviso), esperando o serviço para mostrar o log. */
     private var pendingCloneFailure: String? = null
@@ -246,7 +242,7 @@ class HomeActivity : JangadaActivity() {
     override fun onStart() {
         super.onStart()
         if (!::agentsList.isInitialized) return
-        bound = bindService(Intent(this, TerminalService::class.java), connection, Context.BIND_AUTO_CREATE)
+        connection.bind(Intent(this, TerminalService::class.java))
         refreshInstalled()
         renderStorage()
     }
@@ -459,10 +455,7 @@ class HomeActivity : JangadaActivity() {
         }
         service = null
         // Desfaz o bind sempre que foi feito, mesmo se a conexão ainda não chegou.
-        if (bound) {
-            bound = false
-            unbindService(connection)
-        }
+        connection.unbind()
         super.onStop()
     }
 
@@ -473,17 +466,13 @@ class HomeActivity : JangadaActivity() {
         super.onDestroy()
     }
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+    /** Ligação ao serviço (onStart liga, onStop desliga). */
+    private val connection = ServiceBind(
+        this,
+        // A tela já saiu da frente antes da conexão: a ligação é desfeita e nada é registrado.
+        wanted = { lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) },
+        onConnected = { binder ->
             val svc = (binder as TerminalService.LocalBinder).service
-            // A tela já saiu da frente antes da conexão: desfaz o bind e não registra nada.
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                if (bound) {
-                    bound = false
-                    unbindService(this)
-                }
-                return
-            }
             service = svc
             // Se a tela já estava em primeiro plano quando o serviço chegou, o onResume não pôde avisar.
             if (!paused) svc.homeScreenVisible = true
@@ -499,12 +488,9 @@ class HomeActivity : JangadaActivity() {
                 if (done.state == TerminalService.CloneTask.State.OK) openChat(done.agentId, done.folder)
                 else showCloneFailure(done)
             }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
-        }
-    }
+        },
+        onDisconnected = { service = null },
+    )
 
     // ---- O que está instalado e em que versão ----
 

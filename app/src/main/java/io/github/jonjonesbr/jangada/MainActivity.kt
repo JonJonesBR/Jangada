@@ -3,14 +3,10 @@ package io.github.jonjonesbr.jangada
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
-import android.os.IBinder
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -40,6 +36,7 @@ import io.github.jonjonesbr.jangada.terminal.JangadaViewClient
 import io.github.jonjonesbr.jangada.terminal.Links
 import io.github.jonjonesbr.jangada.terminal.TerminalFonts
 import io.github.jonjonesbr.jangada.terminal.TerminalThemes
+import io.github.jonjonesbr.jangada.ui.ServiceBind
 
 /**
  * A tela do terminal. As sessões moram no [TerminalService], então
@@ -68,8 +65,8 @@ class MainActivity : ComponentActivity() {
     private val agents by lazy { io.github.jonjonesbr.jangada.agents.AgentCatalog.load(this) }
 
     private var service: TerminalService? = null
-    /** true desde o bindService até o unbindService (feitos em onStart e onStop). */
-    private var bound = false
+    /** Há uma busca de conversa em andamento para trocar a sessão pelo chat (ver switchToChat). */
+    private var switchingToChat = false
     private var terminalTypeface: Typeface = Typeface.MONOSPACE
     private var session: TerminalSession? = null
     private var screenVisible = false
@@ -175,22 +172,35 @@ class MainActivity : ComponentActivity() {
      * nova e ficou sem mensagens, o chat também abre numa conversa nova.
      */
     private fun switchToChat() {
+        // Enquanto a conversa é procurada, um segundo toque não abre outro chat.
+        if (switchingToChat) return
         loginBanner.visibility = View.GONE
         val svc = service ?: return
         val current = session ?: return
         val agent = svc.sessionAgent[current.mHandle] ?: return
-        // O chat continua na pasta desta sessão (a conversa do terminal está nela).
+        if (agent != TerminalService.CLAUDE) {
+            openChatFromSession(svc, current.mHandle, agent, conversation = null)
+            return
+        }
+        // A pasta do histórico é listada fora da thread principal; a resposta volta aqui.
+        switchingToChat = true
+        svc.claudeConversationOf(current.mHandle) { conversation ->
+            switchingToChat = false
+            if (!isDestroyed && !isFinishing) openChatFromSession(svc, current.mHandle, agent, conversation)
+        }
+    }
+
+    /**
+     * Fecha a sessão e abre o chat do agente. O chat continua na pasta da sessão (a conversa do
+     * terminal está nela); no Claude, [conversation] é retomada, ou o chat abre numa conversa nova.
+     */
+    private fun openChatFromSession(svc: TerminalService, handle: String, agent: String, conversation: String?) {
         val intent = Intent(this, ChatActivity::class.java)
             .putExtra(ChatActivity.EXTRA_AGENT_ID, agent)
-            .putExtra(ChatActivity.EXTRA_FOLDER, svc.sessionFolder[current.mHandle].orEmpty())
-        if (agent == TerminalService.CLAUDE) {
-            val conversation = svc.claudeConversationOf(current.mHandle)
-            if (conversation != null) intent.putExtra(ChatActivity.EXTRA_RESUME, conversation)
-            else intent.putExtra(ChatActivity.EXTRA_NEW, true)
-        } else {
-            intent.putExtra(ChatActivity.EXTRA_NEW, true)
-        }
-        svc.closeSession(current.mHandle)
+            .putExtra(ChatActivity.EXTRA_FOLDER, svc.sessionFolder[handle].orEmpty())
+        if (agent == TerminalService.CLAUDE && conversation != null) intent.putExtra(ChatActivity.EXTRA_RESUME, conversation)
+        else intent.putExtra(ChatActivity.EXTRA_NEW, true)
+        svc.closeSession(handle)
         startActivity(intent)
         finish()
     }
@@ -228,7 +238,7 @@ class MainActivity : ComponentActivity() {
         if (!::terminalView.isInitialized) return
         val intent = Intent(this, TerminalService::class.java)
         startService(intent)
-        bound = bindService(intent, connection, Context.BIND_AUTO_CREATE)
+        connection.bind(intent)
     }
 
     override fun onResume() {
@@ -260,24 +270,17 @@ class MainActivity : ComponentActivity() {
         }
         service = null
         // Desfaz o bind sempre que foi feito, mesmo se a conexão ainda não chegou.
-        if (bound) {
-            bound = false
-            unbindService(connection)
-        }
+        connection.unbind()
         super.onStop()
     }
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+    /** Ligação ao serviço (onStart liga, onStop desliga). */
+    private val connection = ServiceBind(
+        this,
+        // A tela já saiu da frente antes da conexão: a ligação é desfeita e nada é registrado.
+        wanted = { lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) },
+        onConnected = { binder ->
             val svc = (binder as TerminalService.LocalBinder).service
-            // A tela já saiu da frente antes da conexão: desfaz o bind e não registra nada.
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                if (bound) {
-                    bound = false
-                    unbindService(this)
-                }
-                return
-            }
             service = svc
             svc.screenClient = sessionClient
             svc.screenLinkOpener = { url -> if (screenVisible) { openUrl(url); true } else false }
@@ -285,12 +288,9 @@ class MainActivity : ComponentActivity() {
             svc.addSessionsListener(tabsListener)
             handleIntent(svc)
             terminalView.post { if (composeBar.visibility == View.VISIBLE) focusCompose() else showKeyboard() }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
-        }
-    }
+        },
+        onDisconnected = { service = null },
+    )
 
     /** Decide qual sessão mostrar a partir do pedido que abriu a tela. */
     private fun handleIntent(svc: TerminalService) {

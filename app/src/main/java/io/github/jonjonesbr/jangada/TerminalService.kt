@@ -280,6 +280,11 @@ class TerminalService : Service() {
     fun makeRoomFor(agentId: String, folder: String): Boolean =
         canOpenChat(agentId, folder) || memoryWatch.freeSlotFor(chatKey(agentId, folder))
 
+    /** Versão do app, lida uma vez: não muda enquanto o processo roda (instalar outra versão o reinicia). */
+    private val appVersion: String by lazy {
+        runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
+    }
+
     /**
      * Abre (ou devolve) o chat do agente [agentId], na pasta [folder] ("" = a raiz).
      * [continueLast] retoma a conversa mais recente; [resume] uma conversa específica;
@@ -309,11 +314,11 @@ class TerminalService : Service() {
                 autoCompact = settings.autoCompactFor(key),
             )
         } else {
+            // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).
             val recipe = AgentCatalog.load(this).first { it.id == agentId }
-            val version = runCatching { packageManager.getPackageInfo(packageName, 0).versionName }.getOrNull() ?: "?"
             // Nos agentes ACP, o valor é lido a cada fim de turno (vale na hora).
             AcpChat(
-                linux, recipe.acp!!.command, version, Workspace.path(folder), agentId = recipe.id,
+                linux, recipe.acp!!.command, appVersion, Workspace.path(folder), agentId = recipe.id,
                 autoCompact = { settings.autoCompactFor(key) },
             )
         }
@@ -336,15 +341,18 @@ class TerminalService : Service() {
     /**
      * Conversa do Claude Code usada numa sessão de terminal: a criada ou
      * alterada desde que a sessão começou; senão, a que ela retomou; senão,
-     * nenhuma (era uma conversa nova, ainda sem mensagens).
+     * nenhuma (era uma conversa nova, ainda sem mensagens). A pasta do histórico
+     * é listada numa thread de fundo; [onResult] roda na thread principal.
      */
-    fun claudeConversationOf(handle: String): String? {
+    fun claudeConversationOf(handle: String, onResult: (String?) -> Unit) {
         val started = sessionStartedAt[handle] ?: 0L
+        val saved = sessionConversation[handle]
         val dir = ChatHistory.dir(LinuxEnv(this), Workspace.path(sessionFolder[handle].orEmpty()))
-        val touched = dir.listFiles()
-            ?.filter { it.name.endsWith(".jsonl") && it.lastModified() >= started - 2_000 }
-            ?.maxByOrNull { it.lastModified() }
-        return touched?.name?.removeSuffix(".jsonl") ?: sessionConversation[handle]
+        thread(name = "jangada-conversa") {
+            val files = dir.listFiles()?.map { it.name to it.lastModified() }.orEmpty()
+            val result = ChatHistory.pickSessionConversation(files, started, saved)
+            main.post { onResult(result) }
+        }
     }
 
     /** Fecha o trabalho do par ([agentId], [folder]); [then] roda depois que o agente terminou de sair. */
@@ -680,11 +688,7 @@ class TerminalService : Service() {
     fun cancelTask(agentId: String) {
         val task = tasks[agentId]?.takeIf { it.state == AgentTask.State.RUNNING } ?: return
         task.cancelled = true
-        task.process?.destroy()
-        thread(name = "jangada-cancel-$agentId") {
-            runCatching { Thread.sleep(2_000) }
-            task.process?.takeIf { it.isAlive }?.destroyForcibly()
-        }
+        stopProcess("jangada-cancel-$agentId") { task.process }
         main.post {
             onTasksChanged?.invoke()
             updateNotification()
@@ -925,12 +929,21 @@ class TerminalService : Service() {
     fun cancelClone(folder: String) {
         val task = clones[folder]?.takeIf { it.state == CloneTask.State.RUNNING } ?: return
         task.cancelled = true
-        task.process?.destroy()
-        thread(name = "jangada-cancel-clone-$folder") {
-            runCatching { Thread.sleep(2_000) }
-            task.process?.takeIf { it.isAlive }?.destroyForcibly()
-        }
+        stopProcess("jangada-cancel-clone-$folder") { task.process }
         main.post { updateNotification() }
+    }
+
+    /**
+     * Pede para o processo de [current] sair e, se ele ainda estiver vivo 2 s depois, força.
+     * O ciclo é o mesmo para instalar/atualizar/desinstalar e para clones: só muda o nome da thread.
+     * [current] é lido de novo ao fim da espera (o processo pode ter nascido depois do pedido).
+     */
+    private fun stopProcess(threadName: String, current: () -> Process?) {
+        current()?.destroy()
+        thread(name = threadName) {
+            runCatching { Thread.sleep(2_000) }
+            current()?.takeIf { it.isAlive }?.destroyForcibly()
+        }
     }
 
     /**

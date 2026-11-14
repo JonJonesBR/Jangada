@@ -20,6 +20,18 @@ object ChatHistory {
 
     fun dir(linux: LinuxEnv, cwd: String) = File(linux.rootfs, "root/.claude/projects/${Workspace.claudeProjectKey(cwd)}")
 
+    /**
+     * Conversa de uma sessão de terminal do Claude (pura, sem arquivos): a .jsonl mais recente
+     * gravada desde [startedAt] (com 2 s de folga); senão [saved] (a que a sessão retomou); senão null.
+     * [files] são pares (nome do arquivo, data de alteração), na ordem em que a pasta os lista.
+     */
+    fun pickSessionConversation(files: List<Pair<String, Long>>, startedAt: Long, saved: String?): String? {
+        val newest = files
+            .filter { it.first.endsWith(".jsonl") && it.second >= startedAt - 2_000 }
+            .maxByOrNull { it.second }
+        return newest?.first?.removeSuffix(".jsonl") ?: saved
+    }
+
     fun list(linux: LinuxEnv, cwd: String, limit: Int = 50): List<Conversation> =
         (dir(linux, cwd).listFiles() ?: emptyArray())
             .filter { it.name.endsWith(".jsonl") && it.length() > 0 }

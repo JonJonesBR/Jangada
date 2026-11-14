@@ -1,13 +1,9 @@
 package io.github.jonjonesbr.jangada
 
 import android.app.AlertDialog
-import android.content.ComponentName
-import android.content.Context
 import android.content.Intent
-import android.content.ServiceConnection
 import android.graphics.Typeface
 import android.os.Bundle
-import android.os.IBinder
 import android.text.InputFilter
 import android.text.format.DateUtils
 import android.text.format.Formatter
@@ -32,6 +28,7 @@ import io.github.jonjonesbr.jangada.linux.ProjectOps
 import io.github.jonjonesbr.jangada.linux.ProjectSize
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
+import io.github.jonjonesbr.jangada.ui.ServiceBind
 import io.github.jonjonesbr.jangada.ui.Sheet
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.resumeCloneProgress
@@ -52,9 +49,6 @@ class ProjectsActivity : JangadaActivity() {
 
     /** Serviço ligado (entre onStart e onStop): dono dos chats e terminais abertos. */
     private var service: TerminalService? = null
-
-    /** true desde o bindService até o unbindService (feitos em onStart e onStop). */
-    private var bound = false
 
     private lateinit var list: LinearLayout
     private lateinit var empty: TextView
@@ -127,7 +121,7 @@ class ProjectsActivity : JangadaActivity() {
 
     override fun onStart() {
         super.onStart()
-        bound = bindService(Intent(this, TerminalService::class.java), connection, Context.BIND_AUTO_CREATE)
+        connection.bind(Intent(this, TerminalService::class.java))
         reload()
     }
 
@@ -162,24 +156,17 @@ class ProjectsActivity : JangadaActivity() {
         measuring++
         service = null
         // Desfaz o bind sempre que foi feito, mesmo se a conexão ainda não chegou.
-        if (bound) {
-            bound = false
-            unbindService(connection)
-        }
+        connection.unbind()
         super.onStop()
     }
 
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
+    /** Ligação ao serviço (onStart liga, onStop desliga). */
+    private val connection = ServiceBind(
+        this,
+        // A tela já saiu da frente antes da conexão: a ligação é desfeita e nada é registrado.
+        wanted = { lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) },
+        onConnected = { binder ->
             val svc = (binder as TerminalService.LocalBinder).service
-            // A tela já saiu da frente antes da conexão: desfaz o bind e não registra nada.
-            if (!lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
-                if (bound) {
-                    bound = false
-                    unbindService(this)
-                }
-                return
-            }
             service = svc
             // Com o serviço na mão, a lista mostra quais projetos têm trabalho aberto.
             render()
@@ -189,13 +176,12 @@ class ProjectsActivity : JangadaActivity() {
                 if (done.state == TerminalService.CloneTask.State.OK) toast(R.string.projects_copied) else showCloneFailure(done)
                 reload()
             }
-        }
-
-        override fun onServiceDisconnected(name: ComponentName?) {
+        },
+        onDisconnected = {
             service = null
             render()
-        }
-    }
+        },
+    )
 
     /** Relê ~/projetos numa thread e redesenha a lista na principal. */
     private fun reload() {

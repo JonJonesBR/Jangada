@@ -118,6 +118,10 @@ class MemoryWatch(private val service: TerminalService) {
     private var lastMemoryNotice: Long? = null
     /** O aviso de pouca memória está no canal (some quando a memória volta a OK). */
     private var memoryNoticeShown = false
+    /** Relatórios da última leitura do tique, por chave (ver [usageNow]). */
+    private var lastUsage: Map<String, Reading> = emptyMap()
+    /** elapsedRealtime da última leitura do tique (null = nenhuma ainda). */
+    private var lastUsageAt: Long? = null
 
     private val tick = Runnable { onTick() }
 
@@ -142,6 +146,8 @@ class MemoryWatch(private val service: TerminalService) {
         scheduled = false
         reading = false
         generation++
+        lastUsage = emptyMap()
+        lastUsageAt = null
         clearNotice()
     }
 
@@ -220,11 +226,33 @@ class MemoryWatch(private val service: TerminalService) {
             main.post {
                 if (gen != generation) return@post
                 reading = false
+                rememberUsage(running, usage)
                 recordPeaks(running, usage)
                 // Quem dorme só é escolhido quando há quem possa dormir, ou a memória está crítica.
                 if (targets.isNotEmpty() || level == MemoryPolicy.Level.CRITICAL) decide(level, targets, usage)
                 ensureRunning()
             }
+        }
+    }
+
+    /** Guarda a leitura do tique (thread principal), para as escolhas feitas no toque. */
+    private fun rememberUsage(read: Map<String, AgentChat>, usage: Map<String, JobMemory.Usage?>) {
+        lastUsage = read.mapValues { (key, chat) -> Reading(chat, chat.jobId, usage[key]) }
+        lastUsageAt = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Relatório de cada chat de [targets] para uma escolha feita no toque (thread principal). Reaproveita
+     * a leitura do último tique se ela tem menos de [USAGE_MAX_AGE_MS] e é do mesmo chat e do mesmo job;
+     * o que falta (ou se a leitura está velha) é lido na hora, como antes.
+     */
+    private fun usageNow(linux: LinuxEnv, targets: Map<String, AgentChat>): Map<String, JobMemory.Usage?> {
+        val at = lastUsageAt
+        val fresh = at != null && SystemClock.elapsedRealtime() - at <= USAGE_MAX_AGE_MS
+        return targets.mapValues { (key, chat) ->
+            val saved = lastUsage[key]
+            if (fresh && saved != null && saved.chat === chat && saved.jobId == chat.jobId) saved.usage
+            else usageOf(linux, chat)
         }
     }
 
@@ -291,8 +319,7 @@ class MemoryWatch(private val service: TerminalService) {
      */
     fun freeSlotFor(key: String): Boolean {
         val targets = sleepable().filterKeys { it != key }
-        val linux = LinuxEnv(service)
-        val usage = targets.mapValues { (_, chat) -> usageOf(linux, chat) }
+        val usage = usageNow(LinuxEnv(service), targets)
         val chosen = MemoryPolicy.toFreeSlot(candidatesOf(targets, usage)) ?: return false
         if (sleepEach(listOf(chosen), targets).isEmpty()) return false
         Log.i(TAG, "vaga: $chosen dormiu para abrir $key")
@@ -303,8 +330,7 @@ class MemoryWatch(private val service: TerminalService) {
     /** Quem o modo crítico poria para dormir agora, sem [exceptKey] (relatórios lidos aqui, na thread principal). */
     private fun pressureChoice(exceptKey: String): Pair<List<String>, Map<String, AgentChat>> {
         val targets = sleepable().filterKeys { it != exceptKey }
-        val linux = LinuxEnv(service)
-        val usage = targets.mapValues { (_, chat) -> usageOf(linux, chat) }
+        val usage = usageNow(LinuxEnv(service), targets)
         return MemoryPolicy.toSleepForPressure(candidatesOf(targets, usage), MemoryPolicy.Level.CRITICAL) to targets
     }
 
@@ -356,5 +382,10 @@ class MemoryWatch(private val service: TerminalService) {
         const val PRESSURE_PAUSE_MS = 30_000L
         /** No mínimo este tempo entre dois avisos de pouca memória. */
         const val MEMORY_NOTICE_GAP_MS = 10 * 60_000L
+        /** Leitura do tique reaproveitada nas escolhas do toque só até esta idade (duas conferências). */
+        const val USAGE_MAX_AGE_MS = 2 * INTERVAL_MS
     }
+
+    /** Uma leitura do tique: o chat lido, o job dele na hora e o relatório (null = sem relatório). */
+    private class Reading(val chat: AgentChat, val jobId: String?, val usage: JobMemory.Usage?)
 }
