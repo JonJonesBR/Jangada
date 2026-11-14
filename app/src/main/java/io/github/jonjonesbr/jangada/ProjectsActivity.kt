@@ -65,6 +65,9 @@ class ProjectsActivity : JangadaActivity() {
     /** Tamanho medido de cada projeto (chave: nome). Só a thread principal mexe; não é apagado ao recarregar. */
     private val sizes = HashMap<String, ProjectSize.Sizes>()
 
+    /** Arquivos com mudança sem commit de cada repositório (chave: nome); some da linha se 0. Só a principal escreve. */
+    private val dirtyFiles = HashMap<String, Int>()
+
     /** Geração da medição: cada nova medição (ou sair da tela) soma 1 e a antiga para sozinha. Só a principal escreve. */
     @Volatile private var measuring = 0
 
@@ -220,6 +223,18 @@ class ProjectsActivity : JangadaActivity() {
                     }
                 }
             }
+            // Depois dos tamanhos (um de cada vez, para não pesar no proot): o estado do git de cada repositório.
+            for (item in items) {
+                if (item.branch == null) continue
+                if (measuring != gen || isDestroyed) return@thread
+                val count = dirtyCount(item)
+                runOnUiThread {
+                    if (!isDestroyed && measuring == gen && dirtyFiles[item.name] != count) {
+                        dirtyFiles[item.name] = count
+                        render()
+                    }
+                }
+            }
         }
     }
 
@@ -248,6 +263,9 @@ class ProjectsActivity : JangadaActivity() {
         Workspace.describe(this@ProjectsActivity, item)?.let { addView(label(it, 14f, R.color.setup_muted_text)) }
         sizes[item.name]?.let {
             addView(label(Formatter.formatShortFileSize(this@ProjectsActivity, it.total), 14f, R.color.setup_muted_text))
+        }
+        dirtyFiles[item.name]?.takeIf { it > 0 }?.let {
+            addView(label(resources.getQuantityString(R.plurals.changes_count, it, it), 14f, R.color.setup_muted_text))
         }
         if (open) addView(label(getString(R.string.projects_open_work), 14f, R.color.setup_done_text))
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
