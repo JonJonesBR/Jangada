@@ -73,11 +73,11 @@ import io.github.jonjonesbr.jangada.chat.BackgroundTask
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
-import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.ChildAgents
 import io.github.jonjonesbr.jangada.chat.ChildState
 import io.github.jonjonesbr.jangada.chat.ChildSummary
+import io.github.jonjonesbr.jangada.chat.HistoryFlow
 import io.github.jonjonesbr.jangada.chat.OpenCodeDialogs
 import io.github.jonjonesbr.jangada.chat.OpenCodeStats
 import io.github.jonjonesbr.jangada.chat.WorktreeFlow
@@ -208,6 +208,8 @@ class ChatActivity : JangadaActivity() {
     private val openCode = OpenCodeDialogs(this)
     /** Trabalho isolado desta tela (encerrar, juntar, descartar e tirar); fora desta tela, ver [WorktreeFlow]. */
     private val worktrees = WorktreeFlow(this)
+    /** Histórico de conversas (lista, busca e apagar), fora desta tela; ver [HistoryFlow]. */
+    private val history = HistoryFlow(this)
     /** Diálogo "já há agentes demais" aberto (evita abrir dois). */
     private var jobsFullDialog: Dialog? = null
     /** Painel de pouca memória aberto (evita abrir dois). */
@@ -231,7 +233,8 @@ class ChatActivity : JangadaActivity() {
     private var compactLayout = false
     /** Pedido de permissão que a faixa fixa mostra agora (o primeiro pendente); null = faixa escondida. */
     private var barPermission: ChatItem.Permission? = null
-    private var engine: AgentChat? = null
+    internal var engine: AgentChat? = null
+        private set
     private var enterAt = -1
     private val pendingAttachments = mutableListOf<Attachment>()
     /** Texto pedido por [EXTRA_SEND] (ex.: pedir o commit), enviado quando o chat deste trabalho estiver ligado. */
@@ -282,10 +285,10 @@ class ChatActivity : JangadaActivity() {
     /** Uma linha do popup: um comando do app ou um comando do agente (o outro fica nulo). */
     private data class Suggestion(val label: String, val app: AppCommand?, val agent: SlashCommand?)
 
-    private val isClaude get() = agentId == TerminalService.CLAUDE
-    private val agentName get() = recipe?.name ?: getString(R.string.chat_title)
+    internal val isClaude get() = agentId == TerminalService.CLAUDE
+    internal val agentName get() = recipe?.name ?: getString(R.string.chat_title)
     /** Pasta de trabalho do chat (caminho dentro do Debian). */
-    private val chatCwd: String get() = engine?.cwd ?: Workspace.path(folder)
+    internal val chatCwd: String get() = engine?.cwd ?: Workspace.path(folder)
     /** Chave do trabalho desta tela (agente + pasta), como no serviço. */
     private val chatKey: String get() = TerminalService.chatKey(agentId, folder)
     /** Nomes dos agentes pelo id (o catálogo é lido uma vez, para as linhas de trabalho). */
@@ -593,7 +596,7 @@ class ChatActivity : JangadaActivity() {
      * trabalhos abertos para dormir ou fechar um antes. Com vaga, um agente novo ainda confere
      * a memória do celular (ver [checkMemory]).
      */
-    private fun withRoom(svc: TerminalService, open: () -> Unit) {
+    internal fun withRoom(svc: TerminalService, open: () -> Unit) {
         // A pasta do trabalho isolado está saindo: nenhum chat novo nela.
         if (worktrees.removing) return
         // Par rodando é substituído (não soma) e par dormindo só acorda: nenhum deles sobe agente novo.
@@ -877,7 +880,7 @@ class ChatActivity : JangadaActivity() {
         }, 1000)
     }
 
-    private fun attach(chat: AgentChat) {
+    internal fun attach(chat: AgentChat) {
         engine = chat
         // A última pasta usada é a deste trabalho (a tela só abre trabalhos da própria pasta).
         settings.chatFolder = folder
@@ -1582,7 +1585,7 @@ class ChatActivity : JangadaActivity() {
         input.setText("")
         drafts.put(chatKey, "")
         drafts.putAttachments(chatKey, emptyList())
-        showHistory()
+        history.showHistory()
     }
 
     private fun send() {
@@ -1742,7 +1745,7 @@ class ChatActivity : JangadaActivity() {
      * Fecha o chat deste trabalho, espera o agente sair e liga a tela no que [open] abrir.
      * Com o agente parado, reabrir soma um rodando: precisa de vaga.
      */
-    private fun reopenChat(svc: TerminalService, open: () -> AgentChat) {
+    internal fun reopenChat(svc: TerminalService, open: () -> AgentChat) {
         withRoom(svc) {
             svc.closeChat(agentId, folder) {
                 if (!isDestroyed) attach(open())
@@ -1765,107 +1768,6 @@ class ChatActivity : JangadaActivity() {
         }
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         return true
-    }
-
-    /** Conversas anteriores: toque para retomar, 🗑 para apagar (a aberta já vira uma nova). */
-    private fun showHistory() {
-        val chat = engine
-        if (isClaude) {
-            val cwd = chatCwd
-            thread(name = "chat-history") {
-                // Falha de leitura (pasta sumiu, sem permissão) vira lista vazia, sem derrubar o app.
-                val found = runCatching { ChatHistory.list(linux, cwd) }.getOrDefault(emptyList())
-                runOnUiThread { if (!isDestroyed) showHistoryDialog(found, canDelete = true) }
-            }
-        } else if (chat is AcpChat && chat.supportsHistory && !chat.running) {
-            // Dormindo ou parado: quem lista as conversas é o próprio agente.
-            Toast.makeText(this, getString(R.string.chat_history_asleep, agentName), Toast.LENGTH_LONG).show()
-        } else if (chat is AcpChat && chat.supportsHistory) {
-            chat.listSessions { sessions ->
-                if (isDestroyed) return@listSessions
-                // Lista nula = falhou (agente parado ou erro): não mostra "sem conversas".
-                if (sessions == null) runOnUiThread { Toast.makeText(this, R.string.chat_history_list_failed, Toast.LENGTH_LONG).show() }
-                else showHistoryDialog(sessions, chat.canDelete)
-            }
-        } else {
-            Toast.makeText(this, getString(R.string.chat_history_unsupported, agentName), Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun showHistoryDialog(found: List<ChatHistory.Conversation>, canDelete: Boolean) {
-        val svc = service ?: return
-        val conversations = found.toMutableList()
-        if (conversations.isEmpty()) {
-            Toast.makeText(this, R.string.chat_history_empty, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val rows = conversations.map { conversation ->
-            val isCurrent = conversation.id == engine?.sessionId
-            Sheet.Row(
-                title = conversation.title,
-                description = if (conversation.updatedAt > 0) DateUtils.getRelativeTimeSpanString(conversation.updatedAt) else null,
-                checked = isCurrent,
-            ) {
-                if (!isCurrent && !busyBlocks()) reopenChat(svc) {
-                    svc.openChat(agentId, folder = folder, resume = conversation.id, restart = true)
-                }
-            }
-        }.toMutableList()
-        // Apagar fica numa linha própria (sem gesto escondido, que não é acessível).
-        if (canDelete) rows += Sheet.Row(title = getString(R.string.chat_history_delete_row), destructive = true) {
-            showDeleteHistory(conversations)
-        }
-        // Busca nas conversas (só o Claude: a lista dos outros agentes é do próprio agente).
-        if (isClaude) rows.add(0, Sheet.Row(title = getString(R.string.chat_history_search), icon = "🔍") { askSearch() })
-        Sheet(this).title(getString(R.string.chat_history)).rows(rows).show()
-    }
-
-    /** Busca nas conversas do Claude: pede as palavras e, com texto, procura (ver [searchHistory]). */
-    private fun askSearch() {
-        val field = EditText(this).apply {
-            setSingleLine(true)
-            hint = getString(R.string.chat_history_search_hint)
-            inputType = InputType.TYPE_CLASS_TEXT
-        }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.chat_history_search)
-            .setView(field)
-            .setPositiveButton(R.string.chat_history_search_go) { _, _ ->
-                val text = field.text.toString().trim()
-                if (text.isNotEmpty()) searchHistory(text)
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    /** Lê os arquivos da pasta fora da thread principal; falha conta como nada achado. */
-    private fun searchHistory(text: String) {
-        val cwd = chatCwd
-        thread(name = "chat-search") {
-            val found = runCatching {
-                ChatHistory.search(linux, cwd, text, cancelled = { isDestroyed || isFinishing })
-            }.getOrDefault(emptyList())
-            runOnUiThread { if (!isDestroyed) showSearchResults(text, found) }
-        }
-    }
-
-    /** Resultados da busca: tocar numa conversa faz o mesmo que na linha do Histórico. */
-    private fun showSearchResults(query: String, found: List<ChatHistory.Match>) {
-        val svc = service ?: return
-        if (found.isEmpty()) {
-            Toast.makeText(this, R.string.chat_history_search_none, Toast.LENGTH_SHORT).show()
-            return
-        }
-        val rows = found.map { match ->
-            Sheet.Row(title = match.conversation.title, description = match.snippet) {
-                val conversation = match.conversation
-                val isCurrent = conversation.id == engine?.sessionId
-                if (!isCurrent && !busyBlocks()) reopenChat(svc) {
-                    svc.openChat(agentId, folder = folder, resume = conversation.id, restart = true)
-                }
-            }
-        }
-        Sheet(this).title(getString(R.string.chat_history_search_results, query)).rows(rows).show()
     }
 
     /** Anexos guardados no rascunho deste trabalho: refaz os que ainda estão em ~/projetos/anexos. */
@@ -1903,92 +1805,6 @@ class ChatActivity : JangadaActivity() {
             // Sem app de arquivos para escolher o destino: nada foi salvo.
             pendingExport = null
             Toast.makeText(this, R.string.chat_export_failed, Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    /** Apagar conversas: cada uma em vermelho; tocar numa pede a confirmação e, depois, volta a lista. */
-    private fun showDeleteHistory(conversations: MutableList<ChatHistory.Conversation>) {
-        if (conversations.isEmpty()) return
-        val rows = conversations.map { conversation ->
-            Sheet.Row(title = conversation.title, destructive = true) {
-                confirmDelete(conversation, conversation.id == engine?.sessionId) {
-                    conversations.remove(conversation)
-                    runOnUiThread { if (!isDestroyed) showDeleteHistory(conversations) }
-                }
-            }
-        }
-        val all = if (isClaude) listOf(
-            Sheet.Row(title = getString(R.string.chat_history_delete_all), destructive = true) { confirmDeleteAll(conversations.map { it.id }) },
-        ) else emptyList()
-        Sheet(this).title(getString(R.string.chat_history_delete_title)).rows(all + rows).show()
-    }
-
-    /** Apaga todas as conversas do Claude da pasta (fecha o chat aberto antes) e abre uma conversa nova. */
-    private fun confirmDeleteAll(ids: List<String>) {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.chat_history_delete_all)
-            .setMessage(R.string.chat_history_delete_all_confirm)
-            .setPositiveButton(R.string.chat_delete) { _, _ ->
-                val svc = service ?: return@setPositiveButton
-                val cwd = chatCwd
-                svc.closeChat(agentId, folder) {
-                    thread(name = "chat-delete-all") {
-                        // Um erro num arquivo não pode derrubar o app nem impedir os outros.
-                        for (id in ids) runCatching { ChatHistory.delete(linux, cwd, id) }
-                        runOnUiThread {
-                            if (isDestroyed) return@runOnUiThread
-                            Toast.makeText(this, R.string.chat_history_deleted_all, Toast.LENGTH_SHORT).show()
-                            withRoom(svc) { attach(svc.openChat(agentId, folder = folder, restart = true)) }
-                        }
-                    }
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    private fun confirmDelete(conversation: ChatHistory.Conversation, isCurrent: Boolean, done: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.chat_delete_title)
-            .setMessage(conversation.title)
-            .setPositiveButton(R.string.chat_delete) { _, _ ->
-                val svc = service ?: return@setPositiveButton
-                // Depois de apagar: se era a conversa aberta, abre uma nova; a lista volta à tela principal.
-                val reopenAndDone = {
-                    // O chat já foi fechado: abrir outro precisa de vaga (se o apagado estava parado).
-                    if (isCurrent && !isDestroyed) withRoom(svc) { attach(svc.openChat(agentId, folder = folder, restart = true)) }
-                    done()
-                }
-                if (isClaude) {
-                    // Fecha o chat primeiro (o Claude para de gravar); só então apaga os arquivos.
-                    if (isCurrent) {
-                        svc.closeChat(agentId, folder) { deleteClaudeFiles(conversation.id, reopenAndDone) }
-                    } else {
-                        deleteClaudeFiles(conversation.id, done)
-                    }
-                } else {
-                    // ACP: o agente apaga pela própria conexão, então apaga antes de fechar a conversa.
-                    val acp = engine as? AcpChat
-                    val afterDelete = { if (isCurrent) svc.closeChat(agentId, folder) { reopenAndDone() } else done() }
-                    if (acp == null) afterDelete()
-                    else acp.deleteSession(conversation.id) { error ->
-                        // Falhou: a conversa continua na lista (e aberta, se for a atual).
-                        if (error == null) afterDelete()
-                        else runOnUiThread { if (!isDestroyed) Toast.makeText(this, getString(R.string.chat_history_delete_failed, error), Toast.LENGTH_LONG).show() }
-                    }
-                }
-            }
-            .setNegativeButton(android.R.string.cancel, null)
-            .show()
-    }
-
-    /** Apaga a conversa do Claude fora da thread principal (a pasta de anexos pode ser grande); [then] volta à principal. */
-    private fun deleteClaudeFiles(id: String, then: () -> Unit) {
-        val cwd = chatCwd
-        thread(name = "chat-delete") {
-            // Um erro aqui (arquivo preso, por exemplo) não pode derrubar o app.
-            runCatching { ChatHistory.delete(linux, cwd, id) }
-            runOnUiThread { if (!isDestroyed) then() }
         }
     }
 
@@ -2059,7 +1875,7 @@ class ChatActivity : JangadaActivity() {
             if (!busyBlocks(R.string.chat_new_wait)) newConversation()
         }
         rows += Sheet.Row(title = getString(R.string.chat_menu_history), description = getString(R.string.chat_menu_history_desc), icon = "🕘") {
-            showHistory()
+            history.showHistory()
         }
         rows += Sheet.Row(title = getString(R.string.chat_jobs), description = getString(R.string.chat_menu_jobs_desc), icon = "⇄") {
             showJobs()
