@@ -118,6 +118,8 @@ import kotlin.concurrent.thread
  */
 class ChatActivity : JangadaActivity() {
 
+    override val maxContentWidthDp = 840
+
     private lateinit var list: ListView
     private lateinit var listFrame: View
     private lateinit var jumpEnd: View
@@ -3195,7 +3197,7 @@ class ChatActivity : JangadaActivity() {
             textSize = 16f * chatScale
             setBackgroundResource(R.drawable.bubble_user)
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            maxWidth = (resources.displayMetrics.widthPixels * 0.82).toInt()
+            maxWidth = (contentWidthPx() * 0.82).toInt()
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { gravity = Gravity.END; leftMargin = dp(40) }

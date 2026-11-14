@@ -3,6 +3,9 @@ package io.github.jonjonesbr.jangada
 import android.content.Context
 import android.content.res.Configuration
 import android.os.Bundle
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 
 /**
@@ -12,6 +15,47 @@ import androidx.activity.ComponentActivity
 open class JangadaActivity : ComponentActivity() {
 
     private var createdWithTheme = themeGeneration
+
+    /**
+     * Largura máxima do conteúdo, em dp (0 = sem limite). Em tela larga (tablet, celular deitado) o conteúdo
+     * fica centralizado nessa largura, em vez de esticar de ponta a ponta; abaixo dela nada muda.
+     */
+    protected open val maxContentWidthDp: Int = 720
+
+    /** Largura útil do conteúdo em pixels: a da tela, limitada por [maxContentWidthDp]. */
+    protected fun contentWidthPx(): Int {
+        val screen = resources.displayMetrics.widthPixels
+        val cap = (maxContentWidthDp * resources.displayMetrics.density).toInt()
+        return if (cap > 0) minOf(screen, cap) else screen
+    }
+
+    override fun setContentView(layoutResID: Int) {
+        val frame = CenteredFrame()
+        layoutInflater.inflate(layoutResID, frame, true)
+        super.setContentView(frame)
+    }
+
+    override fun setContentView(view: View?) {
+        val frame = CenteredFrame()
+        frame.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        super.setContentView(frame)
+    }
+
+    /** Moldura que centraliza o filho quando a tela é mais larga que [maxContentWidthDp] (margens iguais dos dois lados). */
+    private inner class CenteredFrame : FrameLayout(this@JangadaActivity) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val side = ((MeasureSpec.getSize(widthMeasureSpec) - contentWidthPx()) / 2).coerceAtLeast(0)
+            for (i in 0 until childCount) {
+                (getChildAt(i).layoutParams as? MarginLayoutParams)?.let {
+                    it.marginStart = side
+                    it.marginEnd = side
+                    it.leftMargin = side
+                    it.rightMargin = side
+                }
+            }
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        }
+    }
 
     override fun onResume() {
         super.onResume()

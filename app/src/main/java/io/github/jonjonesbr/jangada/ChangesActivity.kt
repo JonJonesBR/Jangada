@@ -42,6 +42,9 @@ import kotlin.concurrent.thread
  */
 class ChangesActivity : JangadaActivity() {
 
+    // O diff aproveita a tela toda.
+    override val maxContentWidthDp = 0
+
     /** O que o git disse numa leitura da pasta. */
     private class State(
         val isRepo: Boolean,
