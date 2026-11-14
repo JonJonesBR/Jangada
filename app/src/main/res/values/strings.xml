@@ -298,8 +298,8 @@
     <string name="chat_permission_bar_count">Permission request (%1$d of %2$d)</string>
     <string name="chat_permission_wants">The %1$s wants permission</string>
     <string name="chat_permission_workdir">Directory: %1$s</string>
-    <string name="chat_permission_show_full">Show full command</string>
-    <string name="chat_permission_hide_full">Collapse command</string>
+    <string name="chat_permission_show_full">Details</string>
+    <string name="chat_permission_hide_full">Hide details</string>
     <string name="chat_permission_queue">Request %1$d of %2$d</string>
     <string name="chat_permission_wait_previous">Answer request %1$d of %2$d first</string>
     <string name="chat_permission_confirm">Confirm permission</string>

@@ -373,6 +373,7 @@ class ChatActivity : JangadaActivity() {
             override fun onScrollStateChanged(view: AbsListView, scrollState: Int) = Unit
             override fun onScroll(view: AbsListView, firstVisibleItem: Int, visibleItemCount: Int, totalItemCount: Int) {
                 updateJumpButton()
+                barPermission?.let { permissionBar.visibility = if (permissionCardVisible(it)) View.GONE else View.VISIBLE }
             }
         })
         // Tocar na faixa com tarefas em segundo plano abre o painel para pará-las (isClickable em updateStatus).
@@ -1264,7 +1265,7 @@ class ChatActivity : JangadaActivity() {
         val pending = chat.items.toList().filterIsInstance<ChatItem.Permission>().filter { it.chosen == null }
         val first = pending.firstOrNull()
         barPermission = first
-        permissionBar.visibility = if (first == null) View.GONE else View.VISIBLE
+        permissionBar.visibility = if (first == null || permissionCardVisible(first)) View.GONE else View.VISIBLE
         if (first == null) return
         permissionTitle.text = getString(R.string.chat_permission_bar_count, 1, pending.size)
         // Tela baixa: sem a linha do título, e o comando em até duas linhas (a faixa não empurra a conversa para fora).
@@ -1272,6 +1273,14 @@ class ChatActivity : JangadaActivity() {
         permissionText.maxLines = 2
         // O comando inteiro fica no cartão; aqui cabe só o começo, para a faixa não crescer.
         permissionText.text = first.summary.ifBlank { first.title }
+    }
+
+    /** O cartão do pedido está inteiro na tela: a faixa seria só repetição. */
+    private fun permissionCardVisible(item: ChatItem.Permission): Boolean {
+        val index = adapter.snapshot.indexOfFirst { it === item }
+        if (index < 0) return false
+        val child = list.getChildAt(index - list.firstVisiblePosition) ?: return false
+        return child.top >= 0 && child.bottom <= list.height
     }
 
     /**
@@ -3529,7 +3538,7 @@ class ChatActivity : JangadaActivity() {
             card.addView(TextView(this@ChatActivity).apply {
                 text = ToolText.label(this@ChatActivity, item.toolName.ifEmpty { item.title })
                 setTextColor(getColor(R.color.setup_muted))
-                textSize = 12f * chatScale
+                textSize = 13f * chatScale
                 setPadding(0, dp(2), 0, 0)
             })
             val command = item.summary.ifBlank { item.title }
@@ -3539,53 +3548,60 @@ class ChatActivity : JangadaActivity() {
                 PermissionRisk.workPath(item.workdir, item.toolName, command),
                 engine?.cwd,
             )
-            if (analysis.lines.isNotEmpty()) {
-                val expanded = item.expanded
+            val expanded = item.expanded
+            // Leigo: só o essencial (o que o agente quer fazer, em até 2 linhas). Detalhes abre o resto.
+            if (!expanded && command.isNotBlank()) {
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = command
+                    textSize = 14f * chatScale
+                    maxLines = 2
+                    ellipsize = TextUtils.TruncateAt.END
+                    setTextColor(getColor(R.color.setup_text))
+                    setPadding(0, dp(6), 0, dp(2))
+                })
+            }
+            if (expanded && analysis.lines.isNotEmpty()) {
                 card.addView(TextView(this@ChatActivity).apply {
                     text = analysis.lines.joinToString("\n")
                     typeface = Typeface.MONOSPACE
                     textSize = 12f * chatScale
-                    // Fechado, no máximo 6 linhas; aberto, o comando inteiro (sem corte).
-                    maxLines = if (expanded) Int.MAX_VALUE else MAX_PERMISSION_LINES
-                    ellipsize = TextUtils.TruncateAt.END
                     setTextColor(getColor(R.color.setup_muted))
                     setTextIsSelectable(true)
                     setPadding(0, dp(6), 0, dp(2))
                 })
-                // Muitas linhas ou uma linha muito longa (que quebra sozinha na tela): dá para abrir.
-                if (analysis.lines.size > MAX_PERMISSION_LINES || command.length > PERMISSION_EXPAND_CHARS) {
-                    card.addView(Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
-                        text = getString(
-                            if (expanded) R.string.chat_permission_hide_full else R.string.chat_permission_show_full,
-                        )
-                        isAllCaps = false
-                        textSize = 13f * chatScale
-                        minHeight = dp(48)
-                        setTextColor(getColor(R.color.accent_text))
-                        setOnClickListener {
-                            item.expanded = !item.expanded
-                            // Só o adaptador: um refresh() da tela pularia a rolagem da conversa.
-                            this@ChatAdapter.notifyDataSetChanged()
-                        }
+            }
+            if (expanded) {
+                item.diff?.let { card.addView(diffView(it)) }
+                if (item.detail.isNotEmpty()) {
+                    card.addView(TextView(this@ChatActivity).apply {
+                        text = item.detail
+                        textSize = 12f * chatScale
+                        setTextColor(getColor(R.color.setup_muted))
+                        setPadding(0, 0, 0, dp(4))
+                    })
+                }
+                if (!item.workdir.isNullOrBlank()) {
+                    card.addView(TextView(this@ChatActivity).apply {
+                        text = getString(R.string.chat_permission_workdir, item.workdir)
+                        typeface = Typeface.MONOSPACE
+                        textSize = 11f * chatScale
+                        setTextColor(getColor(R.color.setup_muted))
+                        setPadding(0, dp(2), 0, dp(2))
                     })
                 }
             }
-            item.diff?.let { card.addView(diffView(it)) }
-            if (item.detail.isNotEmpty()) {
-                card.addView(TextView(this@ChatActivity).apply {
-                    text = item.detail
-                    textSize = 12f * chatScale
-                    setTextColor(getColor(R.color.setup_muted))
-                    setPadding(0, 0, 0, dp(4))
-                })
-            }
-            if (!item.workdir.isNullOrBlank()) {
-                card.addView(TextView(this@ChatActivity).apply {
-                    text = getString(R.string.chat_permission_workdir, item.workdir)
-                    typeface = Typeface.MONOSPACE
-                    textSize = 11f * chatScale
-                    setTextColor(getColor(R.color.setup_muted))
-                    setPadding(0, dp(2), 0, dp(2))
+            if (item.chosen == null) {
+                card.addView(Button(this@ChatActivity, null, android.R.attr.borderlessButtonStyle).apply {
+                    text = getString(if (expanded) R.string.chat_permission_hide_full else R.string.chat_permission_show_full)
+                    isAllCaps = false
+                    textSize = 13f * chatScale
+                    minHeight = dp(48)
+                    setTextColor(getColor(R.color.accent_text))
+                    setOnClickListener {
+                        item.expanded = !item.expanded
+                        // Só o adaptador: um refresh() da tela pularia a rolagem da conversa.
+                        this@ChatAdapter.notifyDataSetChanged()
+                    }
                 })
             }
             if (analysis.high) {
@@ -4226,10 +4242,6 @@ class ChatActivity : JangadaActivity() {
         const val JUMP_SCROLL_MS = 250
         /** Intervalo do relógio da faixa de status (só reescreve o texto dela; ver [statusClock]). */
         const val STATUS_CLOCK_MS = 1000L
-        /** Linhas do comando mostradas no cartão de permissão fechado (aberto, o comando inteiro). */
-        const val MAX_PERMISSION_LINES = 6
-        /** Acima deste tamanho, o comando de uma linha já ganha o botão de abrir (quebra na tela). */
-        const val PERMISSION_EXPAND_CHARS = 200
         /** Janela do segundo toque do Permitir em alto risco. */
         const val CONFIRM_PERMISSION_MS = 10_000L
         /** Sem mensagem do agente há este tempo, a ação em andamento também mostra "sem eventos há…". */

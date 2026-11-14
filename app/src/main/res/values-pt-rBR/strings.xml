@@ -296,8 +296,8 @@
     <string name="chat_permission_bar_count">Pedido de permissão (%1$d de %2$d)</string>
     <string name="chat_permission_wants">O %1$s quer permissão</string>
     <string name="chat_permission_workdir">Diretório: %1$s</string>
-    <string name="chat_permission_show_full">Ver comando completo</string>
-    <string name="chat_permission_hide_full">Recolher comando</string>
+    <string name="chat_permission_show_full">Detalhes</string>
+    <string name="chat_permission_hide_full">Ocultar detalhes</string>
     <string name="chat_permission_queue">Pedido %1$d de %2$d</string>
     <string name="chat_permission_wait_previous">Responda o pedido %1$d de %2$d primeiro</string>
     <string name="chat_permission_confirm">Confirmar permissão</string>
