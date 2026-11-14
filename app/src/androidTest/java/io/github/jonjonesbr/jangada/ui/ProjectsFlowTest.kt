@@ -31,7 +31,6 @@ class ProjectsFlowTest {
         private const val FAKE = "claude"
         private const val PROJETO = "fluxo-teste"
         private const val NOVO = "fluxo-renomeado"
-        private const val COPIA = "fluxo-teste-copia"
 
         @JvmStatic
         @BeforeClass
@@ -39,6 +38,8 @@ class ProjectsFlowTest {
     }
 
     private val device = ChatUi.device
+    /** Nome sugerido da cópia: o sufixo muda com o idioma do aparelho (o emulador usa inglês). */
+    private val COPIA get() = PROJETO + ChatUi.context.getString(R.string.projects_copy_suffix)
     private fun pasta(nome: String) = File(LinuxFixture.rootfs, "root/projetos/$nome")
     private fun conversas(nome: String) =
         File(LinuxFixture.rootfs, "root/.claude/projects/${Workspace.claudeProjectKey("/root/projetos/$nome")}")
