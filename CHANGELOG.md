@@ -1,5 +1,14 @@
 # Novidades
 
+## 1.20.0
+
+- Chat do OpenCode: cada subagente aparece num cartão com agente e descrição, estado com o tempo, ações recolhidas e o resultado ao terminar; a faixa de status resume quantos subagentes há e quantos rodam. O pedido de permissão de um subagente mostra quem pediu, e o cartão indica que espera a sua resposta.
+- Chat: faixa de status honesta, com relógio do turno e do tempo de cada ação do agente; um único pedido de permissão por vez, com o risco e fila para os seguintes.
+- Chat: /clear e /reset aparecem nas sugestões de comandos.
+- Conversas: apagar todas (no chat e no painel do projeto) e apagar uma pelo painel; uma conversa sem arquivo não é mais retomada (isso causava o erro código 1).
+- Agentes: os comandos rodados pelo app não usam paginador nem pedem resposta interativa.
+- Mais testes no emulador (exportar conversa, encerrar trabalho isolado, Mudanças, limites, Consumo do OpenCode, tela inicial e terminal).
+
 ## 1.19.0
 
 - Projetos: cada projeto mostra quanto ocupa e, no painel, o total separado em git e dependências. O painel também lista as conversas do Claude do projeto (tocar abre a conversa) e apaga as paradas há mais de 30 dias, só com o projeto fechado.

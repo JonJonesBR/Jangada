@@ -1,0 +1,1 @@
+OpenCode: cada subagente aparece num cartão com estado, tempo e resultado, e o pedido de permissão dele mostra quem pediu. Chat: faixa de status com relógio, um pedido de permissão por vez com o risco, /clear e /reset nas sugestões. Conversas: apagar todas ou uma pelo painel, e conversa sem arquivo não é mais retomada.
