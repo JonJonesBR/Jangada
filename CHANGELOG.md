@@ -2,6 +2,7 @@
 
 ## 1.20.0
 
+- Antigravity CLI (agy): agora tem chat, pelo servidor ACP que vem no próprio CLI (`agy acp`); o primeiro login abre o terminal para colar o código da conta Google.
 - Chat do OpenCode: cada subagente aparece num cartão com agente e descrição, estado com o tempo, ações recolhidas e o resultado ao terminar; a faixa de status resume quantos subagentes há e quantos rodam. O pedido de permissão de um subagente mostra quem pediu, e o cartão indica que espera a sua resposta.
 - Chat: faixa de status honesta, com relógio do turno e do tempo de cada ação do agente; um único pedido de permissão por vez, com o risco e fila para os seguintes.
 - Chat: /clear e /reset aparecem nas sugestões de comandos.
