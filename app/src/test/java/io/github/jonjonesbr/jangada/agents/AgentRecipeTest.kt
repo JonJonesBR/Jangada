@@ -37,6 +37,15 @@ class AgentRecipeTest {
     }
 
     @Test
+    fun antigravityTemChatPeloAcpDoProprioCli() {
+        val agy = recipes.single { it.id == "antigravity" }
+        assertTrue(agy.hasChat)
+        // O servidor ACP vem embutido no CLI (agy acp, desde a 1.5.0): sem instalação extra.
+        assertEquals("agy acp", agy.acp?.command)
+        assertNull(agy.acp?.install)
+    }
+
+    @Test
     fun scriptsGeradosSaoBashValido() {
         for (recipe in recipes) {
             for (updating in listOf(false, true)) {

@@ -80,7 +80,7 @@ Instalar, atualizar e desinstalar com um toque, vendo o espaço que cada um ocup
 | oh-my-pi (omp) | oh-my-pi | ✅ | ✅ |
 | Hermes Agent | Nous Research | ✅ | ✅ |
 | Command Code | Command Code | ✅ | ✅ |
-| Antigravity CLI (agy) | Google | — | ✅ |
+| Antigravity CLI (agy) | Google | ✅ | ✅ |
 | OpenClaw | OpenClaw | — | ✅ |
 
 O chat funciona com o Claude Code e com os agentes que falam o [Agent Client Protocol](https://agentclientprotocol.com). Quer outro agente? Veja como adicionar em [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
@@ -164,7 +164,7 @@ Jangada puts a full Debian Linux inside the app and turns your phone into a plac
 
 ### Agents
 
-Claude Code, Codex, OpenCode, Qwen Code, Pi, oh-my-pi, Hermes Agent and Command Code work in both chat and terminal. Antigravity CLI and OpenClaw work in the terminal only. One-tap install, update and uninstall, with a guided first login.
+Claude Code, Codex, OpenCode, Qwen Code, Pi, oh-my-pi, Hermes Agent, Command Code and Antigravity CLI work in both chat and terminal. OpenClaw works in the terminal only. One-tap install, update and uninstall, with a guided first login.
 
 ### Install
 
