@@ -386,7 +386,9 @@
     <string name="chat_tool_group_title">Ações</string>
     <string name="chat_tool_group_description">%1$s. Toque para ver cada ação.</string>
     <string name="chat_child_title">Subagente</string>
+    <string name="chat_permission_child">Subagente: %1$s</string>
     <string name="chat_child_state_running">Em andamento</string>
+    <string name="chat_child_state_waiting">Aguardando sua permissão</string>
     <string name="chat_child_state_done">Concluído</string>
     <string name="chat_child_state_failed">Falhou</string>
     <string name="chat_child_state_interrupted">Interrompido</string>
@@ -630,6 +632,7 @@
     <string name="notify_permission_title">%1$s precisa de você</string>
     <string name="notify_permission_text">Permita ou recuse para continuar.</string>
     <string name="notify_permission_wants">%1$s: %2$s</string>
+    <string name="notify_permission_child">Subagente %1$s · %2$s</string>
     <string name="notify_action_allow">Permitir</string>
     <string name="notify_action_deny">Recusar</string>
     <string name="notify_login_title">%1$s precisa que você entre na conta</string>

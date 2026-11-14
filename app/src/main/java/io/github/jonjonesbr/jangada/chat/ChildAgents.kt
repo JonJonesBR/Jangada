@@ -16,6 +16,8 @@ internal object ChildAgents {
     const val CAPABILITY = "opencode/child-session-updates"
     /** Método das notificações das sessões filhas. */
     const val METHOD = "opencode/session/child_update"
+    /** Chave do `_meta` do tool call e do pedido de permissão que diz de qual sessão filha eles vêm. */
+    const val CHILD_META = "opencode/child-session"
 
     /** Cartões de subagente na conversa; um terminado sai quando outro precisa entrar. */
     const val MAX_CARDS = 8
@@ -34,6 +36,27 @@ internal object ChildAgents {
 
     /** Título automático ("Child session - 2026-11-13T…Z"): não descreve o que a filha faz. */
     private fun isAutoTitle(title: String) = AUTO_TITLE.containsMatchIn(title)
+
+    /**
+     * Rótulo do subagente que pediu permissão: "agente — descrição" do cartão dele. Sem cartão (ou sem
+     * agente nem descrição), vale o título que o pedido trouxe; vazio quando não há nada.
+     */
+    fun label(childSessionId: String, items: List<ChatItem>, metaTitle: String = ""): String {
+        val fallback = metaTitle.takeIf { !isAutoTitle(it) }.orEmpty()
+        val card = items.firstOrNull { it is ChatItem.Child && it.sessionId == childSessionId } as? ChatItem.Child
+            ?: return fallback
+        val text = listOf(card.agent, card.description).filter { it.isNotEmpty() }.joinToString(" — ")
+        return text.ifEmpty { fallback }
+    }
+
+    /**
+     * A filha espera a sua permissão: tem pedido pendente (sem resposta) vindo dela. Pedido já
+     * respondido, pedido de outra filha e cartão já terminado não contam.
+     */
+    fun waitingPermission(card: ChatItem.Child, items: List<ChatItem>): Boolean =
+        card.state == ChildState.RUNNING && items.any {
+            it is ChatItem.Permission && it.chosen == null && it.childSessionId == card.sessionId
+        }
 
     /** Quantos subagentes a conversa tem (e quantos rodam); null quando não há nenhum. */
     fun summary(cards: List<ChatItem.Child>): ChildSummary? {

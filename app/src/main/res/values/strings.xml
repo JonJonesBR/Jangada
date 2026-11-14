@@ -388,7 +388,9 @@
     <string name="chat_tool_group_title">Actions</string>
     <string name="chat_tool_group_description">%1$s. Tap to see each action.</string>
     <string name="chat_child_title">Subagent</string>
+    <string name="chat_permission_child">Subagent: %1$s</string>
     <string name="chat_child_state_running">Running</string>
+    <string name="chat_child_state_waiting">Waiting for your permission</string>
     <string name="chat_child_state_done">Done</string>
     <string name="chat_child_state_failed">Failed</string>
     <string name="chat_child_state_interrupted">Interrupted</string>
@@ -632,6 +634,7 @@
     <string name="notify_permission_title">%1$s needs you</string>
     <string name="notify_permission_text">Allow or deny to continue.</string>
     <string name="notify_permission_wants">%1$s: %2$s</string>
+    <string name="notify_permission_child">Subagent %1$s · %2$s</string>
     <string name="notify_action_allow">Allow</string>
     <string name="notify_action_deny">Deny</string>
     <string name="notify_login_title">%1$s needs you to log in</string>

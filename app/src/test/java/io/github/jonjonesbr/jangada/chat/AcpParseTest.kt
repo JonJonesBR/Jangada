@@ -259,4 +259,37 @@ class AcpParseTest {
         assertEquals("", AcpParse.subagentSession(JSONObject("""{"rawOutput":{"metadata":{}}}""")))
         assertEquals("", AcpParse.subagentSession(JSONObject("""{"status":"completed"}""")))
     }
+
+    /** Pedido de uma filha (subagente) do opencode: id e título vêm do _meta; id e título do tool vêm prefixados. */
+    @Test
+    fun pedidoDeSessaoFilha() {
+        val toolCall = JSONObject(
+            """{"toolCallId":"ses_f:call_1","title":"Explorar: Rodar comando","_meta":{"opencode/child-session":{"id":"ses_f","parentID":"ses_p","depth":1,"title":"Explorar"}}}""",
+        )
+        assertEquals("ses_f", AcpParse.permissionChildSession(toolCall))
+        assertEquals("Explorar", AcpParse.permissionChildTitle(toolCall))
+        assertEquals("Rodar comando", AcpParse.withoutChildPrefix(toolCall.optString("title"), AcpParse.permissionChildTitle(toolCall)))
+        assertEquals("call_1", AcpParse.unprefixedToolId(toolCall.optString("toolCallId"), "ses_f"))
+    }
+
+    /** Sem _meta de filha (ou com id vazio), nada muda para os demais agentes. */
+    @Test
+    fun semMetaDeSessaoFilhaNadaMuda() {
+        assertNull(AcpParse.permissionChildSession(JSONObject("""{"toolCallId":"call_1","title":"Rodar"}""")))
+        assertNull(AcpParse.permissionChildSession(JSONObject("""{"_meta":{"opencode/child-session":{"id":""}}}""")))
+        assertEquals("", AcpParse.permissionChildTitle(JSONObject("""{}""")))
+        assertEquals("Rodar: x", AcpParse.withoutChildPrefix("Rodar: x", ""))
+        assertEquals("call_1", AcpParse.unprefixedToolId("call_1", null))
+        assertEquals("call_1", AcpParse.unprefixedToolId("call_1", ""))
+    }
+
+    /** O prefixo só sai quando bate exatamente com o título da filha no meta. */
+    @Test
+    fun prefixoDoTituloSoSaiQuandoBate() {
+        assertEquals("Rodar comando", AcpParse.withoutChildPrefix("Explorar: Rodar comando", "Explorar"))
+        assertEquals("Outro: Rodar", AcpParse.withoutChildPrefix("Outro: Rodar", "Explorar"))
+        assertEquals("Explorar: Rodar", AcpParse.withoutChildPrefix("Explorar: Rodar", ""))
+        // Id de outra filha não tira nada do toolCallId.
+        assertEquals("ses_x:call_1", AcpParse.unprefixedToolId("ses_x:call_1", "ses_f"))
+    }
 }

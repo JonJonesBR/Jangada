@@ -90,6 +90,10 @@ sealed class ChatItem {
         var answers: Map<String, String>? = null
         /** elapsedRealtime de quando o pedido chegou (0 = desconhecido); base do tempo de espera. */
         var requestedAtMs: Long = 0L
+        /** Sessão filha (subagente do opencode) que fez o pedido; null quando veio da sessão principal. */
+        var childSessionId: String? = null
+        /** Título da sessão filha, do meta do pedido (rotula o subagente quando o cartão ainda não existe). */
+        var childTitle: String = ""
         /** Estado da tela: o cartão está aberto mostrando o comando/diff inteiro. */
         var expanded: Boolean = false
         /** Estado da tela: até quando (elapsedRealtime) o Permitir espera o segundo toque; 0 = sem confirmação. */

@@ -32,6 +32,7 @@ import io.github.jonjonesbr.jangada.chat.ChatAttention
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.ChildAgents
 import io.github.jonjonesbr.jangada.chat.LimitWindow
 import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.limitKindName
@@ -1303,11 +1304,16 @@ class TerminalService : Service() {
         val pending = if (attention == ChatAttention.PERMISSION) slot?.let { pendingPermission(it.chat) } else null
         if (pending != null) {
             // Pedido de permissão: mostra o que o agente quer e deixa responder daqui.
-            val wants = if (pending.summary.isEmpty()) {
+            val asked = if (pending.summary.isEmpty()) {
                 pending.title
             } else {
                 getString(R.string.notify_permission_wants, pending.title, pending.summary)
             }
+            // Pedido de um subagente: o nome dele entra no texto (o resto do formato fica igual).
+            val wants = pending.childSessionId?.let { childId ->
+                val label = ChildAgents.label(childId, slot?.chat?.items?.toList().orEmpty(), pending.childTitle)
+                getString(R.string.notify_permission_child, label.ifEmpty { getString(R.string.chat_child_title) }, asked)
+            } ?: asked
             val full = if (pending.detail.isEmpty()) wants else wants + "\n" + pending.detail
             attentionNotification(
                 requestCode, NOTIFICATION_CHAT, getString(title, name), clip(wants, NOTIFY_TEXT_MAX), open,

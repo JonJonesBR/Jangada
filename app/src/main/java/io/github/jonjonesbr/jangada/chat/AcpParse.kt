@@ -109,6 +109,40 @@ internal object AcpParse {
     fun permissionWorkdir(toolCall: JSONObject): String? =
         toolCall.optJSONObject("rawInput")?.optString("cwd")?.takeIf { it.isNotEmpty() }
 
+    /** Bloco `_meta` do opencode com os dados da sessão filha que fez o pedido; null quando não há. */
+    private fun childMeta(toolCall: JSONObject): JSONObject? =
+        toolCall.optJSONObject("_meta")?.optJSONObject(ChildAgents.CHILD_META)
+
+    /**
+     * Sessão filha (subagente) que fez o pedido de permissão: `_meta["opencode/child-session"].id`.
+     * Null quando o pedido veio da sessão principal (sem o meta, ou com id vazio).
+     */
+    fun permissionChildSession(toolCall: JSONObject): String? =
+        childMeta(toolCall)?.optString("id")?.takeIf { it.isNotEmpty() }
+
+    /** Título da sessão filha no meta do pedido (opcional no protocolo); vazio quando não há. */
+    fun permissionChildTitle(toolCall: JSONObject): String = childMeta(toolCall)?.optString("title").orEmpty()
+
+    /**
+     * Tira o "<título da filha>: " que o opencode põe no título de um pedido de filha. Só tira quando o
+     * prefixo bate exatamente com o título do meta; sem título ou sem prefixo, o título fica como está.
+     */
+    fun withoutChildPrefix(title: String, childTitle: String): String {
+        if (childTitle.isEmpty()) return title
+        val prefix = "$childTitle: "
+        return if (title.startsWith(prefix)) title.substring(prefix.length) else title
+    }
+
+    /**
+     * O id do tool call sem o "<id da filha>:" que o opencode põe nos tool calls das filhas. Sem filha
+     * (null ou vazio), devolve o id como veio.
+     */
+    fun unprefixedToolId(toolCallId: String, childSessionId: String?): String {
+        if (childSessionId.isNullOrEmpty()) return toolCallId
+        val prefix = "$childSessionId:"
+        return if (toolCallId.startsWith(prefix)) toolCallId.substring(prefix.length) else toolCallId
+    }
+
     /**
      * Agente filho que a ação de subagente abriu (ex.: "explore"): rawInput.agent e, em agentes
      * mais antigos, rawInput.subagent_type. Vazio quando não há.

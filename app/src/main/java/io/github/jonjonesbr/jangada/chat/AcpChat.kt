@@ -794,8 +794,13 @@ class AcpChat(
         val toolCall = params.optJSONObject("toolCall") ?: JSONObject()
         // O agente pode repetir o mesmo pedido: fica o primeiro cartão (responder duas vezes seria erro).
         if (items.any { it is ChatItem.Permission && it.requestId == id }) return
-        val known = tools[toolCall.optString("toolCallId")]
-        val title = toolCall.optString("title").ifEmpty { known?.name ?: context.getString(R.string.chat_action) }
+        // Pedido de subagente (opencode): o id do tool e o título vêm prefixados com a filha; sem o prefixo, acha o tool.
+        val childId = AcpParse.permissionChildSession(toolCall)
+        val childMetaTitle = AcpParse.permissionChildTitle(toolCall)
+        val toolCallId = toolCall.optString("toolCallId")
+        val known = tools[toolCallId] ?: tools[AcpParse.unprefixedToolId(toolCallId, childId)]
+        val rawTitle = AcpParse.withoutChildPrefix(toolCall.optString("title"), childMetaTitle)
+        val title = rawTitle.ifEmpty { known?.name ?: context.getString(R.string.chat_action) }
         // O comando inteiro (sem corte): o cartão e o risco dependem dele.
         val summary = AcpParse.permissionSummary(toolCall).ifEmpty { known?.summary.orEmpty() }
         val parsed = AcpParse.permissionOptions(params.optJSONArray("options"))
@@ -806,7 +811,11 @@ class AcpChat(
                 toolName = toolCall.optString("name"),
                 diff = DiffText.fromAcpContent(toolCall.optJSONArray("content")),
                 workdir = AcpParse.permissionWorkdir(toolCall),
-            ).apply { requestedAtMs = SystemClock.elapsedRealtime() },
+            ).apply {
+                requestedAtMs = SystemClock.elapsedRealtime()
+                childSessionId = childId
+                childTitle = childMetaTitle
+            },
         )
     }
 

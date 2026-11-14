@@ -78,6 +78,7 @@ import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.ChildAgents
 import io.github.jonjonesbr.jangada.chat.ChildState
 import io.github.jonjonesbr.jangada.chat.ChildSummary
 import io.github.jonjonesbr.jangada.chat.OpenCodeStats
@@ -3376,7 +3377,7 @@ class ChatActivity : JangadaActivity() {
             val head = if (item.agent.isEmpty()) getString(R.string.chat_child_title)
             else getString(R.string.chat_child_title) + " · " + item.agent
             // Estado e tempo: "… Em andamento · 0:12"; o tempo para quando ele termina.
-            val state = childStateLine(item)
+            val state = childStateLine(item, engine?.items?.toList().orEmpty())
             card.addView(childText(head, 15f, R.color.setup_text).apply {
                 setTypeface(typeface, Typeface.BOLD)
                 contentDescription = getString(R.string.chat_child_description, head, state)
@@ -3446,18 +3447,21 @@ class ChatActivity : JangadaActivity() {
         }
 
         /** Linha de estado do cartão de subagente: marca, estado e o tempo decorrido. */
-        private fun childStateLine(item: ChatItem.Child): String {
+        private fun childStateLine(item: ChatItem.Child, items: List<ChatItem>): String {
             val until = if (item.endedAtMs > 0) item.endedAtMs else SystemClock.elapsedRealtime()
             // Sem o início informado, o tempo conta de zero (e não desde o boot do aparelho).
             val since = if (item.startedAtMs > 0) item.startedAtMs else until
-            return childMark(item.state) + " " + getString(
-                when (item.state) {
+            // Rodando, mas esperando a permissão do usuário: diz isso, para não parecer travado.
+            val label = when {
+                ChildAgents.waitingPermission(item, items) -> R.string.chat_child_state_waiting
+                else -> when (item.state) {
                     ChildState.RUNNING -> R.string.chat_child_state_running
                     ChildState.DONE -> R.string.chat_child_state_done
                     ChildState.FAILED -> R.string.chat_child_state_failed
                     ChildState.INTERRUPTED -> R.string.chat_child_state_interrupted
-                },
-            ) + " · " + AgentStatus.elapsed(until - since)
+                }
+            }
+            return childMark(item.state) + " " + getString(label) + " · " + AgentStatus.elapsed(until - since)
         }
 
         /**
@@ -3465,10 +3469,11 @@ class ChatActivity : JangadaActivity() {
          * uma vez por segundo): nada de redesenhar a lista por causa do tempo.
          */
         fun refreshChildTimes() {
+            val items = engine?.items?.toList().orEmpty()
             for ((card, view) in stateViews) {
                 // A view pode ter sido reaproveitada para outro cartão (o tag diz de quem ela é).
                 if (card.state != ChildState.RUNNING || view.tag !== card) continue
-                view.text = childStateLine(card)
+                view.text = childStateLine(card, items)
             }
         }
 
@@ -3508,6 +3513,18 @@ class ChatActivity : JangadaActivity() {
                 textSize = 15f * chatScale
                 setTypeface(typeface, Typeface.BOLD)
             })
+            // Pedido de um subagente (sessão filha): diz qual, logo abaixo de "X quer permissão".
+            item.childSessionId?.let { childId ->
+                val label = ChildAgents.label(childId, engine?.items?.toList().orEmpty(), item.childTitle)
+                card.addView(TextView(this@ChatActivity).apply {
+                    text = if (label.isEmpty()) getString(R.string.chat_child_title)
+                    else getString(R.string.chat_permission_child, label)
+                    setTextColor(getColor(R.color.setup_muted))
+                    textSize = 12f * chatScale
+                    setTextIsSelectable(true)
+                    setPadding(0, dp(2), 0, 0)
+                })
+            }
             // De que ferramenta é o pedido: o nome do protocolo vira o rótulo humano (ex.: "shell" → Rodar comando).
             card.addView(TextView(this@ChatActivity).apply {
                 text = ToolText.label(this@ChatActivity, item.toolName.ifEmpty { item.title })

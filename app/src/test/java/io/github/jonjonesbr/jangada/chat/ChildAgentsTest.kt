@@ -329,4 +329,43 @@ class ChildAgentsTest {
         assertEquals("", card.description)
         assertEquals("", card.agent)
     }
+
+    private fun childCard(id: String, agent: String = "explore", desc: String = "Ler o código"): ChatItem.Child =
+        ChatItem.Child("", id, "ses_pai", 1).apply {
+            this.agent = agent
+            description = desc
+        }
+
+    private fun pendingFrom(child: String?, answered: Boolean = false): ChatItem.Permission =
+        ChatItem.Permission(1, "Rodar", "ls", emptyList()).apply {
+            childSessionId = child
+            if (answered) chosen = PermissionOption("allow", "Permitir", PermissionOption.Kind.ALLOW_ONCE)
+        }
+
+    /** Rótulo do pedido: "agente — descrição" do cartão; sem cartão, o título do meta (sem o automático). */
+    @Test
+    fun rotuloDoSubagenteQuePediuPermissao() {
+        val card = childCard("ses_f")
+        assertEquals("explore — Ler o código", ChildAgents.label("ses_f", listOf(card)))
+        assertEquals("Explorar", ChildAgents.label("ses_g", listOf(card), "Explorar"))
+        assertEquals("", ChildAgents.label("ses_g", emptyList(), "Child session - 2026-11-13T10:00:00Z"))
+        assertEquals("", ChildAgents.label("ses_g", emptyList()))
+        // Cartão sem agente nem descrição: vale o título do meta.
+        assertEquals("Explorar", ChildAgents.label("ses_h", listOf(ChatItem.Child("", "ses_h", "ses_pai", 1)), "Explorar"))
+    }
+
+    /** Aguardando permissão: só pedido pendente da própria filha, de um cartão ainda rodando. */
+    @Test
+    fun aguardandoPermissaoSoDaPropriaFilha() {
+        val card = childCard("ses_f")
+        assertFalse(ChildAgents.waitingPermission(card, listOf(card)))
+        assertTrue(ChildAgents.waitingPermission(card, listOf(card, pendingFrom("ses_f"))))
+        // Pedido já respondido não conta.
+        assertFalse(ChildAgents.waitingPermission(card, listOf(card, pendingFrom("ses_f", answered = true))))
+        // Pedido de outra filha ou da sessão principal não conta.
+        assertFalse(ChildAgents.waitingPermission(card, listOf(card, pendingFrom("ses_g"), pendingFrom(null))))
+        // Filha já terminada não aguarda.
+        card.state = ChildState.DONE
+        assertFalse(ChildAgents.waitingPermission(card, listOf(card, pendingFrom("ses_f"))))
+    }
 }
