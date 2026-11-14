@@ -1,5 +1,13 @@
 # Novidades
 
+## 1.22.0
+
+- Telas largas: o conteúdo fica centralizado com largura máxima (720 dp; 840 dp no chat; Mudanças sem limite).
+- Projetos: mostra quantos arquivos sem commit cada repositório tem, e a tela abre pela tela inicial.
+- Acessibilidade: alvos de toque de 48 dp, listas dos Ajustes em painel, cor de erro e contraste do texto melhores.
+- Release com R8: remove código e recursos não usados, sem ofuscar; o app fica menor.
+- Correções: a busca da conversa do Claude não trava a tela, o vigia de links é recriado, a CPU acorda na hora, a integração do Linux sai da thread principal e os anexos são gravados de forma atômica.
+
 ## 1.21.0
 
 - Chat: chip do modo de permissão no fim da barra de atalhos, com nomes simples e troca na hora (agy, Claude e demais agentes com modos).

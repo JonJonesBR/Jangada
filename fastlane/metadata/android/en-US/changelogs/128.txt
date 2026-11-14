@@ -1,0 +1,1 @@
+Wide screens: content is centered with a maximum width. Projects shows how many uncommitted files each repository has and appears on the home screen. 48 dp touch targets, Settings lists in a sheet and better text contrast. Smaller, leaner release build (R8). Fixes: conversation search no longer blocks the screen, link watcher recreated, attachments written atomically.

@@ -1,0 +1,1 @@
+Telas largas: o conteúdo fica centralizado com largura máxima. Projetos mostra quantos arquivos sem commit cada repositório tem e aparece na tela inicial. Alvos de toque de 48 dp, listas dos Ajustes em painel e contraste de texto melhor. Versão menor e mais enxuta (R8). Correções: busca de conversas sem travar a tela, vigia de links recriado, anexos gravados de forma atômica.
