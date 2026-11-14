@@ -753,13 +753,13 @@ object ToolText {
      * capitalizados ("Bash"); os do ACP, minúsculos ("shell").
      */
     fun labelRes(name: String): Int? = when (name) {
-        "Bash", "shell" -> R.string.tool_bash
-        "Read", "read" -> R.string.tool_read
-        "Write", "write" -> R.string.tool_write
-        "Edit", "MultiEdit", "edit", "patch" -> R.string.tool_edit
+        "Bash", "shell", "run_command" -> R.string.tool_bash
+        "Read", "read", "read_file", "view_file" -> R.string.tool_read
+        "Write", "write", "write_to_file" -> R.string.tool_write
+        "Edit", "MultiEdit", "edit", "patch", "replace_file_content", "edit_file" -> R.string.tool_edit
         "NotebookEdit" -> R.string.tool_notebook
-        "Glob", "glob" -> R.string.tool_glob
-        "Grep", "grep" -> R.string.tool_grep
+        "Glob", "glob", "list_dir", "find_by_name" -> R.string.tool_glob
+        "Grep", "grep", "grep_search" -> R.string.tool_grep
         "WebFetch", "webfetch" -> R.string.tool_web_fetch
         "WebSearch", "websearch" -> R.string.tool_web_search
         "TodoWrite", "todowrite" -> R.string.tool_todo
@@ -769,6 +769,16 @@ object ToolText {
         else -> null
     }
 
+    /** Primeiro valor não vazio entre as chaves, sem diferenciar maiúsculas (o agy manda "Path", "CommandLine"). */
+    fun pick(input: JSONObject, keys: List<String>): String? {
+        val byLower = input.keys().asSequence().associateBy { it.lowercase() }
+        for (key in keys) {
+            val real = byLower[key] ?: continue
+            input.optString(real).takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        return null
+    }
+
     fun summary(name: String, input: JSONObject?, limit: Int = 400): String {
         input ?: return ""
         if (name == ChatEngine.PLAN_TOOL) input.optString("plan").takeIf { it.isNotEmpty() }?.let { return it.take(limit) }
@@ -776,10 +786,9 @@ object ToolText {
             val texts = ChatEngine.parseQuestions(input).map { it.text }
             if (texts.isNotEmpty()) return texts.joinToString("\n").take(limit)
         }
-        for (key in listOf("command", "file_path", "path", "url", "query", "pattern", "description", "prompt")) {
-            val value = input.optString(key)
-            if (value.isNotEmpty()) return value.take(limit)
-        }
-        return input.toString().take(200)
+        pick(input, listOf("command", "commandline", "file_path", "filepath", "path", "absolutepath", "url", "query", "pattern", "description", "prompt"))
+            ?.let { return it.take(limit) }
+        // O JSONObject do Android escreve "\/": desfaz, para o caminho aparecer limpo.
+        return input.toString().replace("\\/", "/").take(200)
     }
 }

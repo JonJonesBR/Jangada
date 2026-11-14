@@ -858,6 +858,8 @@ class AcpChat(
                 draft = null
                 thoughtDraft = null
                 val text = textOf(update.optJSONObject("content")) ?: return
+                // Eco da mensagem que o app já mostrou (o agy devolve no turno ao vivo): não duplica.
+                if (!loadingHistory && userDraft == null && items.lastOrNull { it is ChatItem.User }.let { it is ChatItem.User && it.text == text }) return
                 val current = userDraft
                 if (current != null && items.lastOrNull() === current) {
                     val merged = ChatItem.User(current.text + text)

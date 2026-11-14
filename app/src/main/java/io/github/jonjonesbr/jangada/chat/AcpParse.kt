@@ -98,16 +98,12 @@ internal object AcpParse {
      */
     fun permissionSummary(toolCall: JSONObject): String {
         val input = toolCall.optJSONObject("rawInput") ?: return ""
-        for (key in listOf("command", "file_path", "path", "url", "query", "pattern", "description")) {
-            val value = input.optString(key)
-            if (value.isNotEmpty()) return value
-        }
-        return ""
+        return ToolText.pick(input, listOf("command", "commandline", "file_path", "filepath", "path", "absolutepath", "url", "query", "pattern", "description")) ?: ""
     }
 
     /** Pasta de trabalho que o agente mandou no pedido de permissão (rawInput.cwd), se houver. */
     fun permissionWorkdir(toolCall: JSONObject): String? =
-        toolCall.optJSONObject("rawInput")?.optString("cwd")?.takeIf { it.isNotEmpty() }
+        toolCall.optJSONObject("rawInput")?.let { ToolText.pick(it, listOf("cwd")) }
 
     /** Bloco `_meta` do opencode com os dados da sessão filha que fez o pedido; null quando não há. */
     private fun childMeta(toolCall: JSONObject): JSONObject? =
