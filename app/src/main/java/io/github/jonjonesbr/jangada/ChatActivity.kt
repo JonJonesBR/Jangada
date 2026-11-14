@@ -74,6 +74,7 @@ import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.ChatRender
 import io.github.jonjonesbr.jangada.chat.ChildAgents
 import io.github.jonjonesbr.jangada.chat.ChildState
 import io.github.jonjonesbr.jangada.chat.ChildSummary
@@ -2457,7 +2458,7 @@ class ChatActivity : JangadaActivity() {
         override fun isEnabled(position: Int) = false
 
         /** Respostas já separadas em partes e formatadas, por item (cache do adaptador). */
-        private val answers = WeakHashMap<ChatItem.Assistant, Rendered>()
+        private val answers = WeakHashMap<ChatItem.Assistant, ChatRender.Rendered>()
 
         /** Linha de estado de cada cartão de subagente montado (para o tempo andar sem redesenhar). */
         private val stateViews = WeakHashMap<ChatItem.Child, TextView>()
@@ -2573,15 +2574,15 @@ class ChatActivity : JangadaActivity() {
         }
 
         /** Resposta já separada e formatada. Só guarda no cache o que não está em streaming. */
-        private fun answerOf(item: ChatItem.Assistant): Rendered {
+        private fun answerOf(item: ChatItem.Assistant): ChatRender.Rendered {
             if (item.streaming) return renderAnswer(item)
             answers[item]?.takeIf { it.text == item.text }?.let { return it }
             return renderAnswer(item).also { answers[item] = it }
         }
 
         /** Markdown de cada parte de texto (null nas partes de código); os links já ficam marcados. */
-        private fun renderAnswer(item: ChatItem.Assistant): Rendered {
-            val parts = splitCode(item.text)
+        private fun renderAnswer(item: ChatItem.Assistant): ChatRender.Rendered {
+            val parts = ChatRender.splitCode(item.text)
             val bodies = parts.map { part ->
                 if (part.isCode) {
                     null
@@ -2591,7 +2592,7 @@ class ChatActivity : JangadaActivity() {
                     }
                 }
             }
-            return Rendered(item.text, parts, bodies)
+            return ChatRender.Rendered(item.text, parts, bodies)
         }
 
         private fun prose(body: CharSequence, item: ChatItem.Assistant, last: Boolean) = TextView(this@ChatActivity).apply {
@@ -2610,7 +2611,7 @@ class ChatActivity : JangadaActivity() {
             setOnLongClickListener { copy(item.text); true }
         }
 
-        private fun codeBlock(part: Part): View {
+        private fun codeBlock(part: ChatRender.Part): View {
             val block = LinearLayout(this@ChatActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundResource(R.drawable.compose_bg)
@@ -3529,76 +3530,7 @@ class ChatActivity : JangadaActivity() {
         }
     }
 
-    /** Pedaço de uma resposta: texto comum, bloco de código (```) ou tabela. */
-    private class Part(val text: String, val isCode: Boolean, val language: String = "")
-
-    /** Resposta pronta para mostrar: as partes e, para cada uma, o texto formatado (null = bloco de código). */
-    private class Rendered(val text: String, val parts: List<Part>, val bodies: List<CharSequence?>)
-
-    private fun splitCode(text: String): List<Part> {
-        val parts = mutableListOf<Part>()
-        val buffer = StringBuilder()
-        val table = StringBuilder()
-        var inCode = false
-        var language = ""
-        // Tamanho da cerca que abriu o bloco: ````md com ``` dentro só fecha com 4 crases ou mais.
-        var fence = 0
-        fun flushTable() {
-            if (table.isEmpty()) return
-            if (buffer.isNotBlank()) parts += Part(buffer.toString(), isCode = false)
-            buffer.clear()
-            parts += Part(formatTable(table.toString()), isCode = true, language = "")
-            table.clear()
-        }
-        for (line in text.split('\n')) {
-            if (!inCode && line.trimStart().startsWith("|")) {
-                table.append(line).append('\n')
-                continue
-            }
-            flushTable()
-            val ticks = line.trimStart().takeWhile { it == '`' }.length
-            // Dentro do bloco, só fecha uma cerca do mesmo tamanho ou maior, sem nada depois.
-            val closes = inCode && ticks >= fence && line.trim().length == ticks
-            if (if (inCode) closes else ticks >= 3) {
-                if (inCode) {
-                    parts += Part(buffer.toString(), isCode = true, language = language)
-                } else if (buffer.isNotBlank()) {
-                    parts += Part(buffer.toString(), isCode = false)
-                }
-                buffer.clear()
-                language = if (inCode) "" else line.trimStart().drop(ticks).trim()
-                fence = if (inCode) 0 else ticks
-                inCode = !inCode
-                continue
-            }
-            buffer.append(line).append('\n')
-        }
-        flushTable()
-        if (buffer.isNotBlank() || parts.isEmpty()) parts += Part(buffer.toString(), isCode = inCode, language = language)
-        return parts
-    }
-
-    /** Tabela Markdown alinhada em colunas (fonte de terminal, com rolagem lateral). */
-    private fun formatTable(source: String): String {
-        val rows = source.lines().filter { it.isNotBlank() }
-            .filterNot { row -> row.all { it == '|' || it == '-' || it == ':' || it == ' ' } }
-            .map { row ->
-                row.trim().removePrefix("|").removeSuffix("|").split('|')
-                    .map { it.trim().replace("**", "").replace("`", "") }
-            }
-        if (rows.isEmpty()) return source
-        val columns = rows.maxOf { it.size }
-        val widths = (0 until columns).map { c -> rows.maxOf { it.getOrNull(c)?.length ?: 0 }.coerceAtMost(40) }
-        return rows.mapIndexed { index, row ->
-            val line = (0 until columns).joinToString(" │ ") { c -> cell(row.getOrNull(c) ?: "").padEnd(widths[c]) }
-            if (index == 0 && rows.size > 1) line + "\n" + widths.joinToString("─┼─") { "─".repeat(it) } else line
-        }.joinToString("\n")
-    }
-
     companion object {
-        /** Célula com no máximo 40 caracteres; o corte aparece como reticências. */
-        private fun cell(text: String) = if (text.length > 40) text.take(39) + "…" else text
-
         /** Agentes com o adaptador sendo instalado agora, em qualquer tela do chat (evita instalar em paralelo). */
         private val installing = HashSet<String>()
         /** Quantas sugestões de comando "/" aparecem de uma vez. */
