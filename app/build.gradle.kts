@@ -38,7 +38,11 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 remove código e recursos não usados (APK menor). Não ofusca: o repositório é
+            // público e o last_crash.txt precisa continuar legível (ver proguard-rules.pro).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName(if (signingStoreFile != null) "release" else "debug")
         }
     }
