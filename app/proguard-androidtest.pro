@@ -24,6 +24,10 @@
 -keep class io.github.jonjonesbr.jangada.linux.Workspace$* { *; }
 -keep class io.github.jonjonesbr.jangada.linux.Setup { *; }
 -keep class io.github.jonjonesbr.jangada.linux.Setup$* { *; }
+-keep class io.github.jonjonesbr.jangada.chat.AcpChat { *; }
+-keep class io.github.jonjonesbr.jangada.chat.AcpChat$* { *; }
+-keep class io.github.jonjonesbr.jangada.chat.Attachment { *; }
+-keep class io.github.jonjonesbr.jangada.chat.Attachment$* { *; }
 # Os testes leem os ids de recursos (R.string.*) e usam as telas direto (inclusive o Companion da base).
 -keep class io.github.jonjonesbr.jangada.R { *; }
 -keep class io.github.jonjonesbr.jangada.R$* { *; }
