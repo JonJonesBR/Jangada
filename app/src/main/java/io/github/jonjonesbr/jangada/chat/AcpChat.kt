@@ -85,6 +85,8 @@ class AcpChat(
     private var nextId = 1
     private val pending = HashMap<Int, (JSONObject?, JSONObject?) -> Unit>()
     private val tools = HashMap<String, ChatItem.Tool>()
+    /** Ids dos pedidos que o "Aprovar tudo" respondeu sem cartão; limpo ao iniciar o agente. */
+    private val autoAnswered = HashSet<Any>()
     private var draft: ChatItem.Assistant? = null
     private var draftMessageId: String? = null
     private var userDraft: ChatItem.User? = null
@@ -128,6 +130,7 @@ class AcpChat(
         // Processo novo: há agentes que numeram as ações de novo ("call_1"); uma ação nova não pode
         // atualizar a antiga de mesmo id (as antigas já foram encerradas em settleItems).
         tools.clear()
+        autoAnswered.clear()
         // A conversa pedida já é a deste chat: se o agente falhar ao subir, o próximo envio tenta
         // recarregar a mesma, em vez de abrir uma nova sem aviso (como no ChatEngine).
         if (resume != null) sessionId = resume
@@ -805,7 +808,7 @@ class AcpChat(
         }
         val toolCall = params.optJSONObject("toolCall") ?: JSONObject()
         // O agente pode repetir o mesmo pedido: fica o primeiro cartão (responder duas vezes seria erro).
-        if (AcpParse.repeatedPermission(items, id)) return
+        if (AcpParse.repeatedPermission(items, id) || id in autoAnswered) return
         // Pedido de subagente (opencode): o id do tool e o título vêm prefixados com a filha; sem o prefixo, acha o tool.
         val childId = AcpParse.permissionChildSession(toolCall)
         val childMetaTitle = AcpParse.permissionChildTitle(toolCall)
@@ -816,6 +819,18 @@ class AcpChat(
         // O comando inteiro (sem corte): o cartão e o risco dependem dele.
         val summary = AcpParse.permissionSummary(toolCall).ifEmpty { known?.summary.orEmpty() }
         val parsed = AcpParse.permissionOptions(params.optJSONArray("options"))
+        // Aprovar tudo: permite uma vez (nunca "sempre") e deixa um rastro. Sem opção de permitir, o cartão fica.
+        val auto = if (autoApprove && !AutoApprove.isUserDecision(toolCall.optString("name"))) AutoApprove.allowOnce(parsed) else null
+        if (auto != null) {
+            // Sem cartão, o id fica guardado: um pedido repetido com o mesmo id não recebe segunda resposta.
+            autoAnswered += id
+            respond(id,JSONObject().put("outcome", JSONObject().put("outcome", "selected").put("optionId", auto.id)))
+            add(ChatItem.Info(
+                text = context.getString(R.string.chat_auto_approved, title),
+                details = summary.takeIf { it.isNotEmpty() },
+            ))
+            return
+        }
         add(
             ChatItem.Permission(
                 id, title, summary, parsed,

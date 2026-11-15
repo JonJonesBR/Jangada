@@ -1320,14 +1320,24 @@ class ChatActivity : JangadaActivity() {
             }
         }
 
-        // Modo de permissão: só quando o agente oferece; um toque abre a escolha.
+        // Modo de permissão: o do agente, ou "Aprovar tudo" (vermelho) quando ligado. Sem modos,
+        // aparece depois do primeiro pedido de permissão, para dar para ligar o "Aprovar tudo".
         val modeId = chat.currentMode
         val modeName = modeId?.let { id -> ModeText.label(this, id, chat.modeChoices.firstOrNull { it.first == id }?.second.orEmpty()) }
-        chipMode.visibility = if (modeName == null) View.GONE else View.VISIBLE
-        if (modeName != null) {
-            chipMode.text = "🛡 $modeName"
-            chipMode.setTextColor(getColor(if (modeId != null && ModeText.isRisky(modeId)) R.color.setup_error_text else R.color.setup_text))
-            chipMode.contentDescription = getString(R.string.chat_chip_mode_description, modeName)
+        val approveAll = chat.autoApprove
+        val askedPermission = chat.items.any { it is ChatItem.Permission }
+        val showMode = modeName != null || approveAll || askedPermission
+        chipMode.visibility = if (showMode) View.VISIBLE else View.GONE
+        if (showMode) {
+            val name = when {
+                approveAll -> getString(R.string.chat_auto_approve)
+                modeName != null -> modeName
+                else -> getString(R.string.chat_mode_ask)
+            }
+            chipMode.text = "🛡 $name"
+            val risky = approveAll || (modeId != null && ModeText.isRisky(modeId))
+            chipMode.setTextColor(getColor(if (risky) R.color.setup_error_text else R.color.setup_text))
+            chipMode.contentDescription = getString(R.string.chat_chip_mode_description, name)
         }
 
         // Visualização: o modo atual, como nos ajustes.
@@ -1925,7 +1935,8 @@ class ChatActivity : JangadaActivity() {
         if (!isClaude) rows += optionRows(engine as? AcpChat)
         // Agente pronto que não oferece modos: diz que ele pergunta antes de agir (em vez de sumir sem explicação).
         if (!isClaude && engine is AcpChat && engine?.modeChoices.isNullOrEmpty() && engine?.running == true) {
-            rows += Sheet.Row(title = getString(R.string.chat_mode_none), icon = "🛡", enabled = false) {}
+            val noModes = if (engine?.autoApprove == true) R.string.chat_mode_none_approve else R.string.chat_mode_none
+            rows += Sheet.Row(title = getString(noModes), icon = "🛡", enabled = false) {}
         }
         Sheet(this).title(getString(R.string.chat_settings_title)).rows(rows).show()
     }
@@ -1949,18 +1960,42 @@ class ChatActivity : JangadaActivity() {
     private fun showModeSheet() {
         val chat = engine ?: return
         val choices = chat.modeChoices
-        if (choices.isEmpty()) return
+        val rows = choices.map { (id, name) ->
+            Sheet.Row(
+                title = ModeText.label(this, id, name),
+                description = ModeText.description(this, id),
+                checked = id == chat.currentMode,
+                destructive = ModeText.isRisky(id),
+            ) { chooseMode(chat, id, name) }
+        }.toMutableList()
+        // "Aprovar tudo" só aparece quando o agente não oferece um modo arriscado próprio.
+        if (choices.none { ModeText.isRisky(it.first) }) rows += approveAllRow(chat)
         Sheet(this)
             .title(getString(R.string.chat_mode_title))
             .message(getString(R.string.chat_mode_note))
-            .rows(choices.map { (id, name) ->
-                Sheet.Row(
-                    title = ModeText.label(this, id, name),
-                    description = ModeText.description(this, id),
-                    checked = id == chat.currentMode,
-                    destructive = ModeText.isRisky(id),
-                ) { chooseMode(chat, id, name) }
-            })
+            .rows(rows)
+            .show()
+    }
+
+    /** Linha "Aprovar tudo" do painel do chip de modo (ver AutoApprove). */
+    private fun approveAllRow(chat: AgentChat) = Sheet.Row(
+        title = getString(R.string.chat_auto_approve),
+        description = getString(R.string.chat_auto_approve_desc),
+        checked = chat.autoApprove,
+        destructive = true,
+    ) { toggleApproveAll(chat) }
+
+    /** Liga o "Aprovar tudo" com confirmação; desligar não pede nada. */
+    private fun toggleApproveAll(chat: AgentChat) {
+        if (chat.autoApprove) {
+            chat.setAutoApprove(false)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.chat_auto_approve)
+            .setMessage(R.string.chat_mode_risky_confirm)
+            .setPositiveButton(R.string.chat_mode_risky_yes) { _, _ -> chat.setAutoApprove(true) }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 

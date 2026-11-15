@@ -473,6 +473,15 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     /** Últimas linhas de erro do agente, para o link "Detalhes" (null se não houver nenhuma). */
     protected fun detailsOf(stderr: String): String? = stderr.trim().ifEmpty { null }
 
+    /** "Aprovar tudo" desta conversa (ver [AutoApprove]); só a thread principal muda o valor. */
+    @Volatile private var autoApproveOn = false
+    override val autoApprove: Boolean get() = autoApproveOn
+    override fun setAutoApprove(on: Boolean) {
+        if (autoApproveOn == on) return
+        autoApproveOn = on
+        changed()
+    }
+
     protected fun add(item: ChatItem) {
         items += item
         changed()

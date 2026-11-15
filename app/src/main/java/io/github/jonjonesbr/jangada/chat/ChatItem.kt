@@ -338,6 +338,13 @@ interface AgentChat {
     val currentMode: String? get() = null
     /** Troca o modo de permissão (só vale para ids de [modeChoices]). */
     fun setMode(id: String) {}
+    /**
+     * "Aprovar tudo" ligado: responde sozinho aos pedidos de permissão (ver [AutoApprove]).
+     * Desligado por padrão; não é guardado em disco, então some com o objeto do chat.
+     */
+    val autoApprove: Boolean get() = false
+    /** Liga ou desliga o "Aprovar tudo" desta conversa. Ligar não responde os cartões já pendentes. */
+    fun setAutoApprove(on: Boolean) {}
 
     fun sendMessage(text: String, attachments: List<Attachment> = emptyList())
     fun interrupt()

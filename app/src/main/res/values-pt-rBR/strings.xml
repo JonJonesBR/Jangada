@@ -417,7 +417,7 @@
     <string name="settings_other_agents">Nos outros agentes, toque no nome do modelo no topo do chat para trocar modelo, esforço e modo.</string>
 
     <string name="settings_advanced">Avançado (Pro)</string>
-    <string name="settings_cpu_awake">Manter o processador ativo enquanto há sessões abertas (os agentes seguem trabalhando com a tela apagada; gasta mais bateria)</string>
+    <string name="settings_cpu_awake">Manter o processador e o Wi-Fi ativos enquanto há sessões abertas (os agentes seguem trabalhando com a tela apagada; gasta mais bateria)</string>
     <string name="settings_screen_on">Manter a tela ligada no terminal</string>
     <string name="settings_extra_keys">Mostrar a barra de teclas extras no terminal</string>
     <string name="settings_linux">Linux</string>
@@ -963,4 +963,9 @@
     <string name="chat_mode_risky_confirm">O agente vai rodar comandos e mudar arquivos sem perguntar. Ligue só se você consegue desfazer as mudanças.</string>
     <string name="chat_mode_risky_yes">Permitir tudo</string>
     <string name="chat_mode_none">Este agente não tem modos de permissão: ele sempre pergunta antes de agir.</string>
+    <string name="chat_mode_none_approve">Este agente não tem modos de permissão. Com Aprovar tudo ligado, ele não pergunta antes de agir.</string>
+    <string name="chat_auto_approve">Aprovar tudo</string>
+    <string name="chat_auto_approve_desc">Faz tudo sem perguntar. Use só em projetos que você consegue desfazer.</string>
+    <string name="chat_mode_ask">Pergunta antes</string>
+    <string name="chat_auto_approved">Aprovado sem perguntar: %1$s.</string>
 </resources>

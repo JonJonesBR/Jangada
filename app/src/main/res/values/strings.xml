@@ -419,7 +419,7 @@
     <string name="settings_other_agents">For the other agents, tap the model name at the top of the chat to change model, effort and mode.</string>
 
     <string name="settings_advanced">Advanced (Pro)</string>
-    <string name="settings_cpu_awake">Keep the processor awake while sessions are open (agents keep working with the screen off; uses more battery)</string>
+    <string name="settings_cpu_awake">Keep the processor and Wi-Fi awake while sessions are open (agents keep working with the screen off; uses more battery)</string>
     <string name="settings_screen_on">Keep the screen on in the terminal</string>
     <string name="settings_extra_keys">Show the extra keys bar in the terminal</string>
     <string name="settings_linux">Linux</string>
@@ -967,4 +967,9 @@
     <string name="chat_mode_risky_confirm">The agent will run commands and change files without asking you. Turn it on only if you can undo the changes.</string>
     <string name="chat_mode_risky_yes">Allow everything</string>
     <string name="chat_mode_none">This agent has no permission modes: it always asks before acting.</string>
+    <string name="chat_mode_none_approve">This agent has no permission modes. With Approve everything on, it does not ask before acting.</string>
+    <string name="chat_auto_approve">Approve everything</string>
+    <string name="chat_auto_approve_desc">Does everything without asking. Use only in projects you can undo.</string>
+    <string name="chat_mode_ask">Asks first</string>
+    <string name="chat_auto_approved">Approved without asking: %1$s.</string>
 </resources>

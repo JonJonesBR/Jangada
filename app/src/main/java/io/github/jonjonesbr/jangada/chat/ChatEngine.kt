@@ -63,6 +63,8 @@ class ChatEngine(
 
     /** Chaves liberadas com "Sempre permitir nesta conversa" (ver [permissionKey]). */
     private val alwaysAllowed = HashSet<String>()
+    /** request_ids que o "Aprovar tudo" respondeu sem cartão (só a thread principal). */
+    private val autoAnswered = HashSet<String>()
 
     /** Já houve mensagem enviada nesta execução do Claude (o histórico que chega depois não é interrupção). */
     private var sentThisRun = false
@@ -443,6 +445,8 @@ class ChatEngine(
     /** O conjunto é por processo do CLI: ao parar, não há tarefas em segundo plano. */
     override fun onStopped() {
         background = emptyList()
+        // Processo novo do CLI: os ids de pedido recomeçam.
+        autoAnswered.clear()
     }
 
     /** Nenhuma resposta fica com o cursor piscando depois que o Claude parou de escrever. */
@@ -559,6 +563,8 @@ class ChatEngine(
     /** Pedido de permissão de uma ferramenta: cartão, ou resposta direta se o usuário já liberou sempre. */
     private fun askPermission(request: ControlRequest.CanUseTool) {
         val requestId = request.requestId
+        // Pedido repetido que o "Aprovar tudo" já respondeu: não responde de novo.
+        if (requestId in autoAnswered) return
         val toolName = request.toolName
         val input = request.input
         // Perguntas e plano têm cartão próprio; nunca são aprovados sozinhos.
@@ -598,6 +604,17 @@ class ChatEngine(
         // O resumo é sempre o comando ou caminho; a descrição do agente vai como texto extra.
         val summary = ToolText.summary(toolName, input, limit = 4000)
         val detail = request.description.takeIf { it.isNotEmpty() && it != summary }.orEmpty()
+        // Aprovar tudo: permite uma vez, sem cartão, e deixa um rastro no chat (sem aviso de pedido).
+        if (autoApprove && !AutoApprove.isUserDecision(toolName)) {
+            // Sem cartão, o id fica guardado: um can_use_tool repetido com o mesmo id não recebe segunda resposta.
+            autoAnswered += requestId
+            respondPermission(requestId, allow = true, input = input)
+            add(ChatItem.Info(
+                text = context.getString(R.string.chat_auto_approved, ToolText.label(context, toolName)),
+                details = summary.takeIf { it.isNotEmpty() },
+            ))
+            return
+        }
         add(
             ChatItem.Permission(
                 requestId, ToolText.label(context, toolName), summary,
