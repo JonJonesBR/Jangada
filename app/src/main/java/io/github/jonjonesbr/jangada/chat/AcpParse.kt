@@ -314,11 +314,30 @@ internal object AcpParse {
      * caminho em locations. Vazio quando não há nada.
      */
     fun toolSummary(call: JSONObject): String {
+        subagentSummary(call)?.let { return it }
         call.optJSONObject("rawInput")?.let { input ->
             ToolText.summary("", input).takeIf { it.isNotEmpty() }?.let { return it }
         }
         call.optJSONArray("locations")?.optJSONObject(0)?.optString("path")?.takeIf { it.isNotEmpty() }?.let { return it }
         return ""
+    }
+
+    /**
+     * Resumo do `invoke_subagent` do agy: "função (tipo)" e, na linha de baixo, o que foi pedido
+     * (Role, TypeName e Prompt do rawInput). O agy não manda sessão filha nem andamento do subagente,
+     * só esta ação (começa e termina); null quando a ação não é essa ou não traz nada disso.
+     */
+    fun subagentSummary(call: JSONObject): String? {
+        if (toolName(call).lowercase() != "invoke_subagent") return null
+        val input = call.optJSONObject("rawInput") ?: call.optJSONObject("args") ?: return null
+        val role = ToolText.pick(input, listOf("role")).orEmpty()
+        val type = ToolText.pick(input, listOf("typename")).orEmpty()
+        val head = when {
+            role.isNotEmpty() && type.isNotEmpty() -> "$role ($type)"
+            else -> role.ifEmpty { type }
+        }
+        val prompt = ToolText.pick(input, listOf("prompt")).orEmpty().take(400)
+        return listOf(head, prompt).filter { it.isNotEmpty() }.joinToString("\n").ifEmpty { null }
     }
 
     /**

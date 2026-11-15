@@ -321,4 +321,13 @@ class AcpParseTest {
         assertEquals(86400L, AcpParse.scheduleSeconds(update("""{"DurationSeconds":999999}""")))
         assertEquals(0L, AcpParse.scheduleSeconds(JSONObject("{}")))
     }
+
+    @Test
+    fun `invoke_subagent do agy vira resumo com funcao tipo e pedido`() {
+        val call = JSONObject(
+            """{"name":"invoke_subagent","title":"Run invoke_subagent","rawInput":{"Prompt":"Liste os arquivos","Role":"File Lister","TypeName":"research"}}""",
+        )
+        assertEquals("File Lister (research)\nListe os arquivos", AcpParse.toolSummary(call))
+        assertNull(AcpParse.subagentSummary(JSONObject("""{"name":"run_command","rawInput":{"CommandLine":"ls"}}""")))
+    }
 }

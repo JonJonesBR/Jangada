@@ -751,7 +751,7 @@ object ToolText {
         "WebFetch", "webfetch" -> R.string.tool_web_fetch
         "WebSearch", "websearch" -> R.string.tool_web_search
         "TodoWrite", "todowrite" -> R.string.tool_todo
-        "Task", "Agent", "subagent" -> R.string.tool_agent
+        "Task", "Agent", "subagent", "invoke_subagent" -> R.string.tool_agent
         "AskUserQuestion", "question" -> R.string.tool_question
         "ExitPlanMode" -> R.string.tool_plan
         else -> null
