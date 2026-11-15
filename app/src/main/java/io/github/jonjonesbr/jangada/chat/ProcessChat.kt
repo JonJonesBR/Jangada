@@ -119,6 +119,12 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     protected val queue = ArrayDeque<QueuedMessage>()
 
     /**
+     * O agente marcou para si um despertar (ex.: o `schedule` do agy, para acompanhar um CI): até
+     * essa hora (elapsedRealtime) o chat não dorme, porque fechar o processo apagaria o agendamento.
+     */
+    @Volatile protected var keepAwakeUntilMs = 0L
+
+    /**
      * O usuário tocou em Parar e o fim do turno cancelado ainda não chegou. Esse fim
      * não descarta a fila (o que estiver nela foi enviado depois de Parar) mesmo com erro.
      */
@@ -154,6 +160,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         val c = Connection()
         connection = c
         asleep = false
+        keepAwakeUntilMs = 0L
         val now = SystemClock.elapsedRealtime()
         idleSinceMs = now
         // Execução nova: nenhuma mensagem recebida ainda (o silêncio conta de agora) e nenhuma saída anterior.
@@ -438,10 +445,11 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
      * Recusa (false) com turno em andamento, sem como retomar, ou com pedido de permissão ou login
      * sem resposta ou em andamento: nesses casos parar perderia o que o usuário precisa responder
      * (no login em andamento, o agente espera a volta do navegador). Também recusa com tarefas
-     * em segundo plano ou subagente rodando: pararia o que o agente ainda está fazendo.
+     * em segundo plano, subagente rodando ou despertar agendado pelo agente: pararia o que ele ainda vai fazer.
      */
     override fun sleep(): Boolean {
         if (!running || busy || background.isNotEmpty() || (childAgents?.running ?: 0) > 0 || !canResume) return false
+        if (SystemClock.elapsedRealtime() < keepAwakeUntilMs) return false
         val waiting = items.any { item ->
             (item is ChatItem.Permission && item.chosen == null) ||
                 (item is ChatItem.Login &&

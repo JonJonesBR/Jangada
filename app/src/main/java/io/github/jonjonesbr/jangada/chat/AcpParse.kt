@@ -160,6 +160,18 @@ internal object AcpParse {
         return id.ifEmpty { raw.optString("sessionID") }
     }
 
+    /**
+     * Segundos do `schedule` do agy (o agente se acorda sozinho depois de DurationSeconds para seguir,
+     * ex.: acompanhar um CI). Vem em rawInput, como número ou texto; 0 quando não há ou é inválido.
+     */
+    fun scheduleSeconds(update: JSONObject): Long {
+        val input = update.optJSONObject("rawInput") ?: return 0
+        val key = input.keys().asSequence().firstOrNull { it.equals("DurationSeconds", ignoreCase = true) } ?: return 0
+        val value = input.opt(key)
+        val seconds = (value as? Number)?.toLong() ?: value?.toString()?.trim()?.toLongOrNull() ?: 0
+        return seconds.coerceIn(0, 24 * 3600)
+    }
+
     /** A resposta do session/prompt foi de um turno parado (stopReason "cancelled"). */
     fun cancelled(result: JSONObject?): Boolean = result?.optString("stopReason") == "cancelled"
 

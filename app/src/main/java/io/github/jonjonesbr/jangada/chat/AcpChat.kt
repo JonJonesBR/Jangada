@@ -629,13 +629,14 @@ class AcpChat(
     /** Ajustes (por categoria) que já foram reaplicados nesta sessão, para não repetir em laço. */
     private val restored = mutableSetOf<String>()
 
-    /** Só modelo e nível de raciocínio são lembrados entre conversas; o modo de permissão não. */
+    /** Modelo, nível de raciocínio e modo de permissão são lembrados entre conversas (por agente). */
     private fun remembered(option: ConfigOption) =
-        agentId.isNotEmpty() && option.source != ConfigOption.Source.MODE && option.category in REMEMBERED
+        agentId.isNotEmpty() && (option.source == ConfigOption.Source.MODE || option.category in REMEMBERED)
 
     /**
-     * Reaplica o modelo e o raciocínio que o usuário escolheu da última vez: o agente começa toda
-     * sessão no padrão dele, e sem isso a escolha voltava ao padrão a cada conversa nova.
+     * Reaplica o modelo, o raciocínio e o modo de permissão que o usuário escolheu da última vez: o
+     * agente começa toda sessão no padrão dele, e sem isso a escolha voltava ao padrão a cada conversa
+     * nova ou a cada vez que o agente acordava de um sono.
      */
     private fun restoreChoices() {
         for (option in configOptions) {
@@ -915,6 +916,7 @@ class AcpChat(
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
                 applyStatus(tool, update)
                 applySubagent(tool, update)
+                noteSchedule(tool, update)
                 changed()
             }
             "tool_call_update" -> {
@@ -926,6 +928,7 @@ class AcpChat(
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
                 applyStatus(tool, update)
                 applySubagent(tool, update)
+                noteSchedule(tool, update)
                 changed()
             }
             "plan" -> {
@@ -996,6 +999,19 @@ class AcpChat(
     }
 
     /**
+     * `schedule` do agy: o agente se acorda sozinho depois de N segundos. Guarda a hora para o chat não
+     * dormir antes (dormir fecha o processo e o agendamento some). Replay de conversa antiga não conta.
+     */
+    private fun noteSchedule(tool: ChatItem.Tool, update: JSONObject) {
+        if (loadingHistory || tool.toolName.lowercase() != "schedule") return
+        val seconds = AcpParse.scheduleSeconds(update)
+        if (seconds <= 0) return
+        // Folga para o turno seguinte começar e terminar antes de o sono voltar a ser permitido.
+        val until = SystemClock.elapsedRealtime() + seconds * 1000 + SCHEDULE_MARGIN_MS
+        if (until > keepAwakeUntilMs) keepAwakeUntilMs = until
+    }
+
+    /**
      * Ação de subagente: guarda o agente filho e a sessão filha (do rawOutput) e liga os cartões
      * dela ao tool do pai. Roda antes do changed(), para a tela já ver a ligação.
      */
@@ -1052,7 +1068,7 @@ class AcpChat(
     internal companion object {
         const val TAG = "JangadaAcp"
         /** Categorias de ajuste que o app lembra entre conversas (por agente). */
-        val REMEMBERED = setOf("model", "thought_level")
+        val REMEMBERED = setOf("model", "thought_level", "mode")
         /** Página do OpenCode Go (assinatura), aberta pelo aviso de limite free esgotado. */
         const val OPENCODE_GO_URL = "https://opencode.ai/go"
         /** Atualizações que compõem a conversa: no replay de uma conversa já na tela, são descartadas. */
@@ -1065,6 +1081,8 @@ class AcpChat(
         const val OPENCODE_ID = "opencode"
         /** Ferramentas do pai que abrem um subagente (o nome do agente filho vem no rawInput delas). */
         val SUBAGENT_TOOLS = setOf("subagent", "task")
+        /** Folga depois do despertar agendado pelo agente, antes de o chat poder dormir. */
+        const val SCHEDULE_MARGIN_MS = 120_000L
         /** Intervalo mínimo entre leituras dos limites do OpenCode Go (cada uma abre outro opencode). */
         const val OPENCODE_LIMITS_EVERY_MS = 10 * 60_000L
         /** Pergunta os limites ao opencode, com servidor próprio (sai no fim) e tempo limite. */

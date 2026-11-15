@@ -310,4 +310,15 @@ class AcpParseTest {
         assertTrue(AcpParse.repeatedPermission(listOf(card("abc", answered = false)), "abc"))
         assertFalse(AcpParse.repeatedPermission(emptyList(), 0))
     }
+
+    @Test
+    fun `schedule do agy le os segundos em numero ou texto`() {
+        fun update(input: String) = JSONObject("""{"rawInput":$input}""")
+        assertEquals(180L, AcpParse.scheduleSeconds(update("""{"DurationSeconds":180,"Prompt":"x"}""")))
+        assertEquals(120L, AcpParse.scheduleSeconds(update("""{"durationSeconds":"120"}""")))
+        assertEquals(0L, AcpParse.scheduleSeconds(update("""{"Prompt":"x"}""")))
+        assertEquals(0L, AcpParse.scheduleSeconds(update("""{"DurationSeconds":-5}""")))
+        assertEquals(86400L, AcpParse.scheduleSeconds(update("""{"DurationSeconds":999999}""")))
+        assertEquals(0L, AcpParse.scheduleSeconds(JSONObject("{}")))
+    }
 }
