@@ -25,10 +25,10 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/1-inicio.jpg" width="22%" alt="Tela inicial" />
-  <img src="docs/screenshots/2-chat.jpg" width="22%" alt="Chat" />
-  <img src="docs/screenshots/3-terminal.jpg" width="22%" alt="Terminal" />
-  <img src="docs/screenshots/4-configuracoes.jpg" width="22%" alt="Configurações" />
+  <img src="docs/screenshots/1-inicio.png" width="22%" alt="Tela inicial" />
+  <img src="docs/screenshots/2-agentes.png" width="22%" alt="Agentes" />
+  <img src="docs/screenshots/3-chat.png" width="22%" alt="Chat" />
+  <img src="docs/screenshots/4-projetos.png" width="22%" alt="Projetos" />
 </p>
 
 O Jangada coloca um Linux Debian completo dentro do app e transforma o celular num lugar para programar com IA. Você instala um agente com um toque, cria ou clona um projeto e conversa com ele como num app de mensagens. O agente lê, escreve e testa o código numa pasta de verdade. No fim, você confere as mudanças, faz o commit e envia para o GitHub, tudo pelo celular.
@@ -42,18 +42,23 @@ O Jangada coloca um Linux Debian completo dentro do app e transforma o celular n
 - Troca de modelo, esforço e modo no próprio chat; uso do contexto à vista, com atalho para compactar.
 - Três visualizações (Detalhado, Normal e Resumo), fila de mensagens enquanto o agente trabalha e rascunho do que você ainda não enviou.
 - No Claude Code, a mesma conversa no chat e no terminal.
+- Faixa de status com o que o agente está fazendo e há quanto tempo; no OpenCode, cada subagente aparece num cartão próprio.
+- Histórico de conversas por pasta, com busca, retomada, exportação e exclusão; compactação automática do contexto.
+- **Limites do plano à vista** (Claude, Codex e OpenCode), com aviso ao chegar perto do limite.
 
 ### 📁 Trabalhar em projetos de verdade
 - **Novo projeto:** cria a pasta com git e, se você quiser, o repositório no GitHub ou no GitLab (com o login do `gh` ou do `glab`).
 - **Clonar** um repositório pelo endereço (https ou ssh), do GitHub, do GitLab ou de outro site. Repositórios privados pedem login.
 - **Mudanças:** veja os arquivos alterados e o diff colorido, faça o commit (ou peça ao agente) e envie com `git push` para o repositório remoto.
 - **Trabalho isolado:** uma cópia do repositório numa branch própria (git worktree), para o agente experimentar sem mexer no seu código. Depois, junte, descarte ou mantenha.
+- **Projetos:** renomeie, duplique ou exclua pastas, veja o espaço de cada uma (git e dependências) e quantos arquivos estão sem commit.
 - Se você permitir, os agentes também leem e salvam nos arquivos do celular (`~/celular`: Downloads, Documentos…).
 
 ### ⚡ Vários agentes ao mesmo tempo
 - Vários trabalhos rodando juntos (até 4, conforme a memória do aparelho), cada um com o seu agente e a sua pasta, sem um parar o outro.
 - **Cuidado com a memória:** se ela apertar, o Linux encerra primeiro os comandos dos agentes (como navegadores de teste), não os agentes. Agentes parados "dormem" para liberar memória e continuam a conversa quando você escrever, e cada agente recebe orientações para não abrir vários navegadores ao mesmo tempo.
 - A tela inicial mostra quem está trabalhando, quem espera você e quem terminou, com quem espera você em destaque.
+- Telas largas (tablets, modo paisagem) com o conteúdo centralizado.
 - Os agentes continuam em segundo plano, com a tela apagada ou em outro app, e um aviso chega quando a resposta fica pronta (o gasto de bateria é maior; dá para desligar nas configurações).
 
 ### ⌨️ Terminal completo
@@ -142,17 +147,22 @@ Jangada puts a full Debian Linux inside the app and turns your phone into a plac
   - attachments, and sharing from any app;
   - model, effort and mode switching, plus context usage;
   - Detailed, Normal and Summary views, a message queue and drafts;
-  - for Claude Code, the same conversation in chat and terminal.
+  - for Claude Code, the same conversation in chat and terminal;
+  - a status bar with what the agent is doing and for how long; in OpenCode, each subagent gets its own card;
+  - per-folder conversation history with search, resume, export and delete; automatic context compaction;
+  - plan limits at a glance (Claude, Codex and OpenCode), with a warning when you get close.
 - **📁 Work on real projects:**
   - New project with git and, optionally, a GitHub or GitLab repository (using your `gh` or `glab` login);
   - clone a repository by its address (private ones need a login);
   - Changes screen with diff, commit and `git push`;
   - isolated jobs (git worktree) for the agent to experiment safely;
+  - Projects screen to rename, duplicate or delete folders, with the space each one uses (git and dependencies) and how many files are uncommitted;
   - access to your phone files (`~/celular`), if you allow it.
 - **⚡ Several agents at once:**
   - several jobs running side by side (up to 4, depending on the device's memory);
   - memory care: if memory runs low, Linux stops the agents' commands first (such as test browsers), not the agents; idle agents sleep to free memory and pick up the conversation when you write;
   - the home screen shows who is working, who is waiting for you and who is done;
+  - wide screens (tablets, landscape) with centered content;
   - agents keep going in the background and notify you when they are done (this uses more battery; you can turn it off in Settings).
 - **⌨️ Full terminal:**
   - Termux's terminal with tabs, agent-friendly extra keys, a text box with your keyboard's autocorrect and voice typing, clickable links and color schemes;

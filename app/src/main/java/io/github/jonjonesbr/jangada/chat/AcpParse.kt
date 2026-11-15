@@ -201,4 +201,145 @@ internal object AcpParse {
      */
     fun repeatedPermission(items: List<ChatItem>, id: Any): Boolean =
         items.any { it is ChatItem.Permission && it.chosen == null && it.requestId == id }
+
+    /** Um jeito de entrar na conta, como vem do initialize (o AcpChat põe o rótulo e a [AuthOption]). */
+    data class AuthMethod(
+        val id: String,
+        val name: String,
+        val description: String,
+        val terminal: Boolean,
+        val args: List<String>,
+        val env: Map<String, String>,
+    )
+
+    /** Métodos de login que o agente anuncia no initialize; item que não é objeto some. */
+    fun authMethods(methods: JSONArray?): List<AuthMethod> {
+        methods ?: return emptyList()
+        return (0 until methods.length()).mapNotNull { i ->
+            val m = methods.optJSONObject(i) ?: return@mapNotNull null
+            val args = m.optJSONArray("args")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+            val env = m.optJSONObject("env")?.let { e -> e.keys().asSequence().associateWith { e.optString(it) } } ?: emptyMap()
+            AuthMethod(
+                m.optString("id"), m.optString("name").ifEmpty { m.optString("id") }, m.optString("description"),
+                m.optString("type") == "terminal", args, env,
+            )
+        }
+    }
+
+    /**
+     * Um ajuste lido da resposta do agente. Na forma antiga (models/modes) o nome sai vazio: o rótulo
+     * ("Modelo", "Modo") é do app, então quem monta o ajuste o põe.
+     */
+    data class ConfigRead(
+        val id: String,
+        val name: String,
+        val category: String,
+        val currentValue: String,
+        val choices: List<Pair<String, String>>,
+        val source: Source,
+    ) {
+        enum class Source { CONFIG, MODEL, MODE }
+    }
+
+    /**
+     * Ajustes do "configOptions" (só os do tipo select). Null quando a resposta não traz o array:
+     * aí vale a forma antiga, em [legacyConfigOptions].
+     */
+    fun configOptions(result: JSONObject): List<ConfigRead>? {
+        val config = result.optJSONArray("configOptions") ?: return null
+        return (0 until config.length()).mapNotNull { i ->
+            val o = config.optJSONObject(i) ?: return@mapNotNull null
+            if (o.optString("type", "select") != "select") return@mapNotNull null
+            ConfigRead(
+                o.optString("id"), o.optString("name"), o.optString("category"),
+                o.optString("currentValue"), selectChoices(o.optJSONArray("options")), ConfigRead.Source.CONFIG,
+            )
+        }
+    }
+
+    /**
+     * Forma antiga do agente: "models" (modelo atual e disponíveis) e "modes". Cada um só vira ajuste
+     * quando tem opções; sem o rótulo (ver [ConfigRead]).
+     */
+    fun legacyConfigOptions(result: JSONObject): List<ConfigRead> {
+        val list = mutableListOf<ConfigRead>()
+        result.optJSONObject("models")?.let { models ->
+            val available = models.optJSONArray("availableModels") ?: JSONArray()
+            val choices = (0 until available.length()).mapNotNull { i ->
+                available.optJSONObject(i)?.let { it.optString("modelId") to it.optString("name").ifEmpty { it.optString("modelId") } }
+            }
+            if (choices.isNotEmpty()) list += ConfigRead("model", "", "model", models.optString("currentModelId"), choices, ConfigRead.Source.MODEL)
+        }
+        result.optJSONObject("modes")?.let { modes ->
+            val available = modes.optJSONArray("availableModes") ?: JSONArray()
+            val choices = (0 until available.length()).mapNotNull { i ->
+                available.optJSONObject(i)?.let { it.optString("id") to it.optString("name").ifEmpty { it.optString("id") } }
+            }
+            if (choices.isNotEmpty()) list += ConfigRead("mode", "", "mode", modes.optString("currentModeId"), choices, ConfigRead.Source.MODE)
+        }
+        return list
+    }
+
+    /**
+     * Comandos "/" de um available_commands_update. Null quando o update não traz a lista (aí o
+     * anúncio anterior fica). Sem nome, o item some; a barra inicial é tirada.
+     */
+    fun commands(update: JSONObject): List<SlashCommand>? {
+        val list = update.optJSONArray("availableCommands") ?: return null
+        return (0 until list.length()).mapNotNull { i ->
+            val c = list.optJSONObject(i) ?: return@mapNotNull null
+            val name = c.optString("name").removePrefix("/")
+            if (name.isEmpty()) null else SlashCommand(name, c.optString("description"))
+        }
+    }
+
+    /** Texto de um bloco de conteúdo (ex.: content de agent_message_chunk); null quando não é do tipo "text". */
+    fun contentText(content: JSONObject?): String? =
+        content?.takeIf { it.optString("type") == "text" }?.optString("text")
+
+    /**
+     * Resumo curto de uma ação: o comando, o arquivo ou o endereço (rawInput); sem ele, o primeiro
+     * caminho em locations. Vazio quando não há nada.
+     */
+    fun toolSummary(call: JSONObject): String {
+        call.optJSONObject("rawInput")?.let { input ->
+            ToolText.summary("", input).takeIf { it.isNotEmpty() }?.let { return it }
+        }
+        call.optJSONArray("locations")?.optJSONObject(0)?.optString("path")?.takeIf { it.isNotEmpty() }?.let { return it }
+        return ""
+    }
+
+    /**
+     * Estado que o status de um tool_call ou tool_call_update traz. "failed" passa por [failureState]
+     * (pode ser o próprio usuário). Null quando o status é desconhecido: o estado anterior fica.
+     */
+    fun statusState(update: JSONObject): ToolState? {
+        val state = toolState(update.optString("status")) ?: return null
+        return if (state == ToolState.FAILED) failureState(update) else state
+    }
+
+    /** Entradas do plano (update "plan"); null quando não há a lista. */
+    fun planEntries(update: JSONObject): List<PlanEntry>? {
+        val entries = update.optJSONArray("entries") ?: return null
+        return (0 until entries.length()).mapNotNull { i ->
+            entries.optJSONObject(i)?.let { PlanEntry(it.optString("content"), it.optString("status")) }
+        }
+    }
+
+    /** Janela de contexto do usage_update; null quando "used" ou "size" não são positivos. */
+    fun contextUsage(update: JSONObject): ContextUsage? {
+        val used = update.optLong("used")
+        val size = update.optLong("size")
+        return if (used > 0 && size > 0) ContextUsage(used, size) else null
+    }
+
+    /** Id do modo atual (current_mode_update); null quando vazio. */
+    fun currentModeId(update: JSONObject): String? = update.optString("currentModeId").takeIf { it.isNotEmpty() }
+
+    /** Mensagem e dados de um erro, sem os vazios, em linhas. Vazio quando não há nada. */
+    fun errorDetail(error: JSONObject?): String {
+        val message = error?.optString("message").orEmpty()
+        val data = error?.opt("data")?.toString().orEmpty()
+        return listOf(message, data).filter { it.isNotEmpty() && it != "null" }.joinToString("\n")
+    }
 }
