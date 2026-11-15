@@ -23,7 +23,7 @@ open class JangadaActivity : ComponentActivity() {
     protected open val maxContentWidthDp: Int = 720
 
     /** Largura útil do conteúdo em pixels: a da tela, limitada por [maxContentWidthDp]. */
-    protected fun contentWidthPx(): Int {
+    internal fun contentWidthPx(): Int {
         val screen = resources.displayMetrics.widthPixels
         val cap = (maxContentWidthDp * resources.displayMetrics.density).toInt()
         return if (cap > 0) minOf(screen, cap) else screen
