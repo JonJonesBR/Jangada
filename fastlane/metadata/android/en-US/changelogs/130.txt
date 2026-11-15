@@ -1,0 +1,1 @@
+Chat: Approve all and the permission mode are no longer lost when the agent sleeps; the mode of agy and other agents is remembered per agent. agy no longer sleeps while it has a scheduled follow-up (like watching a CI). agy's subagent shows as Subagent, with role, type and request.

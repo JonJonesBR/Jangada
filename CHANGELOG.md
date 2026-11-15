@@ -1,5 +1,11 @@
 # Novidades
 
+## 1.24.0
+
+- Chat: o "Aprovar tudo" e o modo de permissão não se perdem mais quando o agente dorme ou é reiniciado. O modo do agy e dos outros agentes ACP fica guardado por agente, como o modelo.
+- Chat do agy: não dorme enquanto tiver um acompanhamento agendado (`schedule`, usado para vigiar um CI); dormir fechava o processo e o agendamento sumia.
+- Chat do agy: o subagente (`invoke_subagent`) aparece como Subagente, com função, tipo e pedido. O agy não informa o andamento dele, só o início e o fim.
+
 ## 1.23.0
 
 - Chat: o modelo e o nível de raciocínio escolhidos em cada agente ACP (agy, Codex, OpenCode e outros) ficam guardados e valem em toda conversa nova; antes voltavam ao padrão do agente. Nos Ajustes, "Modelo padrão dos outros agentes" mostra e limpa o que está guardado.

@@ -1,0 +1,1 @@
+Chat: o Aprovar tudo e o modo de permissão não se perdem mais quando o agente dorme; o modo do agy e dos outros agentes fica guardado por agente. O agy não dorme enquanto tiver um acompanhamento agendado (como vigiar um CI). O subagente do agy aparece como Subagente, com função, tipo e pedido.
