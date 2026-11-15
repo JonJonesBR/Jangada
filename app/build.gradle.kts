@@ -45,7 +45,19 @@ android {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName(if (signingStoreFile != null) "release" else "debug")
         }
+        // Igual ao release (mesmo R8, mesmo corte de recursos), mas assinado com a chave de debug e com
+        // regras extras que mantêm só o que os testes do emulador chamam direto. Serve para rodar a suíte
+        // do emulador no APK minificado (ui-tests.yml, variante "minificado"). Não é publicado.
+        create("minified") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+            proguardFiles("proguard-androidtest.pro")
+        }
     }
+
+    // Com -PtestarMinificado os testes do emulador rodam contra o build type "minified".
+    if (project.hasProperty("testarMinificado")) testBuildType = "minified"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

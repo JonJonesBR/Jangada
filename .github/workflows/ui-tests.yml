@@ -5,6 +5,15 @@ name: Testes no emulador
 on:
   workflow_dispatch:
     inputs:
+      variante:
+        description: "Qual APK testar: debug, minificado (R8, como o release) ou os dois"
+        type: choice
+        options: [ debug, minificado, ambos ]
+        default: debug
+      classe:
+        description: "Só uma classe de teste (nome completo; vazio = todas)"
+        type: string
+        default: ""
       capturas:
         description: "Só tirar as capturas de tela do README"
         type: boolean
@@ -64,7 +73,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           # Se algum teste falhar, guarda o logcat do emulador (limpo, sem dado de ninguém) e as capturas
           # das telas das falhas (só dados dos agentes falsos) junto do relatório.
-          script: if [ "${{ inputs.capturas }}" = "true" ]; then ./gradlew --no-daemon :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=io.github.jonjonesbr.jangada.ui.ReadmeShotsTest -Pandroid.testInstrumentationRunnerArguments.capturas=true && mkdir -p app/build/reports/androidTests && adb pull /data/local/tmp/jangada-capturas app/build/reports/androidTests/capturas; else ./gradlew --no-daemon :app:connectedDebugAndroidTest || { mkdir -p app/build/reports/androidTests; adb logcat -d > app/build/reports/androidTests/logcat.txt; adb pull /data/local/tmp/jangada-falhas app/build/reports/androidTests/telas || true; exit 1; }; fi
+          script: bash scripts/ui-tests-emulador.sh "${{ inputs.variante || 'ambos' }}" "${{ inputs.capturas }}" "${{ inputs.classe }}"
       - name: Guardar o relatório
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
