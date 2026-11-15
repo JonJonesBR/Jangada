@@ -1,0 +1,43 @@
+#!/bin/bash
+# Antigravity CLI (agy) falso do teste: só "agy acp" (ACP, JSON-RPC por linha) e --version.
+# Com o arquivo $LOGDIR/sem-login, session/new responde "login necessário" (-32000), como o agy deslogado.
+LOGDIR=${FAKE_LOGDIR:-/var/log/jangada-fake}; mkdir -p "$LOGDIR"; LOG=$LOGDIR/agy.log
+echo "ARGV $*" >> "$LOG"
+case "$1" in
+  --version) echo "0.0.0-fake"; exit 0 ;;
+  acp) ;;
+  *) exit 1 ;;
+esac
+
+emit() { printf '%s\n' "$1"; }
+reply() { emit '{"jsonrpc":"2.0","id":'"$1"',"result":'"$2"'}'; }
+update() { emit '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"agy-1","update":'"$1"'}}'; }
+chunk() { update '{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"'"$1"'"}}'; }
+PID_=
+while IFS= read -r line; do
+  echo "RECV ${line:0:4000}" >> "$LOG"
+  line=${line//'\/'/'/'}   # o JSONObject do Android escreve "\/"
+  id=$(printf '%s' "$line" | sed -n 's/^{"jsonrpc":"2.0","id":\([0-9]*\),.*/\1/p')
+  case "$line" in
+    *'"method":"initialize"'*)
+      reply "$id" '{"protocolVersion":1,"agentCapabilities":{"loadSession":false,"promptCapabilities":{"image":false}},"agentInfo":{"name":"agy","version":"0.0.0-fake"},"authMethods":[{"id":"terminal-login","name":"Entrar pelo terminal","description":"Cole o codigo da conta Google","type":"terminal","args":["acp","--login"]}]}' ;;
+    *'"method":"session/new"'*)
+      if [ -e "$LOGDIR/sem-login" ]; then
+        emit '{"jsonrpc":"2.0","id":'"$id"',"error":{"code":-32000,"message":"Authentication required"}}'
+      else
+        reply "$id" '{"sessionId":"agy-1"}'
+      fi ;;
+    *'"method":"session/cancel"'*)
+      [ -n "$PID_" ] && { reply "$PID_" '{"stopReason":"cancelled"}'; PID_=; } ;;
+    *'"method":"session/prompt"'*)
+      PID_=$id
+      case "$line" in
+        *permissao*)
+          emit '{"jsonrpc":"2.0","id":9001,"method":"session/request_permission","params":{"sessionId":"agy-1","toolCall":{"toolCallId":"tc1","title":"Rodar comando","kind":"execute","rawInput":{"command":"echo oi"}},"options":[{"optionId":"once","name":"Permitir","kind":"allow_once"},{"optionId":"no","name":"Recusar","kind":"reject_once"}]}}' ;;
+        *) chunk "Agy: ok"; reply "$PID_" '{"stopReason":"end_turn"}'; PID_= ;;
+      esac ;;
+    *'"id":9001,'*)
+      case "$line" in *'"optionId":"once"'*) chunk "Agy permitido." ;; *) chunk "Agy recusado." ;; esac
+      reply "$PID_" '{"stopReason":"end_turn"}'; PID_= ;;
+  esac
+done
