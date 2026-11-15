@@ -23,13 +23,16 @@ rodar() { # $1 = nome (debug|minificado), resto = argumentos do gradle
   # Cada variante começa com o emulador limpo do app: desinstala o que a anterior deixou.
   adb uninstall io.github.jonjonesbr.jangada >/dev/null 2>&1
   adb uninstall io.github.jonjonesbr.jangada.test >/dev/null 2>&1
-  if ! ./gradlew --no-daemon "$@" "${ARGS[@]}"; then
+  if ! timeout "$LIMITE" ./gradlew --no-daemon "$@" "${ARGS[@]}"; then
     mkdir -p "$OUT/$nome"
     adb logcat -d > "$OUT/$nome/logcat.txt"
     adb pull /data/local/tmp/jangada-falhas "$OUT/$nome/telas" || true
     return 1
   fi
 }
+
+# Limite por variante: um teste preso não pode gastar a hora inteira do job sem deixar o logcat.
+LIMITE=40m; [ -n "$CLASSE" ] && LIMITE=15m
 
 falhou=0
 case "$VARIANTE" in
