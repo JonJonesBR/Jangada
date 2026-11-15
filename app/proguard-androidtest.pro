@@ -14,3 +14,7 @@
 -keep class androidx.tracing.** { *; }
 -keep class androidx.concurrent.futures.** { *; }
 -keep class com.google.common.util.concurrent.ListenableFuture { *; }
+# O código dos testes (Kotlin) usa o stdlib do app: o AGP tira a cópia duplicada do APK de teste.
+-keep class kotlin.** { *; }
+-keep class kotlinx.** { *; }
+-dontwarn kotlin.**
