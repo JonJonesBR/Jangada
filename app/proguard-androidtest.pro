@@ -9,3 +9,8 @@
 -keep class io.github.jonjonesbr.jangada.linux.Setup { *; }
 -keep class io.github.jonjonesbr.jangada.linux.Setup$State { *; }
 -keep class io.github.jonjonesbr.jangada.linux.Setup$State$* { *; }
+# O androidx.test (APK de teste) usa o androidx.tracing e o concurrent-futures do app: o AGP tira a cópia
+# duplicada do APK de teste, então o R8 do app não pode podar estas bibliotecas (NoSuchMethodError no início).
+-keep class androidx.tracing.** { *; }
+-keep class androidx.concurrent.futures.** { *; }
+-keep class com.google.common.util.concurrent.ListenableFuture { *; }
