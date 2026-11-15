@@ -65,6 +65,8 @@ class TerminalService : Service() {
     private val binder = LocalBinder()
     private val main = Handler(Looper.getMainLooper())
     private var wakeLock: PowerManager.WakeLock? = null
+    /** Mantém o Wi-Fi ativo com a tela apagada: sem ele, o Android derruba conexões longas (agentes em streaming). */
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private var foreground = false
     /** Serviço iniciado por startService (fica vivo mesmo sem tela ligada a ele). */
     private var started = false
@@ -482,6 +484,7 @@ class TerminalService : Service() {
         cpuAwakeListener?.let { AppSettings(this).unwatchCpuAwake(it) }
         cpuAwakeListener = null
         wakeLock?.let { if (it.isHeld) it.release() }
+        wifiLock?.let { if (it.isHeld) it.release() }
         networkCallback?.let { callback ->
             runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(callback) }
         }
@@ -1099,7 +1102,9 @@ class TerminalService : Service() {
         started = false
         stopForeground(true)
         wakeLock?.let { if (it.isHeld) it.release() }
+        wifiLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
+        wifiLock = null
         stopSelf()
     }
 
@@ -1241,9 +1246,20 @@ class TerminalService : Service() {
                 setReferenceCounted(false)
                 acquire()
             }
+            // Falha ao criar o bloqueio do Wi-Fi não pode derrubar o serviço.
+            runCatching {
+                val wifi = applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
+                @Suppress("DEPRECATION")
+                wifiLock = wifi?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "jangada:wifi")?.apply {
+                    setReferenceCounted(false)
+                    acquire()
+                }
+            }
         } else if (!wanted && held != null) {
             if (held.isHeld) held.release()
             wakeLock = null
+            wifiLock?.let { if (it.isHeld) it.release() }
+            wifiLock = null
         }
     }
 
