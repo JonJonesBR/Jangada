@@ -31,6 +31,29 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_CHAT_MODEL, "") ?: ""
         set(value) = prefs.edit().putString(KEY_CHAT_MODEL, value).apply()
 
+    /** Padrão lembrado de um agente ACP (categoria "model" ou "thought_level"): id e nome, ou null. */
+    fun acpDefault(agentId: String, category: String): Pair<String, String>? {
+        val raw = prefs.getString("$KEY_ACP_DEFAULT$agentId|$category", null) ?: return null
+        val id = raw.substringBefore('\n')
+        return if (id.isEmpty()) null else id to raw.substringAfter('\n', id)
+    }
+
+    fun setAcpDefault(agentId: String, category: String, id: String, name: String) =
+        prefs.edit().putString("$KEY_ACP_DEFAULT$agentId|$category", "$id\n$name").apply()
+
+    /** Agentes que têm padrão lembrado, com os padrões (categoria, id, nome). */
+    fun acpDefaults(): Map<String, List<Triple<String, String, String>>> =
+        prefs.all.keys.filter { it.startsWith(KEY_ACP_DEFAULT) }.mapNotNull { key ->
+            val (agent, category) = key.removePrefix(KEY_ACP_DEFAULT).split('|', limit = 2).takeIf { it.size == 2 } ?: return@mapNotNull null
+            acpDefault(agent, category)?.let { agent to Triple(category, it.first, it.second) }
+        }.groupBy({ it.first }, { it.second })
+
+    fun clearAcpDefaults(agentId: String) {
+        val edit = prefs.edit()
+        prefs.all.keys.filter { it.startsWith("$KEY_ACP_DEFAULT$agentId|") }.forEach { edit.remove(it) }
+        edit.apply()
+    }
+
     /** Esforço do Claude no chat: "" = padrão, ou low, medium, high, xhigh, max. */
     var chatEffort: String
         get() = prefs.getString(KEY_CHAT_EFFORT, "") ?: ""
@@ -212,6 +235,7 @@ class AppSettings(context: Context) {
         private const val KEY_EXTRA_KEYS = "show_extra_keys"
         private const val KEY_CHAT_EFFORT = "chat_effort"
         private const val KEY_CHAT_MODEL = "chat_model"
+        private const val KEY_ACP_DEFAULT = "acp_default|"
         private const val KEY_MODE = "mode"
         private const val MODE_SIMPLE = "simple"
         private const val MODE_PRO = "pro"

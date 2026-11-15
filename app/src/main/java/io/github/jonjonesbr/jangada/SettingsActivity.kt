@@ -65,6 +65,30 @@ class SettingsActivity : JangadaActivity() {
         effort.check(efforts.entries.firstOrNull { it.value == settings.chatEffort }?.key ?: R.id.effort_default)
         effort.setOnCheckedChangeListener { _, id -> settings.chatEffort = efforts[id] ?: "" }
 
+        // Modelo e raciocínio lembrados dos agentes ACP (agy, Codex, OpenCode...): ver ou limpar.
+        val defaultsButton = findViewById<Button>(R.id.settings_agent_defaults)
+        fun showAgentDefaults() {
+            defaultsButton.text = getString(R.string.settings_agent_defaults_count, settings.acpDefaults().size)
+        }
+        showAgentDefaults()
+        defaultsButton.setOnClickListener {
+            val saved = settings.acpDefaults()
+            if (saved.isEmpty()) return@setOnClickListener Toast.makeText(this, R.string.settings_agent_defaults_none, Toast.LENGTH_SHORT).show()
+            val names = io.github.jonjonesbr.jangada.agents.AgentCatalog.load(this).associate { it.id to it.name }
+            Sheet(this).title(getString(R.string.settings_agent_defaults)).rows(
+                saved.map { (agent, list) ->
+                    Sheet.Row(
+                        title = names[agent] ?: agent,
+                        value = list.joinToString(" · ") { it.third },
+                        description = getString(R.string.settings_agent_defaults_clear),
+                    ) {
+                        settings.clearAcpDefaults(agent)
+                        showAgentDefaults()
+                    }
+                },
+            ).show()
+        }
+
         // Agentes de chat ao mesmo tempo: Automático (pela RAM do aparelho) ou de 1 a AgentLimit.MAX.
         val maxAgents = findViewById<Button>(R.id.settings_max_agents)
         val autoAgents = AgentLimit.auto(totalMemBytes())

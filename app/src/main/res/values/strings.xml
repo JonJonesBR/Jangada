@@ -410,6 +410,11 @@
     <string name="effort_high">High</string>
     <string name="effort_xhigh">Extra high</string>
     <string name="effort_max">Maximum</string>
+    <string name="settings_agent_defaults">Default model of other agents</string>
+    <string name="settings_agent_defaults_hint">The model and reasoning level you pick in a chat are remembered for that agent and applied to every new conversation. Tap above to see or clear them.</string>
+    <string name="settings_agent_defaults_count">Remembered choices: %1$d</string>
+    <string name="settings_agent_defaults_none">None yet. Pick a model in an agent\'s chat to remember it.</string>
+    <string name="settings_agent_defaults_clear">Clear</string>
     <string name="settings_effort">Claude chat effort</string>
     <string name="settings_other_agents">For the other agents, tap the model name at the top of the chat to change model, effort and mode.</string>
 

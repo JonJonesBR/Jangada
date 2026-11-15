@@ -291,6 +291,7 @@ class AcpChat(
 
     private fun openSession(resume: String?) {
         armSessionTimeout()
+        restored.clear()
         val params = JSONObject().put("cwd", cwd).put("mcpServers", JSONArray())
         if (resume != null && canLoad) {
             loadingHistory = true
@@ -620,9 +621,35 @@ class AcpChat(
         changed()
     }
 
-    /** Muda um ajuste da conversa (modelo, raciocínio, modo...). */
-    fun setOption(option: ConfigOption, value: String) {
+    private val appSettings by lazy { io.github.jonjonesbr.jangada.AppSettings(context) }
+
+    /** Ajustes (por categoria) que já foram reaplicados nesta sessão, para não repetir em laço. */
+    private val restored = mutableSetOf<String>()
+
+    /** Só modelo e nível de raciocínio são lembrados entre conversas; o modo de permissão não. */
+    private fun remembered(option: ConfigOption) =
+        agentId.isNotEmpty() && option.source != ConfigOption.Source.MODE && option.category in REMEMBERED
+
+    /**
+     * Reaplica o modelo e o raciocínio que o usuário escolheu da última vez: o agente começa toda
+     * sessão no padrão dele, e sem isso a escolha voltava ao padrão a cada conversa nova.
+     */
+    private fun restoreChoices() {
+        for (option in configOptions) {
+            if (!remembered(option) || !restored.add(option.category)) continue
+            val saved = appSettings.acpDefault(agentId, option.category)?.first ?: continue
+            if (saved != option.current && option.choices.any { it.first == saved }) setOption(option, saved, remember = false)
+        }
+    }
+
+    /** Muda um ajuste da conversa (modelo, raciocínio, modo...). [remember]: guarda como padrão do agente. */
+    fun setOption(option: ConfigOption, value: String, remember: Boolean = true) {
         val id = sessionId ?: return
+        if (remember && remembered(option)) {
+            val name = option.choices.firstOrNull { it.first == value }?.second ?: value
+            appSettings.setAcpDefault(agentId, option.category, value, name)
+            restored += option.category
+        }
         when (option.source) {
             ConfigOption.Source.CONFIG -> request(
                 "session/set_config_option",
@@ -654,6 +681,7 @@ class AcpChat(
         if (config != null) {
             configOptions = config.map { ConfigOption(it.id, it.name, it.category, it.currentValue, it.choices, ConfigOption.Source.CONFIG) }
             changed()
+            restoreChoices()
             return
         }
         val list = AcpParse.legacyConfigOptions(result).map { read ->
@@ -666,6 +694,7 @@ class AcpChat(
         if (list.isNotEmpty()) {
             configOptions = list
             changed()
+            restoreChoices()
         }
     }
 
@@ -1007,6 +1036,8 @@ class AcpChat(
 
     internal companion object {
         const val TAG = "JangadaAcp"
+        /** Categorias de ajuste que o app lembra entre conversas (por agente). */
+        val REMEMBERED = setOf("model", "thought_level")
         /** Página do OpenCode Go (assinatura), aberta pelo aviso de limite free esgotado. */
         const val OPENCODE_GO_URL = "https://opencode.ai/go"
         /** Atualizações que compõem a conversa: no replay de uma conversa já na tela, são descartadas. */

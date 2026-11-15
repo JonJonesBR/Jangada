@@ -408,6 +408,11 @@
     <string name="effort_high">Alto</string>
     <string name="effort_xhigh">Extra alto</string>
     <string name="effort_max">Máximo</string>
+    <string name="settings_agent_defaults">Modelo padrão dos outros agentes</string>
+    <string name="settings_agent_defaults_hint">O modelo e o nível de raciocínio que você escolhe no chat ficam guardados para aquele agente e valem em toda conversa nova. Toque acima para ver ou limpar.</string>
+    <string name="settings_agent_defaults_count">Escolhas guardadas: %1$d</string>
+    <string name="settings_agent_defaults_none">Nada guardado ainda. Escolha um modelo no chat de um agente para guardá-lo.</string>
+    <string name="settings_agent_defaults_clear">Limpar</string>
     <string name="settings_effort">Esforço do Claude no chat</string>
     <string name="settings_other_agents">Nos outros agentes, toque no nome do modelo no topo do chat para trocar modelo, esforço e modo.</string>
 
