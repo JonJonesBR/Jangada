@@ -1,0 +1,1 @@
+Chat: o modelo e o raciocínio escolhidos em cada agente (agy, Codex, OpenCode...) ficam guardados e valem nas conversas novas; veja e limpe nos Ajustes. Novo "Aprovar tudo" no chip de modo: permite cada pedido de permissão sem perguntar, em qualquer agente (desligado por padrão, com confirmação). O Wi-Fi fica ativo com a tela apagada para os agentes não perderem a conexão.

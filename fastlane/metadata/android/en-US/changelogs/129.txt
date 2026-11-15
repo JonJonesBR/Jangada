@@ -1,0 +1,1 @@
+Chat: the model and reasoning level you pick for each agent (agy, Codex, OpenCode...) are remembered and applied to new conversations; see and clear them in Settings. New "Approve all" in the mode chip: allows every permission request without asking, on any agent (off by default, with confirmation). Wi-Fi stays active with the screen off so agents do not lose their connection.

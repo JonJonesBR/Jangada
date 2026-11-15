@@ -1,5 +1,11 @@
 # Novidades
 
+## 1.23.0
+
+- Chat: o modelo e o nível de raciocínio escolhidos em cada agente ACP (agy, Codex, OpenCode e outros) ficam guardados e valem em toda conversa nova; antes voltavam ao padrão do agente. Nos Ajustes, "Modelo padrão dos outros agentes" mostra e limpa o que está guardado.
+- Chat: "Aprovar tudo" no chip de modo, para qualquer agente. O app permite uma vez cada pedido de permissão, nunca "sempre", e deixa um rastro no chat. Desligado por padrão, pede confirmação e não persiste; perguntas ao usuário e aprovação de plano continuam com você.
+- O Wi-Fi fica ativo junto com o processador (ajuste "Manter o processador ativo"), para o Android não derrubar a conexão dos agentes com a tela apagada.
+
 ## 1.22.0
 
 - Telas largas: o conteúdo fica centralizado com largura máxima (720 dp; 840 dp no chat; Mudanças sem limite).
