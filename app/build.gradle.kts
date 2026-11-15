@@ -20,6 +20,7 @@ android {
         versionCode = 128
         versionName = "1.22.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testProguardFiles("proguard-testapk.pro")
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }

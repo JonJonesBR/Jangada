@@ -9,6 +9,3 @@
 -keep class io.github.jonjonesbr.jangada.linux.Setup { *; }
 -keep class io.github.jonjonesbr.jangada.linux.Setup$State { *; }
 -keep class io.github.jonjonesbr.jangada.linux.Setup$State$* { *; }
-# O AGP também passa o R8 pelo APK de teste (mesmas regras); anotações do errorprone citam classes do JDK.
--dontwarn javax.lang.model.**
--dontwarn com.google.errorprone.annotations.**
