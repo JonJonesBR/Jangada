@@ -184,22 +184,13 @@ class AcpChat(
                 listOf(info.optString("title").ifEmpty { info.optString("name") }, info.optString("version"))
                     .filter { it.isNotEmpty() }.joinToString(" ")
             }
-            authOptions = parseAuth(result.optJSONArray("authMethods"))
+            authOptions = AcpParse.authMethods(result.optJSONArray("authMethods")).map { m ->
+                AuthOption(
+                    m.id, m.name, m.description,
+                    if (m.terminal) AuthOption.Kind.TERMINAL else AuthOption.Kind.AGENT, m.args, m.env,
+                )
+            }
             openSession(resume)
-        }
-    }
-
-    private fun parseAuth(methods: JSONArray?): List<AuthOption> {
-        methods ?: return emptyList()
-        return (0 until methods.length()).mapNotNull { i ->
-            val m = methods.optJSONObject(i) ?: return@mapNotNull null
-            val terminal = m.optString("type") == "terminal"
-            val args = m.optJSONArray("args")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
-            val env = m.optJSONObject("env")?.let { e -> e.keys().asSequence().associateWith { e.optString(it) } } ?: emptyMap()
-            AuthOption(
-                m.optString("id"), m.optString("name").ifEmpty { m.optString("id") }, m.optString("description"),
-                if (terminal) AuthOption.Kind.TERMINAL else AuthOption.Kind.AGENT, args, env,
-            )
         }
     }
 
@@ -654,35 +645,23 @@ class AcpChat(
         }
     }
 
-    /** Lê os ajustes que o agente oferece numa resposta (session/new, load, set...). */
+    /**
+     * Lê os ajustes que o agente oferece numa resposta (session/new, load, set...): o configOptions
+     * ou, em agentes mais antigos, models e modes (a leitura está em [AcpParse]; aqui ficam os rótulos).
+     */
     private fun parseConfig(result: JSONObject) {
-        val config = result.optJSONArray("configOptions")
+        val config = AcpParse.configOptions(result)
         if (config != null) {
-            configOptions = (0 until config.length()).mapNotNull { i ->
-                val o = config.optJSONObject(i) ?: return@mapNotNull null
-                if (o.optString("type", "select") != "select") return@mapNotNull null
-                ConfigOption(
-                    o.optString("id"), o.optString("name"), o.optString("category"),
-                    o.optString("currentValue"), AcpParse.selectChoices(o.optJSONArray("options")), ConfigOption.Source.CONFIG,
-                )
-            }
+            configOptions = config.map { ConfigOption(it.id, it.name, it.category, it.currentValue, it.choices, ConfigOption.Source.CONFIG) }
             changed()
             return
         }
-        val list = mutableListOf<ConfigOption>()
-        result.optJSONObject("models")?.let { models ->
-            val available = models.optJSONArray("availableModels") ?: JSONArray()
-            val choices = (0 until available.length()).mapNotNull { i ->
-                available.optJSONObject(i)?.let { it.optString("modelId") to it.optString("name").ifEmpty { it.optString("modelId") } }
+        val list = AcpParse.legacyConfigOptions(result).map { read ->
+            if (read.source == AcpParse.ConfigRead.Source.MODEL) {
+                ConfigOption(read.id, context.getString(R.string.chat_setting_model), read.category, read.currentValue, read.choices, ConfigOption.Source.MODEL)
+            } else {
+                ConfigOption(read.id, context.getString(R.string.chat_setting_mode), read.category, read.currentValue, read.choices, ConfigOption.Source.MODE)
             }
-            if (choices.isNotEmpty()) list += ConfigOption("model", context.getString(R.string.chat_setting_model), "model", models.optString("currentModelId"), choices, ConfigOption.Source.MODEL)
-        }
-        result.optJSONObject("modes")?.let { modes ->
-            val available = modes.optJSONArray("availableModes") ?: JSONArray()
-            val choices = (0 until available.length()).mapNotNull { i ->
-                available.optJSONObject(i)?.let { it.optString("id") to it.optString("name").ifEmpty { it.optString("id") } }
-            }
-            if (choices.isNotEmpty()) list += ConfigOption("mode", context.getString(R.string.chat_setting_mode), "mode", modes.optString("currentModeId"), choices, ConfigOption.Source.MODE)
         }
         if (list.isNotEmpty()) {
             configOptions = list
@@ -692,12 +671,7 @@ class AcpChat(
 
     /** Lista de comandos "/" que o agente anuncia; cada anúncio substitui o anterior. */
     private fun parseCommands(update: JSONObject) {
-        val list = update.optJSONArray("availableCommands") ?: return
-        commands = (0 until list.length()).mapNotNull { i ->
-            val c = list.optJSONObject(i) ?: return@mapNotNull null
-            val name = c.optString("name").removePrefix("/")
-            if (name.isEmpty()) null else SlashCommand(name, c.optString("description"))
-        }
+        commands = AcpParse.commands(update) ?: return
         changed()
     }
 
@@ -837,7 +811,7 @@ class AcpChat(
             "agent_message_chunk" -> {
                 userDraft = null
                 thoughtDraft = null
-                val text = textOf(update.optJSONObject("content")) ?: return
+                val text = AcpParse.contentText(update.optJSONObject("content")) ?: return
                 val messageId = update.optString("messageId").ifEmpty { null }
                 val current = draft
                 // Raciocínio no meio da mesma mensagem (mesmo messageId) não parte a resposta em várias bolhas.
@@ -853,7 +827,7 @@ class AcpChat(
                 changed(throttle = true)
             }
             "agent_thought_chunk" -> {
-                val text = textOf(update.optJSONObject("content")) ?: return
+                val text = AcpParse.contentText(update.optJSONObject("content")) ?: return
                 val current = thoughtDraft
                 if (current != null && items.lastOrNull() === current) {
                     current.text += text
@@ -866,7 +840,7 @@ class AcpChat(
                 draft?.streaming = false
                 draft = null
                 thoughtDraft = null
-                val text = textOf(update.optJSONObject("content")) ?: return
+                val text = AcpParse.contentText(update.optJSONObject("content")) ?: return
                 // Eco da mensagem que o app já mostrou (o agy devolve no turno ao vivo): não duplica.
                 if (!loadingHistory && userDraft == null && items.lastOrNull { it is ChatItem.User }.let { it is ChatItem.User && it.text == text }) return
                 val current = userDraft
@@ -886,7 +860,7 @@ class AcpChat(
                 thoughtDraft = null
                 val id = update.optString("toolCallId")
                 val title = update.optString("title")
-                val tool = tools[id] ?: ChatItem.Tool(id, title, summaryOf(update)).also {
+                val tool = tools[id] ?: ChatItem.Tool(id, title, AcpParse.toolSummary(update)).also {
                     // O título é o rótulo humano; o nome é a ferramenta de verdade (ex.: "shell").
                     it.toolName = AcpParse.toolName(update)
                     it.kind = update.optString("kind")
@@ -904,17 +878,14 @@ class AcpChat(
                 update.optString("name").takeIf { it.isNotEmpty() }?.let { tool.toolName = it }
                 update.optString("title").takeIf { it.isNotEmpty() }?.let { tool.name = it }
                 update.optString("kind").takeIf { it.isNotEmpty() }?.let { tool.kind = it }
-                summaryOf(update).takeIf { it.isNotEmpty() }?.let { tool.summary = it }
+                AcpParse.toolSummary(update).takeIf { it.isNotEmpty() }?.let { tool.summary = it }
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
                 applyStatus(tool, update)
                 applySubagent(tool, update)
                 changed()
             }
             "plan" -> {
-                val entries = update.optJSONArray("entries") ?: return
-                val list = (0 until entries.length()).mapNotNull { i ->
-                    entries.optJSONObject(i)?.let { PlanEntry(it.optString("content"), it.optString("status")) }
-                }
+                val list = AcpParse.planEntries(update) ?: return
                 val current = plan
                 if (current != null && items.contains(current)) current.entries = list
                 else plan = ChatItem.Plan(list).also { items += it }
@@ -925,15 +896,13 @@ class AcpChat(
             "config_option_update" -> parseConfig(update)
             // Janela de contexto: quanto já ocupa e quanto cabe (o agente manda a cada mudança).
             "usage_update" -> {
-                val used = update.optLong("used")
-                val size = update.optLong("size")
-                if (used > 0 && size > 0) contextUsage = ContextUsage(used, size)
+                AcpParse.contextUsage(update)?.let { contextUsage = it }
                 changed()
             }
             "available_commands_update" -> parseCommands(update)
             "current_mode_update" -> {
                 val mode = configOptions.firstOrNull { it.source == ConfigOption.Source.MODE || it.category == "mode" }
-                update.optString("currentModeId").takeIf { it.isNotEmpty() }?.let { mode?.current = it; changed() }
+                AcpParse.currentModeId(update)?.let { mode?.current = it; changed() }
             }
             "notice" -> add(ChatItem.Info(listOf(update.optString("title"), update.optString("description"))
                 .filter { it.isNotEmpty() }.joinToString(": ")))
@@ -961,12 +930,8 @@ class AcpChat(
 
     private fun applyStatus(tool: ChatItem.Tool, update: JSONObject) {
         val now = SystemClock.elapsedRealtime()
-        val state = AcpParse.toolState(update.optString("status"))
-        // Status desconhecido: o estado anterior fica (agente fora do protocolo não apaga o que já veio).
-        if (state != null) {
-            // "failed" pode ser o próprio usuário (Parar ou recusa): o texto do agente diz qual é.
-            tool.mark(if (state == ToolState.FAILED) AcpParse.failureState(update) else state, now)
-        }
+        // Status desconhecido (null): o estado anterior fica (agente fora do protocolo não apaga o que já veio).
+        AcpParse.statusState(update)?.let { tool.mark(it, now) }
         // Replay de uma conversa já terminada: a ação está concluída mesmo que o agente não repita o status.
         if (loadingHistory && !tool.done) tool.mark(ToolState.DONE, now)
     }
@@ -986,9 +951,6 @@ class AcpChat(
         }
     }
 
-    private fun textOf(content: JSONObject?): String? =
-        content?.takeIf { it.optString("type") == "text" }?.optString("text")
-
     /**
      * Ação de subagente: guarda o agente filho e a sessão filha (do rawOutput) e liga os cartões
      * dela ao tool do pai. Roda antes do changed(), para a tela já ver a ligação.
@@ -998,15 +960,6 @@ class AcpChat(
         AcpParse.subagentAgent(update).takeIf { it.isNotEmpty() }?.let { tool.subagent = it }
         AcpParse.subagentSession(update).takeIf { it.isNotEmpty() }?.let { tool.childSessionId = it }
         ChildAgents.refresh(items)
-    }
-
-    /** Resumo curto de uma ação: o comando, o arquivo ou o endereço envolvido. */
-    private fun summaryOf(call: JSONObject): String {
-        call.optJSONObject("rawInput")?.let { input ->
-            ToolText.summary("", input).takeIf { it.isNotEmpty() }?.let { return it }
-        }
-        call.optJSONArray("locations")?.optJSONObject(0)?.optString("path")?.takeIf { it.isNotEmpty() }?.let { return it }
-        return ""
     }
 
     /** Aviso de limite do plano esgotado, com o que fazer e o link do OpenCode Go; a mensagem original vai em Detalhes. */
@@ -1021,11 +974,9 @@ class AcpChat(
     )
 
     private fun friendlyError(error: JSONObject?): String {
-        val message = error?.optString("message").orEmpty()
-        val data = error?.opt("data")?.toString().orEmpty()
         // Mesmo critério de login dos outros lugares (AcpParse.isAuthError).
-        return if (AcpParse.isAuthError(error)) context.getString(R.string.chat_acp_login_hint)
-        else listOf(message, data).filter { it.isNotEmpty() && it != "null" }.joinToString("\n")
+        if (AcpParse.isAuthError(error)) return context.getString(R.string.chat_acp_login_hint)
+        return AcpParse.errorDetail(error)
             .ifEmpty { context.getString(R.string.chat_acp_error) + "\n" + context.getString(R.string.chat_error_hint) }
     }
 

@@ -54,10 +54,10 @@ class ChatEngine(
     @Volatile override var model: String? = null
         private set
     override val supportsHistory = true
-    /** Comandos "/" que o Claude anunciou ao iniciar (ver [claudeCommands]). */
+    /** Comandos "/" que o Claude anunciou ao iniciar (ver [ClaudeParse.commandNames]). */
     @Volatile override var commands: List<SlashCommand> = emptyList()
         private set
-    /** Tarefas em segundo plano que o Claude informou (ver [updateBackground]). Só a thread principal escreve; a lista é trocada inteira. */
+    /** Tarefas em segundo plano que o Claude informou (ver [ClaudeParse.backgroundTasks]). Só a thread principal escreve; a lista é trocada inteira. */
     @Volatile override var background: List<BackgroundTask> = emptyList()
         private set
 
@@ -306,33 +306,18 @@ class ChatEngine(
         )
     }
 
-    /**
-     * Comandos "/" do Claude a partir do "init". Os que só funcionam no terminal não funcionam no chat,
-     * e os internos (começam com "__") não interessam ao usuário; cada nome aparece uma vez.
-     */
-    private fun claudeCommands(json: JSONObject): List<SlashCommand> {
-        val terminalOnly = jsonNames(json.optJSONArray("terminal_slash_commands")).toSet()
-        return jsonNames(json.optJSONArray("slash_commands"))
-            .filter { it.isNotEmpty() && !it.startsWith("__") && it !in terminalOnly }
-            .distinct()
-            .map { SlashCommand(it, "") }
-    }
-
-    /** Textos de um array JSON, sem a barra inicial; array ausente vira lista vazia. */
-    private fun jsonNames(array: JSONArray?): List<String> {
-        if (array == null) return emptyList()
-        return (0 until array.length()).map { array.optString(it).removePrefix("/") }
-    }
-
     override fun handle(json: JSONObject) {
         json.optString("session_id").takeIf { it.isNotEmpty() && it != "default" }?.let { sessionId = it }
-        // Mensagens de subagentes trazem o id da ferramenta que os chamou: não são a resposta principal.
-        val fromSubagent = json.has("parent_tool_use_id") && !json.isNull("parent_tool_use_id")
+        // Mensagens de subagentes não são a resposta principal (ver ClaudeParse.isSubagent).
+        val fromSubagent = ClaudeParse.isSubagent(json)
         when (json.optString("type")) {
             "system" -> when (json.optString("subtype")) {
                 "init" -> {
                     model = json.optString("model").ifEmpty { null }
-                    if (json.optJSONArray("slash_commands") != null) commands = claudeCommands(json)
+                    // Comandos "/" que o Claude anunciou (sem os de terminal e os internos).
+                    if (ClaudeParse.announcesCommands(json)) {
+                        commands = ClaudeParse.commandNames(json).map { SlashCommand(it, "") }
+                    }
                     changed()
                 }
                 // A conversa foi compactada: o uso volta a ser medido no próximo turno.
@@ -364,30 +349,23 @@ class ChatEngine(
                 endStreaming()
                 val cancelled = cancelling
                 cancelling = false
-                val failed = json.optBoolean("is_error")
-                val subtype = json.optString("subtype")
-                // Turno parado pela própria pessoa: o CLI manda error_during_execution, que não é erro para mostrar.
-                // Outro erro que chegue durante o Parar (API, rede, login) continua aparecendo.
-                val stoppedByUser = cancelled && subtype == "error_during_execution"
-                if (failed && !stoppedByUser) {
-                    val result = json.optString("result")
-                    val text = result.ifEmpty { subtype }
-                    if (Regex("login|log in|auth|api key|credential", RegexOption.IGNORE_CASE).containsMatchIn(text)) {
+                // Parada pelo usuário (error_during_execution) não aparece; outro erro durante o Parar, sim.
+                val outcome = ClaudeParse.resultOutcome(json, cancelled)
+                when (outcome) {
+                    ResultOutcome.Ok, ResultOutcome.Ignored -> Unit
+                    ResultOutcome.LoginRequired -> {
                         // Sem login: o cartão leva à tela do Claude, onde o login acontece.
                         if (items.none { it is ChatItem.Login && it.state == ChatItem.Login.State.WAITING }) {
                             add(ChatItem.Login(listOf(AuthOption("screen", "", "", AuthOption.Kind.AGENT_SCREEN))))
                         }
-                    } else if (result.isEmpty()) {
-                        // Sem texto do agente: o subtipo (ex.: error_max_turns) vira mensagem amigável.
-                        add(errorBySubtype(subtype))
-                    } else {
-                        add(ChatItem.Info(friendlyError(result), isError = true))
                     }
+                    is ResultOutcome.ErrorBySubtype -> add(errorBySubtype(outcome.subtype))
+                    is ResultOutcome.ErrorWithText -> add(ChatItem.Info(friendlyError(outcome.text), isError = true))
                 }
                 updateWindow(json.optJSONObject("modelUsage"))
                 // Turno com erro (inclusive login): a fila não segue sozinha, a pessoa revisa antes.
                 // O erro de um turno que a pessoa mesma parou não conta: a fila já foi descartada no Parar.
-                if (failed && !cancelled) dropQueue()
+                if (!cancelled && outcome != ResultOutcome.Ok) dropQueue()
                 changed()
                 // Com mensagem na fila, o turno continua (busy segue true); o aviso de fim só sai no último.
                 sendQueued()
@@ -410,26 +388,11 @@ class ChatEngine(
         changed()
     }
 
-    /**
-     * Monta a lista de tarefas em segundo plano a partir do sinal do CLI (null = nenhuma). Ignora as
-     * entradas `ambient` e mostra só as de cima: a que está dentro de outra tarefa já é parte dela.
-     * Mantém o que o agente fazia (activity) quando a tarefa continua na lista.
-     */
+    /** Troca a lista de tarefas em segundo plano pelo sinal do CLI (regras em [ClaudeParse.backgroundTasks]). */
     private fun updateBackground(tasks: JSONArray?) {
-        val live = tasks?.let { array -> (0 until array.length()).mapNotNull { array.optJSONObject(it) } }
-            .orEmpty()
-            .filter { !it.optBoolean("ambient") }
-        val ids = live.map { it.optString("task_id") }.toSet()
-        val previous = background.associateBy { it.id }
-        background = live
-            .filter { task ->
-                val parent = task.optString("parent_task_id")
-                parent.isEmpty() || parent !in ids
-            }
-            .map { task ->
-                val id = task.optString("task_id")
-                BackgroundTask(id, task.optString("description"), previous[id]?.activity)
-            }
+        val previous = background.associate { it.id to it.activity }
+        background = ClaudeParse.backgroundTasks(tasks, previous)
+            .map { BackgroundTask(it.id, it.description, it.activity) }
     }
 
     /** O que uma tarefa em segundo plano está fazendo agora (task_progress). Ignorada se não está na lista. */
@@ -453,8 +416,7 @@ class ChatEngine(
      */
     private fun updateUsage(usage: JSONObject?) {
         usage ?: return
-        val used = usage.optLong("input_tokens") + usage.optLong("cache_creation_input_tokens") +
-            usage.optLong("cache_read_input_tokens") + usage.optLong("output_tokens")
+        val used = ClaudeParse.contextTokens(usage)
         if (used <= 0) return
         val size = contextWindow.takeIf { it > 0 } ?: if (model?.contains("[1m]") == true) 1_000_000L else 200_000L
         contextUsage = ContextUsage(used, size)
@@ -464,8 +426,7 @@ class ChatEngine(
     /** O "result" traz a janela de cada modelo usado: guarda a maior e recalcula com o uso atual. */
     private fun updateWindow(modelUsage: JSONObject?) {
         modelUsage ?: return
-        val largest = modelUsage.keys().asSequence()
-            .maxOfOrNull { modelUsage.optJSONObject(it)?.optLong("contextWindow") ?: 0L } ?: 0L
+        val largest = ClaudeParse.largestWindow(modelUsage)
         if (largest <= 0) return
         contextWindow = largest
         contextUsage?.let { contextUsage = ContextUsage(it.used, largest) }
@@ -511,34 +472,31 @@ class ChatEngine(
     }
 
     private fun handleAssistant(message: JSONObject?, fromSubagent: Boolean) {
-        val content = message?.optJSONArray("content") ?: return
+        val blocks = ClaudeParse.assistantBlocks(message) ?: return
         val text = StringBuilder()
-        for (i in 0 until content.length()) {
-            val block = content.optJSONObject(i) ?: continue
-            when (block.optString("type")) {
-                "text" -> text.append(block.optString("text"))
-                "thinking" -> {
+        for (block in blocks) {
+            when (block) {
+                is AssistantBlock.Text -> text.append(block.text)
+                is AssistantBlock.Thinking -> {
                     // Bloco redigido vem vazio: não há o que mostrar.
-                    val thinking = block.optString("thinking")
-                    if (thinking.isNotBlank() && !fromSubagent) {
+                    if (block.text.isNotBlank() && !fromSubagent) {
                         // Se a resposta já começou a aparecer (streaming), o raciocínio entra antes dela.
                         val at = draft?.let { items.indexOf(it) } ?: -1
-                        if (at >= 0) items.add(at, ChatItem.Thinking(thinking)) else items += ChatItem.Thinking(thinking)
+                        if (at >= 0) items.add(at, ChatItem.Thinking(block.text)) else items += ChatItem.Thinking(block.text)
                     }
                 }
-                "tool_use" -> {
-                    val id = block.optString("id")
-                    if (block.optString("name") == TODO_TOOL) {
+                is AssistantBlock.ToolUse -> {
+                    if (block.name == TODO_TOOL) {
                         // A lista de tarefas de um subagente não substitui a da conversa.
-                        if (!fromSubagent) updatePlan(todoEntries(block.optJSONObject("input")))
+                        if (!fromSubagent) updatePlan(todoEntries(block.input))
                         continue
                     }
-                    if (tools.containsKey(id)) continue
-                    val tool = ChatItem.Tool(id, block.optString("name"), ToolText.summary(block.optString("name"), block.optJSONObject("input")))
+                    if (tools.containsKey(block.id)) continue
+                    val tool = ChatItem.Tool(block.id, block.name, ToolText.summary(block.name, block.input))
                     // O nome do Claude já é a ferramenta ("Bash", "Read"): serve para as duas coisas.
-                    tool.toolName = block.optString("name")
+                    tool.toolName = block.name
                     tool.mark(ToolState.PENDING, SystemClock.elapsedRealtime())
-                    tools[id] = tool
+                    tools[block.id] = tool
                     items += tool
                 }
             }
@@ -564,13 +522,11 @@ class ChatEngine(
     }
 
     private fun handleToolResults(message: JSONObject?) {
-        val content = message?.opt("content") as? JSONArray ?: return
-        for (i in 0 until content.length()) {
-            val block = content.optJSONObject(i) ?: continue
-            if (block.optString("type") != "tool_result") continue
-            tools[block.optString("tool_use_id")]?.let {
-                it.mark(if (block.optBoolean("is_error")) ToolState.FAILED else ToolState.DONE, SystemClock.elapsedRealtime())
-                it.output = ToolOutput.fromClaude(block.opt("content"))
+        val results = ClaudeParse.toolResults(message) ?: return
+        for (result in results) {
+            tools[result.toolUseId]?.let {
+                it.mark(if (result.isError) ToolState.FAILED else ToolState.DONE, SystemClock.elapsedRealtime())
+                it.output = ToolOutput.fromClaude(result.content)
             }
         }
         changed()
@@ -592,16 +548,19 @@ class ChatEngine(
     }
 
     private fun handleControlRequest(json: JSONObject) {
-        val requestId = json.optString("request_id")
-        val request = json.optJSONObject("request") ?: return
-        if (request.optString("subtype") != "can_use_tool") {
+        when (val request = ClaudeParse.controlRequest(json) ?: return) {
             // Pedidos que este app não usa: responde com erro para o Claude seguir.
-            send(JSONObject().put("type", "control_response").put("response",
-                JSONObject().put("subtype", "error").put("request_id", requestId).put("error", "não suportado")))
-            return
+            is ControlRequest.Unsupported -> send(JSONObject().put("type", "control_response").put("response",
+                JSONObject().put("subtype", "error").put("request_id", request.requestId).put("error", "não suportado")))
+            is ControlRequest.CanUseTool -> askPermission(request)
         }
-        val toolName = request.optString("tool_name")
-        val input = request.optJSONObject("input") ?: JSONObject()
+    }
+
+    /** Pedido de permissão de uma ferramenta: cartão, ou resposta direta se o usuário já liberou sempre. */
+    private fun askPermission(request: ControlRequest.CanUseTool) {
+        val requestId = request.requestId
+        val toolName = request.toolName
+        val input = request.input
         // Perguntas e plano têm cartão próprio; nunca são aprovados sozinhos.
         if (toolName == QUESTION_TOOL) {
             val questions = parseQuestions(input)
@@ -638,7 +597,7 @@ class ChatEngine(
         }
         // O resumo é sempre o comando ou caminho; a descrição do agente vai como texto extra.
         val summary = ToolText.summary(toolName, input, limit = 4000)
-        val detail = request.optString("description").takeIf { it.isNotEmpty() && it != summary }.orEmpty()
+        val detail = request.description.takeIf { it.isNotEmpty() && it != summary }.orEmpty()
         add(
             ChatItem.Permission(
                 requestId, ToolText.label(context, toolName), summary,
