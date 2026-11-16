@@ -157,6 +157,8 @@ class AcpChat(
         // Processo novo: há agentes que numeram as ações de novo ("call_1"); uma ação nova não pode
         // atualizar a antiga de mesmo id (as antigas já foram encerradas em settleItems).
         tools.clear()
+        pendingRounds.clear()
+        stuckNoticed.clear()
         waitAsyncIds.clear()
         autoAnswered.clear()
         // A conversa pedida já é a deste chat: se o agente falhar ao subir, o próximo envio tenta
@@ -1017,6 +1019,42 @@ class AcpChat(
      * Põe na tela só o que é novo do replay (ver [AcpCatchUp.plan]). Os updates voltam para handleUpdate como
      * se chegassem agora. Com mensagem ou ação nova, avisa o fim de resposta.
      */
+    /** Quantos alcances seguidos cada ação ficou "pendente" (esperando confirmação que o app não recebeu). */
+    private val pendingRounds = HashMap<String, Int>()
+    /** Ações que já geraram o aviso "espera sua aprovação" (um por ação). */
+    private val stuckNoticed = HashSet<String>()
+
+    /**
+     * O agy, acordado fora de turno (fim de um comando em segundo plano), pode pedir aprovação de uma ação. O pedido
+     * (session/request_permission) só viaja pelo canal de atualizações, que está fechado: o app vê a ação pendente
+     * no alcance, sem cartão de permissão, e o agente espera para sempre. Avisa e oferece Continuar (uma mensagem
+     * abre o canal e o pedido chega como cartão normal); com o Aprovar tudo ligado, continua sozinho.
+     */
+    private fun noteStuckTools() {
+        val awaiting = items.filterIsInstance<ChatItem.Tool>().filter { it.state == ToolState.PENDING }
+        pendingRounds.keys.retainAll(awaiting.map { it.id }.toSet())
+        val permissionOpen = items.any { it is ChatItem.Permission && it.chosen == null }
+        for (tool in awaiting) {
+            val rounds = (pendingRounds[tool.id] ?: 0) + 1
+            pendingRounds[tool.id] = rounds
+            if (rounds < STUCK_ROUNDS || permissionOpen || !stuckNoticed.add(tool.id)) continue
+            val what = tool.summary.ifBlank { tool.name }.take(120)
+            if (autoApprove) {
+                add(ChatItem.Info(context.getString(R.string.chat_stuck_auto, what)))
+                continueStuck()
+            } else {
+                add(ChatItem.Info(context.getString(R.string.chat_stuck_waiting, what), continueAgent = true))
+                attention(ChatAttention.PERMISSION)
+            }
+            return
+        }
+    }
+
+    override fun continueStuck() {
+        if (!running || !ready || busy) return
+        sendMessage(context.getString(R.string.chat_continue_message))
+    }
+
     private fun applyCatchUp(replay: List<JSONObject>) {
         // As ações da tela entram no mapa de ações: sem isso, um update delas criaria cartão duplicado.
         for (tool in items.filterIsInstance<ChatItem.Tool>()) tools.putIfAbsent(tool.id, tool)
@@ -1025,6 +1063,7 @@ class AcpChat(
         val plan = AcpCatchUp.plan(replay, known, texts)
         for (update in plan.toApply) handleUpdate(JSONObject().put("update", update))
         finishDrafts()
+        noteStuckTools()
         val now = SystemClock.elapsedRealtime()
         quietRounds = if (plan.hasNew) 0 else quietRounds + 1
         // Ação vigiada nova (do alcance): a vigia segue, no nível dela.
@@ -1369,6 +1408,8 @@ class AcpChat(
         )
         /** Id do Codex na receita: só ele lê os limites do plano pelas sessões. */
         const val CODEX_ID = "codex"
+        /** Alcances seguidos com a ação pendente antes de avisar que ela espera aprovação. */
+        const val STUCK_ROUNDS = 2
         /** Id do OpenCode na receita: lê os limites do Go pela API do próprio opencode. */
         const val OPENCODE_ID = "opencode"
         /** Id do Antigravity (agy) na receita: precisa do alcance depois do turno (ver armCatchUpAfterTurn). */

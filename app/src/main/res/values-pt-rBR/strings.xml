@@ -549,6 +549,10 @@
     <string name="chat_acp_free_limit">O limite de uso grátis acabou por agora. Para continuar: troque de modelo, conecte uma chave sua em Ajustes do chat › Contas e chaves ou assine o OpenCode Go.</string>
     <string name="chat_acp_go_limit">O limite de uso do OpenCode Go acabou por agora. Espere renovar, troque de modelo ou conecte outra chave em Ajustes do chat › Contas e chaves.</string>
     <string name="chat_acp_quota_limit">A cota deste modelo acabou por agora. Troque de modelo (alguns têm cotas separadas) ou espere renovar.</string>
+    <string name="chat_stuck_waiting">O agente espera sua aprovação para rodar: %1$s. O pedido não chegou ao app.</string>
+    <string name="chat_stuck_auto">O agente esperava para rodar: %1$s. Continuando sozinho (Aprovar tudo está ligado).</string>
+    <string name="chat_continue">Continuar</string>
+    <string name="chat_continue_message">Continue, por favor.</string>
     <string name="chat_change_model">Trocar de modelo</string>
     <string name="chat_acp_go_link">Conhecer o OpenCode Go</string>
     <string name="chat_acp_error">Erro do agente.</string>

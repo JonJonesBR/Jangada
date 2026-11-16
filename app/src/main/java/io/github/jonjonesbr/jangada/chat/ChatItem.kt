@@ -128,6 +128,8 @@ sealed class ChatItem {
         val urlLabel: String? = null,
         /** Mostra o link "Trocar de modelo" (cota do modelo esgotada). */
         val changeModel: Boolean = false,
+        /** Mostra o link "Continuar" (o agente espera algo que o app não recebeu; ver [AgentChat.continueStuck]). */
+        val continueAgent: Boolean = false,
     ) : ChatItem()
     /** Raciocínio do agente: sempre guardado na conversa; a tela decide se mostra (ver [ChatView]). */
     class Thinking(var text: String) : ChatItem()
@@ -308,6 +310,8 @@ interface AgentChat {
     val childAgents: ChildSummary? get() = null
     /** Para uma tarefa em segundo plano (ver [background]). Sem efeito se o agente não sabe parar tarefas. */
     fun stopBackground(taskId: String) {}
+    /** Cutuca o agente que ficou esperando uma aprovação fora de turno (agy): manda uma mensagem curta. Sem efeito nos outros. */
+    fun continueStuck() {}
     /** O agente está recarregando a conversa anterior (session/load): ainda não aceita turno; mensagens ficam na fila. */
     val reloading: Boolean get() = false
     /** Dormindo: o agente foi fechado de propósito para liberar memória, e a próxima mensagem o acorda. */

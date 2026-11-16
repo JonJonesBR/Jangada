@@ -1405,6 +1405,11 @@ class ChatActivity : JangadaActivity() {
     }
 
     /** Toque no chip de modelo: no Claude, as linhas Modelo e Esforço; no ACP, as opções que o agente oferece. */
+    /** Link "Continuar" do aviso de ação esperando aprovação (agy fora de turno). */
+    internal fun continueAgent() {
+        engine?.continueStuck()
+    }
+
     internal fun showModelSheet() {
         if (isClaude) {
             Sheet(this)
