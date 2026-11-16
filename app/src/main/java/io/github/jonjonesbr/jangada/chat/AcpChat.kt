@@ -115,6 +115,33 @@ class AcpChat(
     private var exitShown = false
 
     /**
+     * Vigia do alcance (só o agy, ver armCatchUpAfterTurn): até essa hora (elapsedRealtime) a sessão é
+     * recarregada de tempos em tempos para trazer o que o agente fez sozinho depois do turno. 0 = desarmada.
+     */
+    private var watchUntilMs = 0L
+    /** Hora em que a vigia foi armada: os primeiros minutos têm intervalo menor. */
+    private var watchArmedAtMs = 0L
+    /** O próximo disparo da vigia (um só; [scheduleWatch] troca o anterior). */
+    private var watchTick: Runnable? = null
+    /** Alcance em andamento: o load foi pedido e o replay é guardado, sem ir para a tela. */
+    private var catchUpActive = false
+    /** O load do alcance passou do tempo limite e ainda não respondeu: nenhum alcance novo até ele responder. */
+    private var catchUpStale = false
+    /** Updates do replay do alcance em andamento (ver applyCatchUp). */
+    private val catchUpBuffer = mutableListOf<JSONObject>()
+    private var catchUpTimeout: Runnable? = null
+    /** Ações criadas no turno atual; no fim do turno, decidem se a vigia arma (ver armCatchUpAfterTurn). */
+    private val turnTools = mutableListOf<ChatItem.Tool>()
+    /** Ids das ações cujo rawInput trouxe WaitMsBeforeAsync (ver AcpCatchUp.levelOf); limpo ao iniciar o agente. */
+    private val waitAsyncIds = HashSet<String>()
+    /** Nível atual da vigia (quando armada). */
+    private var watchLevel = AcpCatchUp.Level.NONE
+    /** Alcances seguidos sem nada novo; três assim (e nenhuma ação vigiada aberta) desarmam a vigia. */
+    private var quietRounds = 0
+    /** Prazo do sono por agendamento do agente (schedule); a vigia não mexe nele ao desarmar. */
+    private var scheduleKeepUntilMs = 0L
+
+    /**
      * A conversa já está na tela (itens guardados): o replay do `session/load` é ignorado, para não
      * duplicar nem refazer na tela tudo o que já foi conversado. O agente ainda recarrega o contexto.
      */
@@ -130,6 +157,7 @@ class AcpChat(
         // Processo novo: há agentes que numeram as ações de novo ("call_1"); uma ação nova não pode
         // atualizar a antiga de mesmo id (as antigas já foram encerradas em settleItems).
         tools.clear()
+        waitAsyncIds.clear()
         autoAnswered.clear()
         // A conversa pedida já é a deste chat: se o agente falhar ao subir, o próximo envio tenta
         // recarregar a mesma, em vez de abrir uma nova sem aviso (como no ChatEngine).
@@ -461,6 +489,8 @@ class AcpChat(
 
     override fun sendMessage(text: String, attachments: List<Attachment>) {
         if (!running) start(resume = sessionId)
+        // Mensagem nova: o turno cuida de si (a vigia volta a ser armada no fim dele).
+        disarmCatchUp()
         val item = ChatItem.User(text, attachments.map { it.name })
         add(item)
         // Turno em andamento (ou agente ainda subindo): a mensagem espera na fila, sem um segundo session/prompt.
@@ -516,6 +546,7 @@ class AcpChat(
         }
         draft = null
         thoughtDraft = null
+        turnTools.clear()
         request("session/prompt", JSONObject().put("sessionId", id).put("prompt", blocks)) { result, error ->
             val cancelled = cancelling
             cancelling = false
@@ -556,6 +587,8 @@ class AcpChat(
             if ((error != null || refused) && !cancelled) dropQueue()
             // Turno que acabou bem com o contexto cheio: o /compact entra na fila antes da próxima mensagem.
             if (!cancelled && error == null && !refused) autoCompactIfDue()
+            // Turno que acabou bem, sem parar o agente: se ficou ação em segundo plano, a vigia do alcance arma.
+            if (!cancelled && error == null && !refused && !AcpParse.cancelled(result)) armCatchUpAfterTurn()
             changed()
             // O turno acabou: a próxima mensagem da fila (se houver) vai agora.
             sendNext()
@@ -748,6 +781,14 @@ class AcpChat(
         pending.clear()
         ready = false
         loadingHistory = false
+        // Parou: a vigia e o alcance em andamento acabam (o load pendente recebe a falha abaixo, sem efeito).
+        disarmCatchUp()
+        // O agendamento do agente morre com o processo.
+        scheduleKeepUntilMs = 0L
+        catchUpActive = false
+        catchUpStale = false
+        catchUpBuffer.clear()
+        clearCatchUpTimeout()
         draft = null
         userDraft = null
         thoughtDraft = null
@@ -767,7 +808,8 @@ class AcpChat(
         exitShown = true
         when {
             // Agente que fecha logo no início reclamando de login: mostra o cartão de login.
-            !ready && code != 0 && Regex("auth|login|sign.?in|credential", RegexOption.IGNORE_CASE).containsMatchIn(stderr) ->
+            // Durante o alcance (ou o load atrasado) o agente não está pronto por causa do alcance, não por login.
+            !ready && !catchUpActive && !catchUpStale && code != 0 && Regex("auth|login|sign.?in|credential", RegexOption.IGNORE_CASE).containsMatchIn(stderr) ->
                 requireLogin(sessionId)
             // O cartão de login já avisou: o erro de saída não repete.
             items.lastOrNull() is ChatItem.Login -> Unit
@@ -775,6 +817,226 @@ class AcpChat(
             code == 0 && midTurn -> add(ChatItem.Info(midTurnMessage()))
             else -> add(ChatItem.Info(exitMessage(code), isError = code != 0, details = detailsOf(stderr).takeIf { code != 0 }))
         }
+    }
+
+    // ---- Alcance do agy (vigia depois do turno) ----
+
+    /**
+     * Fim de um turno bem-sucedido: se alguma ação do turno (comando ou subagente) ainda não terminou, arma a
+     * vigia. Ação que já terminou no turno não arma. O agy pode terminar essas ações depois do turno, e o canal
+     * de atualizações já fechou: só o load da sessão as traz de volta.
+     */
+    private fun armCatchUpAfterTurn() {
+        if (agentId != AGY_ID || !canLoad || !running) return
+        val level = AcpCatchUp.turnLevel(turnTools.map { levelOf(it) })
+        if (level == AcpCatchUp.Level.NONE) return
+        // Registro para conferir no logcat: só o nível e a ferramenta (a saída do comando pode ter segredos).
+        val who = turnTools.firstOrNull { levelOf(it) == level }
+        Log.i(TAG, "Alcance armado: nível=$level, ação=${who?.toolName}")
+        armWatch(SystemClock.elapsedRealtime(), level)
+    }
+
+    /** Nível de uma ação do turno (ver AcpCatchUp.levelOf). */
+    private fun levelOf(tool: ChatItem.Tool): AcpCatchUp.Level = AcpCatchUp.levelOf(tool, tool.id in waitAsyncIds)
+
+    /**
+     * Arma ou estende a vigia no [level]. Nível forte sobrepõe o fraco (a janela e o intervalo passam a ser
+     * os dele); a janela só cresce. O chat não dorme enquanto a vigia estiver armada.
+     */
+    private fun armWatch(now: Long, level: AcpCatchUp.Level) {
+        if (watchUntilMs == 0L) {
+            watchArmedAtMs = now
+            quietRounds = 0
+            watchLevel = level
+        } else if (level == AcpCatchUp.Level.STRONG && watchLevel != AcpCatchUp.Level.STRONG) {
+            watchLevel = AcpCatchUp.Level.STRONG
+            watchArmedAtMs = now
+        }
+        extendWatch(now, if (watchLevel == AcpCatchUp.Level.STRONG) WATCH_WINDOW_MS else WEAK_WINDOW_MS)
+        if (watchTick == null) scheduleWatch(now)
+    }
+
+    /** Prorroga a vigia até [window] depois de [now]; o chat não dorme enquanto ela estiver armada. */
+    private fun extendWatch(now: Long, window: Long) {
+        watchUntilMs = now + window
+        if (watchUntilMs > keepAwakeUntilMs) keepAwakeUntilMs = watchUntilMs
+    }
+
+    /** Guarda o ids das ações que o agy mandou em segundo plano (WaitMsBeforeAsync no rawInput). */
+    private fun noteWaitAsync(tool: ChatItem.Tool, update: JSONObject) {
+        if (update.optJSONObject("rawInput")?.has(WAIT_ASYNC_KEY) == true) waitAsyncIds += tool.id
+    }
+
+    /**
+     * Agenda o próximo disparo. Nível fraco: intervalo fixo e curto. Forte: mais rápido nos primeiros minutos.
+     * Troca o agendado, se houver (um só).
+     */
+    private fun scheduleWatch(now: Long) {
+        watchTick?.let { main.removeCallbacks(it) }
+        val delay = when {
+            watchLevel == AcpCatchUp.Level.WEAK -> WATCH_FAST_INTERVAL_MS
+            now - watchArmedAtMs < WATCH_FAST_MS -> WATCH_FAST_INTERVAL_MS
+            else -> WATCH_SLOW_INTERVAL_MS
+        }
+        val tick = Runnable {
+            watchTick = null
+            watchOnce()
+        }
+        watchTick = tick
+        main.postDelayed(tick, delay)
+    }
+
+    /**
+     * Desarma a vigia. O sono volta a valer só até o prazo do agendamento do agente (que é guardado à parte):
+     * o prazo da vigia não sobra nele.
+     */
+    private fun disarmCatchUp() {
+        watchUntilMs = 0L
+        watchLevel = AcpCatchUp.Level.NONE
+        watchTick?.let { main.removeCallbacks(it) }
+        watchTick = null
+        keepAwakeUntilMs = scheduleKeepUntilMs
+    }
+
+    /**
+     * Um disparo da vigia: parou ou expirou, encerra; ocupado ou ainda não pronto, reprograma; senão, faz o alcance.
+     */
+    private fun watchOnce() {
+        if (watchUntilMs == 0L) return
+        val now = SystemClock.elapsedRealtime()
+        if (!running || now >= watchUntilMs) {
+            disarmCatchUp()
+            return
+        }
+        if (busy || !ready || loadingHistory || catchUpActive || catchUpStale || sessionId == null) {
+            scheduleWatch(now)
+            return
+        }
+        startCatchUp()
+    }
+
+    /**
+     * Recarrega a sessão em silêncio (sem "Recarregando conversa…"). Enquanto isso, o envio espera
+     * (ready = false): a mensagem entra na fila e sai ao fim do alcance.
+     */
+    private fun startCatchUp() {
+        val id = sessionId ?: return
+        catchUpActive = true
+        catchUpBuffer.clear()
+        ready = false
+        // Load que não responde: o chat segue sem erro visível (ver catchUpTimedOut).
+        val timeout = Runnable {
+            catchUpTimeout = null
+            catchUpTimedOut()
+        }
+        catchUpTimeout = timeout
+        main.postDelayed(timeout, CATCH_UP_TIMEOUT_MS)
+        request("session/load", JSONObject().put("cwd", cwd).put("mcpServers", JSONArray()).put("sessionId", id)) { result, error ->
+            onCatchUpLoaded(result, error)
+        }
+    }
+
+    /** Resposta do load do alcance: aplica o que é novo; erro (inclusive de login) não aparece, só desarma a vigia. */
+    private fun onCatchUpLoaded(result: JSONObject?, error: JSONObject?) {
+        if (!catchUpActive) {
+            // Resposta atrasada: o replay dela já foi descartado; agora o envio volta.
+            if (catchUpStale) {
+                catchUpStale = false
+                clearCatchUpTimeout()
+                if (error == null) result?.let { parseConfig(it) }
+                resumeAfterCatchUp()
+            }
+            return
+        }
+        catchUpActive = false
+        clearCatchUpTimeout()
+        val replay = catchUpBuffer.toList()
+        catchUpBuffer.clear()
+        // Parou no meio: onStopped já cuidou do estado.
+        if (isStopped(error)) return
+        if (error != null) {
+            disarmCatchUp()
+            resumeAfterCatchUp()
+            return
+        }
+        result?.let { parseConfig(it) }
+        applyCatchUp(replay)
+        resumeAfterCatchUp()
+    }
+
+    /**
+     * Tempo limite do load do alcance: sem erro visível, o envio segue parado (ready = false) e a mensagem espera
+     * na fila até a resposta atrasada. O replay que chegar depois é descartado (handleUpdate). Sem resposta até o
+     * limite final, o agente dorme em silêncio e a próxima mensagem o religa na mesma sessão.
+     */
+    private fun catchUpTimedOut() {
+        if (!catchUpActive) return
+        catchUpActive = false
+        catchUpBuffer.clear()
+        catchUpStale = true
+        val limit = Runnable {
+            catchUpTimeout = null
+            catchUpLimitReached()
+        }
+        catchUpTimeout = limit
+        main.postDelayed(limit, CATCH_UP_LIMIT_MS - CATCH_UP_TIMEOUT_MS)
+    }
+
+    /**
+     * Limite final do load atrasado: dorme em silêncio (como o sleep, sem as recusas dele). Um agente que não
+     * responde ao load há 2 min está preso; mensagens que esperavam na fila ficam na tela para reenviar
+     * (como quando o agente cai no meio de uma resposta).
+     */
+    private fun catchUpLimitReached() {
+        if (!catchUpStale) return
+        catchUpStale = false
+        putToSleep()
+    }
+
+    private fun clearCatchUpTimeout() {
+        catchUpTimeout?.let { main.removeCallbacks(it) }
+        catchUpTimeout = null
+    }
+
+    /** Fim do alcance (com ou sem novidade): libera o envio, segue a fila e reprograma a vigia se ainda armada. */
+    private fun resumeAfterCatchUp() {
+        ready = true
+        changed()
+        sendNext()
+        if (watchUntilMs != 0L && watchTick == null) scheduleWatch(SystemClock.elapsedRealtime())
+    }
+
+    /**
+     * Põe na tela só o que é novo do replay (ver [AcpCatchUp.plan]). Os updates voltam para handleUpdate como
+     * se chegassem agora. Com mensagem ou ação nova, avisa o fim de resposta.
+     */
+    private fun applyCatchUp(replay: List<JSONObject>) {
+        // As ações da tela entram no mapa de ações: sem isso, um update delas criaria cartão duplicado.
+        for (tool in items.filterIsInstance<ChatItem.Tool>()) tools.putIfAbsent(tool.id, tool)
+        val known = tools.keys.toSet()
+        val texts = items.filterIsInstance<ChatItem.Assistant>().map { it.text }
+        val plan = AcpCatchUp.plan(replay, known, texts)
+        for (update in plan.toApply) handleUpdate(JSONObject().put("update", update))
+        finishDrafts()
+        val now = SystemClock.elapsedRealtime()
+        quietRounds = if (plan.hasNew) 0 else quietRounds + 1
+        // Ação vigiada nova (do alcance): a vigia segue, no nível dela.
+        val newLevel = AcpCatchUp.turnLevel(turnTools.filter { it.id in plan.newToolIds }.map { levelOf(it) })
+        if (newLevel != AcpCatchUp.Level.NONE && watchUntilMs != 0L) armWatch(now, newLevel)
+        val strongOpen = turnTools.any { levelOf(it) == AcpCatchUp.Level.STRONG && !it.done }
+        val anyOpen = turnTools.any { levelOf(it) != AcpCatchUp.Level.NONE && !it.done }
+        when (watchLevel) {
+            // Forte: só desarma antes do prazo com mensagem nova do agente e a ação forte concluída ou ausente,
+            // sem outra ação vigiada nova. Parada e erro desarmam em outro lugar.
+            AcpCatchUp.Level.STRONG ->
+                if (plan.newMessages && !strongOpen && newLevel == AcpCatchUp.Level.NONE) disarmCatchUp()
+            // Fraco: alcances seguidos sem novidade e nada aberto desarmam antes da janela curta.
+            AcpCatchUp.Level.WEAK ->
+                if (quietRounds >= QUIET_ROUNDS && !anyOpen) disarmCatchUp()
+            AcpCatchUp.Level.NONE -> Unit
+        }
+        // Com mensagens na fila, o aviso de fim fica para quando a resposta enfileirada também acabar.
+        if (plan.hasNew && queue.isEmpty()) attention(ChatAttention.FINISHED)
     }
 
     // ---- Mensagens do agente ----
@@ -854,6 +1116,14 @@ class AcpChat(
     private fun handleUpdate(params: JSONObject?) {
         val update = params?.optJSONObject("update") ?: return
         val kind = update.optString("sessionUpdate")
+        // Alcance em andamento: o replay é guardado para ser comparado com a tela (ver applyCatchUp).
+        if (catchUpActive && kind in REPLAYED) {
+            catchUpBuffer.add(update)
+            return
+        }
+        // Replay tardio de um alcance que já passou do tempo limite: não pode repetir a conversa na tela.
+        // (Sem envio enquanto o load atrasado não responde, nenhum update do replay é ao vivo: descarta sempre.)
+        if (catchUpStale && kind in REPLAYED) return
         // Replay da conversa que já está na tela: só o que muda o estado do agente (comandos, opções, contexto) vale.
         if (loadingHistory && skipReplay && kind in REPLAYED) return
         when (kind) {
@@ -916,11 +1186,13 @@ class AcpChat(
                     it.mark(ToolState.PENDING, SystemClock.elapsedRealtime())
                     tools[id] = it
                     items += it
+                    turnTools += it
                 }
                 ToolOutput.fromAcp(update)?.let { tool.output = it }
                 applyStatus(tool, update)
                 applySubagent(tool, update)
                 noteSchedule(tool, update)
+                noteWaitAsync(tool, update)
                 changed()
             }
             "tool_call_update" -> {
@@ -933,6 +1205,7 @@ class AcpChat(
                 applyStatus(tool, update)
                 applySubagent(tool, update)
                 noteSchedule(tool, update)
+                noteWaitAsync(tool, update)
                 changed()
             }
             "plan" -> {
@@ -968,6 +1241,8 @@ class AcpChat(
         params ?: return
         // Recarga da conversa que já está na tela: o replay não refaz os cartões.
         if (loadingHistory && skipReplay) return
+        // Alcance em andamento: as sessões filhas não entram no replay do agy (ignoradas, como no load).
+        if (catchUpActive) return
         val now = SystemClock.elapsedRealtime()
         val id = params.optString("childSessionId")
         val card = items.firstOrNull { it is ChatItem.Child && it.sessionId == id } as? ChatItem.Child
@@ -1012,6 +1287,7 @@ class AcpChat(
         if (seconds <= 0) return
         // Folga para o turno seguinte começar e terminar antes de o sono voltar a ser permitido.
         val until = SystemClock.elapsedRealtime() + seconds * 1000 + SCHEDULE_MARGIN_MS
+        if (until > scheduleKeepUntilMs) scheduleKeepUntilMs = until
         if (until > keepAwakeUntilMs) keepAwakeUntilMs = until
     }
 
@@ -1088,6 +1364,24 @@ class AcpChat(
         const val CODEX_ID = "codex"
         /** Id do OpenCode na receita: lê os limites do Go pela API do próprio opencode. */
         const val OPENCODE_ID = "opencode"
+        /** Id do Antigravity (agy) na receita: precisa do alcance depois do turno (ver armCatchUpAfterTurn). */
+        const val AGY_ID = "antigravity"
+        /** Vigia do alcance: quanto tempo depois do fim do turno ela segue (cada disparo recarrega a sessão). */
+        const val WATCH_WINDOW_MS = 60 * 60_000L
+        /** Janela curta (nível fraco): comando ou subagente já concluído, para o caso de o agy seguir rodando sem sinal. */
+        const val WEAK_WINDOW_MS = 2 * 60_000L
+        /** Chave do rawInput que mostra que o comando voltou antes de terminar (segue em segundo plano). */
+        const val WAIT_ASYNC_KEY = "WaitMsBeforeAsync"
+        /** Vigia: intervalo nos primeiros minutos, e depois dos primeiros minutos. */
+        const val WATCH_FAST_MS = 5 * 60_000L
+        const val WATCH_FAST_INTERVAL_MS = 15_000L
+        const val WATCH_SLOW_INTERVAL_MS = 45_000L
+        /** Tempo limite do load do alcance: sem resposta, o chat segue (o replay tardio é descartado). */
+        const val CATCH_UP_TIMEOUT_MS = 60_000L
+        /** Limite final do load atrasado: sem resposta até aqui, o agente dorme (a próxima mensagem o religa). */
+        const val CATCH_UP_LIMIT_MS = 120_000L
+        /** Alcances seguidos sem novidade (e sem ação vigiada aberta) que desarmam a vigia antes do prazo. */
+        const val QUIET_ROUNDS = 3
         /** Ferramentas do pai que abrem um subagente (o nome do agente filho vem no rawInput delas). */
         val SUBAGENT_TOOLS = setOf("subagent", "task")
         /** Folga depois do despertar agendado pelo agente, antes de o chat poder dormir. */

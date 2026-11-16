@@ -456,11 +456,16 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                     (item.state == ChatItem.Login.State.WAITING || item.state == ChatItem.Login.State.WORKING))
         }
         if (waiting) return false
+        putToSleep()
+        return true
+    }
+
+    /** Fecha o processo como em [sleep], sem as recusas dele (thread principal). A próxima mensagem o acorda. */
+    protected fun putToSleep() {
         asleep = true
         // Info normal (não é erro): stop() não acrescenta mensagem de saída, pois connection já não é a execução.
         add(ChatItem.Info(context.getString(R.string.chat_asleep)))
         stop()
-        return true
     }
 
     /** O que houve com o código de saída e o que fazer agora. O erro cru fica em [detailsOf]. */
