@@ -172,6 +172,7 @@
     <string name="chat_background_message">Stopping a task lets the agent know; it may reply about it. You can keep sending messages.</string>
     <string name="chat_background_stop_one">Stop: %1$s</string>
     <string name="chat_background_stop_all">Stop all</string>
+    <string name="chat_watching">The agent is still waiting on something in the background; the result shows up here on its own.</string>
     <string name="chat_background_tap">Tap to stop</string>
     <string name="chat_stop">Stop</string>
     <string name="chat_hint">Message Claude</string>

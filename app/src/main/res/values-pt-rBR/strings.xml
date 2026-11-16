@@ -170,6 +170,7 @@
     <string name="chat_background_message">Parar uma tarefa avisa o agente, que pode responder sobre ela. Você pode continuar mandando mensagens.</string>
     <string name="chat_background_stop_one">Parar: %1$s</string>
     <string name="chat_background_stop_all">Parar todos</string>
+    <string name="chat_watching">O agente segue esperando algo em segundo plano; o resultado aparece aqui sozinho.</string>
     <string name="chat_background_tap">Toque para parar</string>
     <string name="chat_stop">Parar</string>
     <string name="chat_hint">Mensagem para o Claude</string>

@@ -843,7 +843,11 @@ class AcpChat(
      * Arma ou estende a vigia no [level]. Nível forte sobrepõe o fraco (a janela e o intervalo passam a ser
      * os dele); a janela só cresce. O chat não dorme enquanto a vigia estiver armada.
      */
+    /** Vigia forte armada: a faixa de status mostra que o agente segue com algo em segundo plano. */
+    override val watching: Boolean get() = watchUntilMs != 0L && watchLevel == AcpCatchUp.Level.STRONG
+
     private fun armWatch(now: Long, level: AcpCatchUp.Level) {
+        val before = watching
         if (watchUntilMs == 0L) {
             watchArmedAtMs = now
             quietRounds = 0
@@ -854,6 +858,7 @@ class AcpChat(
         }
         extendWatch(now, if (watchLevel == AcpCatchUp.Level.STRONG) WATCH_WINDOW_MS else WEAK_WINDOW_MS)
         if (watchTick == null) scheduleWatch(now)
+        if (watching != before) changed()
     }
 
     /** Prorroga a vigia até [window] depois de [now]; o chat não dorme enquanto ela estiver armada. */
@@ -891,11 +896,13 @@ class AcpChat(
      * o prazo da vigia não sobra nele.
      */
     private fun disarmCatchUp() {
+        val was = watching
         watchUntilMs = 0L
         watchLevel = AcpCatchUp.Level.NONE
         watchTick?.let { main.removeCallbacks(it) }
         watchTick = null
         keepAwakeUntilMs = scheduleKeepUntilMs
+        if (was) changed()
     }
 
     /**

@@ -1123,6 +1123,7 @@ class ChatActivity : JangadaActivity() {
         val background = chat.background
         val children = chat.childAgents
         val runningChildren = children?.running ?: 0
+        val watching = chat.watching && chat.running
         val state = AgentStatus.of(
             items = chat.items.toList(),
             busy = chat.busy,
@@ -1134,21 +1135,23 @@ class ChatActivity : JangadaActivity() {
             now = SystemClock.elapsedRealtime(),
             stallMs = settings.chatStallSeconds * 1000L,
         )
-        status.visibility = if (state != AgentStatus.State.Idle || background.isNotEmpty() || runningChildren > 0) View.VISIBLE else View.GONE
+        status.visibility = if (state != AgentStatus.State.Idle || background.isNotEmpty() || runningChildren > 0 || watching) View.VISIBLE else View.GONE
         // Tocar na faixa só faz algo com tarefas em segundo plano (ver showBackgroundSheet).
         status.isClickable = background.isNotEmpty()
         // O relógio só gira se o agente está mesmo trabalhando: pedido de permissão, travamento ou queda
         // não podem dar a impressão de que algo anda (nem uma ação em andamento sem eventos, que é o travamento).
         val working = state is AgentStatus.State.Thinking || state is AgentStatus.State.Reloading ||
             (state is AgentStatus.State.Running && !state.stalled)
-        statusSpinner.visibility = if (working) View.VISIBLE else View.GONE
+        statusSpinner.visibility = if (working || watching) View.VISIBLE else View.GONE
         // O relógio só corre enquanto o tempo anda: ocioso ou com o agente perdido, ele para — mas
         // com subagente rodando ele segue, para o tempo dos cartões deles andar.
         val clock = (state != AgentStatus.State.Idle && state !is AgentStatus.State.Lost) || runningChildren > 0
         if (clock && resumed) startStatusClock() else stopStatusClock()
         // Parar interrompe o turno; com o agente perdido não há o que parar.
         stopButton.visibility = if (chat.busy && state !is AgentStatus.State.Lost) View.VISIBLE else View.GONE
-        val lines = statusLines(state, background, children)
+        val lines = statusLines(state, background, children).toMutableList()
+        // Turno acabou, mas o agente segue com algo em segundo plano: sem isso o chat parece parado.
+        if (watching && background.isEmpty()) lines += getString(R.string.chat_watching)
         statusText.maxLines = if (compactLayout) 1 else 3
         statusText.text = lines.joinToString(if (compactLayout) " · " else "\n")
     }

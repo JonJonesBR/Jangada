@@ -204,7 +204,7 @@ fun chatState(chat: AgentChat): ChatState {
         waiting -> ChatState.WAITING
         // Tarefas em segundo plano contam como trabalho, para não dormir nem parecer pronto.
         // Subagente rodando também: o turno do pai pode ter acabado enquanto ele continua.
-        chat.busy || chat.background.isNotEmpty() || (chat.childAgents?.running ?: 0) > 0 -> ChatState.WORKING
+        chat.busy || chat.watching || chat.background.isNotEmpty() || (chat.childAgents?.running ?: 0) > 0 -> ChatState.WORKING
         else -> ChatState.READY
     }
 }
@@ -302,6 +302,8 @@ interface AgentChat {
     val commands: List<SlashCommand> get() = emptyList()
     /** Tarefas que o agente deixou rodando em segundo plano (subagentes, comandos). Vazia se não há ou se o agente não informa. */
     val background: List<BackgroundTask> get() = emptyList()
+    /** O app está acompanhando em segundo plano o que o agente deixou rodando (agy: relê a sessão; ver AcpCatchUp). */
+    val watching: Boolean get() = false
     /** Subagentes da conversa (cartões próprios); null quando não há nenhum ou o agente não informa. */
     val childAgents: ChildSummary? get() = null
     /** Para uma tarefa em segundo plano (ver [background]). Sem efeito se o agente não sabe parar tarefas. */
