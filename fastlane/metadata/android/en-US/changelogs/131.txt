@@ -1,0 +1,1 @@
+Chat: when a model's quota runs out (429 error, common in agy), the notice now has a Change model link that opens the model picker.

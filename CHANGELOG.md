@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.25.0
+
+- Chat: quando a cota de um modelo acaba (erro 429, comum no agy, onde alguns modelos têm cota separada), o aviso explica e traz o link "Trocar de modelo", que abre o seletor.
+
 ## 1.24.0
 
 - Chat: o "Aprovar tudo" e o modo de permissão não se perdem mais quando o agente dorme ou é reiniciado. O modo do agy e dos outros agentes ACP fica guardado por agente, como o modelo.

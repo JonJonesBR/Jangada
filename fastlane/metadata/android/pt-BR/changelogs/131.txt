@@ -1,0 +1,1 @@
+Chat: quando a cota de um modelo acaba (erro 429, comum no agy), o aviso agora traz o link Trocar de modelo, que abre o seletor.
