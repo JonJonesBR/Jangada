@@ -20,7 +20,7 @@ internal object AcpParse {
     }
 
     /** Limite de uso do plano que acabou (OpenCode: free do Zen ou assinatura Go). */
-    enum class UsageLimit { FREE, GO }
+    enum class UsageLimit { FREE, GO, QUOTA }
 
     /**
      * Erro de fim do limite do plano. O opencode (packages/cli/src/acp/error.ts) responde ao
@@ -35,9 +35,14 @@ internal object AcpParse {
             name == "provider.go-limit" -> UsageLimit.GO
             name == "provider.free-limit" -> UsageLimit.FREE
             error.optString("message").contains("Free usage limit reached", ignoreCase = true) -> UsageLimit.FREE
+            isQuotaText(error.optString("message")) -> UsageLimit.QUOTA
             else -> null
         }
     }
+
+    /** Cota do modelo esgotada (agy/Google: "Individual quota reached", RESOURCE_EXHAUSTED, código 429). */
+    fun isQuotaText(text: String): Boolean =
+        text.contains("quota reached", ignoreCase = true) || text.contains("RESOURCE_EXHAUSTED")
 
     /**
      * Nome da ferramenta como o agente a chama (ex.: "shell"); o "title" é o rótulo humano.

@@ -1402,7 +1402,7 @@ class ChatActivity : JangadaActivity() {
     }
 
     /** Toque no chip de modelo: no Claude, as linhas Modelo e Esforço; no ACP, as opções que o agente oferece. */
-    private fun showModelSheet() {
+    internal fun showModelSheet() {
         if (isClaude) {
             Sheet(this)
                 .title(getString(R.string.chat_model_effort_title))

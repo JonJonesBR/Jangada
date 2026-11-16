@@ -25,6 +25,9 @@ class AcpParseTest {
         assertEquals(AcpParse.UsageLimit.FREE, AcpParse.usageLimit(JSONObject("""{"code":-32603,"message":"Free usage limit reached"}""")))
         assertNull(AcpParse.usageLimit(JSONObject("""{"code":-32603,"message":"Internal service failure"}""")))
         assertNull(AcpParse.usageLimit(null))
+        assertEquals(AcpParse.UsageLimit.QUOTA, AcpParse.usageLimit(JSONObject("""{"code":-32603,"message":"RESOURCE_EXHAUSTED (code 429): Individual quota reached."}""")))
+        assertTrue(AcpParse.isQuotaText("⚠ Individual quota reached. Please upgrade"))
+        assertFalse(AcpParse.isQuotaText("Tudo certo"))
     }
 
     @Test

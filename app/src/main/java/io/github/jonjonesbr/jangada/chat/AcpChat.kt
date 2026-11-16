@@ -547,6 +547,10 @@ class AcpChat(
                 else if (!cancelled && !(isStopped(error) && exitShown)) add(ChatItem.Info(friendlyError(error), isError = true))
             }
             else if (refused) add(ChatItem.Info(context.getString(R.string.chat_acp_refused), isError = true))
+            // O agy entrega o 429 como texto da resposta (não como erro do protocolo): oferece trocar de modelo.
+            else if ((items.lastOrNull() as? ChatItem.Assistant)?.text?.let { AcpParse.isQuotaText(it) } == true) {
+                add(usageLimitInfo(AcpParse.UsageLimit.QUOTA, null))
+            }
             // Erro, login ou recusa: a fila não segue sozinha, a pessoa revisa antes.
             // O erro de um turno que a pessoa mesma parou não conta: a fila já foi descartada no Parar.
             if ((error != null || refused) && !cancelled) dropQueue()
@@ -1025,8 +1029,13 @@ class AcpChat(
     /** Aviso de limite do plano esgotado, com o que fazer e o link do OpenCode Go; a mensagem original vai em Detalhes. */
     private fun usageLimitInfo(limit: AcpParse.UsageLimit, error: JSONObject?): ChatItem.Info = ChatItem.Info(
         text = context.getString(
-            if (limit == AcpParse.UsageLimit.GO) R.string.chat_acp_go_limit else R.string.chat_acp_free_limit,
+            when (limit) {
+                AcpParse.UsageLimit.GO -> R.string.chat_acp_go_limit
+                AcpParse.UsageLimit.QUOTA -> R.string.chat_acp_quota_limit
+                else -> R.string.chat_acp_free_limit
+            },
         ),
+        changeModel = limit == AcpParse.UsageLimit.QUOTA,
         isError = true,
         details = error?.optString("message")?.takeIf { it.isNotBlank() },
         url = if (limit == AcpParse.UsageLimit.FREE) OPENCODE_GO_URL else null,

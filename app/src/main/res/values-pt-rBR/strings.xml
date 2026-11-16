@@ -547,6 +547,8 @@
     <string name="chat_acp_login_hint">O agente precisa de login. Toque em &gt;_ no topo, entre pela tela do agente e volte ao chat.</string>
     <string name="chat_acp_free_limit">O limite de uso grátis acabou por agora. Para continuar: troque de modelo, conecte uma chave sua em Ajustes do chat › Contas e chaves ou assine o OpenCode Go.</string>
     <string name="chat_acp_go_limit">O limite de uso do OpenCode Go acabou por agora. Espere renovar, troque de modelo ou conecte outra chave em Ajustes do chat › Contas e chaves.</string>
+    <string name="chat_acp_quota_limit">A cota deste modelo acabou por agora. Troque de modelo (alguns têm cotas separadas) ou espere renovar.</string>
+    <string name="chat_change_model">Trocar de modelo</string>
     <string name="chat_acp_go_link">Conhecer o OpenCode Go</string>
     <string name="chat_acp_error">Erro do agente.</string>
     <string name="chat_setting_mode">Modo</string>

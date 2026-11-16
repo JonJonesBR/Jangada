@@ -126,6 +126,8 @@ sealed class ChatItem {
         val details: String? = null,
         val url: String? = null,
         val urlLabel: String? = null,
+        /** Mostra o link "Trocar de modelo" (cota do modelo esgotada). */
+        val changeModel: Boolean = false,
     ) : ChatItem()
     /** Raciocínio do agente: sempre guardado na conversa; a tela decide se mostra (ver [ChatView]). */
     class Thinking(var text: String) : ChatItem()
