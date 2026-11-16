@@ -1,0 +1,1 @@
+Chat do agy: a faixa de status mostra um spinner enquanto o agente espera algo em segundo plano; o resultado aparece sozinho.

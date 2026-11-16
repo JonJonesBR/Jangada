@@ -1,0 +1,1 @@
+Chat: in agy, the status bar shows a spinner while the agent waits on something in the background; the result shows up on its own.

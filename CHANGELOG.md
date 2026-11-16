@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.27.0
+
+- Chat do agy: enquanto o app acompanha algo que o agente deixou em segundo plano (um comando longo, um CI), a faixa de status mostra um spinner e o aviso de que o resultado aparece sozinho. Antes o chat parecia parado.
+
 ## 1.26.0
 
 - Chat do agy: o resultado de comandos e subagentes em segundo plano (um download, um `gh run watch`) agora volta ao chat sozinho. O agy fecha o canal de atualizações no fim do turno; depois dele, o app relê a conversa a intervalos e mostra só o que é novo, sem você enviar nada. O chat também não dorme enquanto espera.
