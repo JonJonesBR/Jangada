@@ -1052,7 +1052,7 @@ class AcpChat(
 
     override fun continueStuck() {
         if (!running || !ready || busy) return
-        sendMessage(context.getString(R.string.chat_continue_message))
+        sendMessage(context.getString(R.string.chat_continue_prompt))
     }
 
     private fun applyCatchUp(replay: List<JSONObject>) {

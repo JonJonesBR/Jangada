@@ -1114,7 +1114,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
                     )
                 }
                 if (url != null) link(item.urlLabel ?: url) { activity.openInfoUrl(url) }
-                if (item.continueAgent) link(getString(R.string.chat_continue)) { activity.continueAgent() }
+                if (item.continueAgent) link(getString(R.string.chat_stuck_continue)) { activity.continueAgent() }
                 if (changeModel) link(getString(R.string.chat_change_model)) { activity.showModelSheet() }
                 if (details != null) link(getString(R.string.chat_error_details)) { activity.showDetails(R.string.chat_error_details, details) }
             }

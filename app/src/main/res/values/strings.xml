@@ -553,8 +553,7 @@
     <string name="chat_acp_quota_limit">The quota for this model is over for now. Switch to another model (some models have separate quotas) or wait for it to reset.</string>
     <string name="chat_stuck_waiting">The agent is waiting for your approval to run: %1$s. The request did not reach the app.</string>
     <string name="chat_stuck_auto">The agent was waiting to run: %1$s. Continuing on its own (Approve all is on).</string>
-    <string name="chat_continue">Continue</string>
-    <string name="chat_continue_message">Please continue.</string>
+    <string name="chat_stuck_continue">Continue</string>
     <string name="chat_change_model">Change model</string>
     <string name="chat_acp_go_link">See OpenCode Go</string>
     <string name="chat_acp_error">Agent error.</string>
