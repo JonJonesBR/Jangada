@@ -1,0 +1,1 @@
+Chat do agy: o resultado de comandos e subagentes em segundo plano agora volta ao chat sozinho, sem precisar enviar outra mensagem.

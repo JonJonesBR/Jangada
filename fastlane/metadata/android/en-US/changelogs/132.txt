@@ -1,0 +1,1 @@
+Chat: results of background commands and subagents in agy now come back to the chat on their own, without sending another message.

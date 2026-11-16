@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.26.0
+
+- Chat do agy: o resultado de comandos e subagentes em segundo plano (um download, um `gh run watch`) agora volta ao chat sozinho. O agy fecha o canal de atualizações no fim do turno; depois dele, o app relê a conversa a intervalos e mostra só o que é novo, sem você enviar nada. O chat também não dorme enquanto espera.
+
 ## 1.25.0
 
 - Chat: quando a cota de um modelo acaba (erro 429, comum no agy, onde alguns modelos têm cota separada), o aviso explica e traz o link "Trocar de modelo", que abre o seletor.
