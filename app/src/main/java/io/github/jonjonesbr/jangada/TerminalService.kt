@@ -314,6 +314,8 @@ class TerminalService : Service() {
             ChatEngine(
                 linux, settings.askPermissions, settings.chatModel, settings.chatEffort, Workspace.path(folder),
                 autoCompact = settings.autoCompactFor(key),
+                savedMode = settings.claudeMode,
+                onModeChosen = { settings.claudeMode = it },
             )
         } else {
             // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).

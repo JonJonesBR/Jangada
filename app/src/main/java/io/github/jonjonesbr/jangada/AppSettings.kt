@@ -26,6 +26,11 @@ class AppSettings(context: Context) {
         get() = prefs.getBoolean(KEY_ASK_PERMISSIONS, true)
         set(value) = prefs.edit().putBoolean(KEY_ASK_PERMISSIONS, value).apply()
 
+    /** Modo de permissão do Claude que o usuário escolheu da última vez (lembrado nos chats novos); null = nunca escolheu. */
+    var claudeMode: String?
+        get() = prefs.getString(KEY_CLAUDE_MODE, null)
+        set(value) = prefs.edit().putString(KEY_CLAUDE_MODE, value).apply()
+
     /** Modelo do chat: "" = padrão da conta, ou "opus", "sonnet", "haiku". */
     var chatModel: String
         get() = prefs.getString(KEY_CHAT_MODEL, "") ?: ""
@@ -236,6 +241,7 @@ class AppSettings(context: Context) {
         private const val KEY_CHAT_EFFORT = "chat_effort"
         private const val KEY_CHAT_MODEL = "chat_model"
         private const val KEY_ACP_DEFAULT = "acp_default|"
+        private const val KEY_CLAUDE_MODE = "claude_mode"
         private const val KEY_MODE = "mode"
         private const val MODE_SIMPLE = "simple"
         private const val MODE_PRO = "pro"

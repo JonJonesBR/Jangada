@@ -29,6 +29,10 @@ class ChatEngine(
     override val cwd: String,
     /** Compactação automática que vale para este trabalho (ver AutoCompact); "default" não mexe em nada. */
     private val autoCompact: String = AutoCompact.DEFAULT,
+    /** Modo de permissão que o usuário escolheu da última vez (vale mais que o ajuste geral); null = nenhum. */
+    savedMode: String? = null,
+    /** Chamado quando o usuário escolhe um modo, para o app lembrá-lo nos chats seguintes. */
+    private val onModeChosen: ((String) -> Unit)? = null,
 ) : ProcessChat(linux, TAG) {
 
     @Volatile override var sessionId: String? = null
@@ -36,7 +40,8 @@ class ChatEngine(
     /** Com a sessão guardada, a próxima mensagem usa `--resume` e continua a conversa. */
     override val canResume: Boolean get() = sessionId != null
     /** Modo de permissão desta conversa (começa pelo ajuste geral e muda pelo chip de modo). */
-    @Volatile private var permissionMode: String = if (askPermissions) "default" else "auto"
+    @Volatile private var permissionMode: String =
+        savedMode?.takeIf { it in MODE_IDS } ?: if (askPermissions) "default" else "auto"
     override val modeChoices: List<Pair<String, String>> = listOf(
         "default" to "Default", "acceptEdits" to "Accept edits", "auto" to "Auto", "plan" to "Plan",
     )
@@ -44,6 +49,7 @@ class ChatEngine(
     override fun setMode(id: String) {
         if (modeChoices.none { it.first == id } || id == permissionMode) return
         permissionMode = id
+        onModeChosen?.invoke(id)
         // Com o CLI rodando, troca na hora; parado, o próximo início já usa o modo novo.
         if (running) {
             send(JSONObject().put("type", "control_request").put("request_id", nextRequestId())
@@ -652,6 +658,8 @@ class ChatEngine(
 
     companion object {
         private const val TAG = "JangadaChat"
+        /** Modos de permissão que o Claude aceita (ver modeChoices). */
+        private val MODE_IDS = setOf("default", "acceptEdits", "auto", "plan")
         const val MAX_HISTORY = 300
         /** Id do agente Claude nas preferências de limites (igual a TerminalService.CLAUDE). */
         const val LIMITS_AGENT_ID = "claude-code"
