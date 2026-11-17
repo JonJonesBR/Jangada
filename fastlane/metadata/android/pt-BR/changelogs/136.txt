@@ -1,0 +1,1 @@
+Chat do agy: usa o modelo escolhido também ao acordar e na primeira mensagem; o aviso de segundo plano não fica preso.

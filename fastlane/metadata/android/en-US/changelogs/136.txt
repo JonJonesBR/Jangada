@@ -1,0 +1,1 @@
+agy chat: keeps the chosen model after waking up and on the first message; the background notice no longer gets stuck.

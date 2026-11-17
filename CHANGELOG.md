@@ -1,5 +1,12 @@
 # Novidades
 
+## 1.28.2
+
+- Chat do agy: ao acordar do sono, o agente volta com o modelo que o chat usava (antes voltava ao padrão e podia dar cota esgotada). A primeira mensagem espera o modelo ser reaplicado, sem prender a fila mais de 15 s.
+- Chat do agy: o aviso "O agente segue esperando algo em segundo plano" some quando o agente responde depois de terminar o que estava em segundo plano. Antes podia ficar na tela por até uma hora.
+- Chat ACP: o Histórico avisa que está carregando e não repete o pedido.
+- CI: o gitleaks procura segredos no código e no histórico.
+
 ## 1.28.1
 
 - Chat do Claude: ao retomar uma conversa, o contexto não mostra mais 100% falso. O app lembra a janela de contexto de cada modelo e, enquanto não a conhece, esconde o percentual em vez de chutar.
