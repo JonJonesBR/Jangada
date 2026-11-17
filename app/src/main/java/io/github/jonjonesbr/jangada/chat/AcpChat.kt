@@ -498,7 +498,7 @@ class AcpChat(
         val item = ChatItem.User(text, attachments.map { it.name })
         add(item)
         // Turno em andamento (ou agente ainda subindo): a mensagem espera na fila, sem um segundo session/prompt.
-        if (busy || !ready) {
+        if (busy || !ready || restoring > 0) {
             item.queued = true
             queue += QueuedMessage(text, attachments, item)
             busy = true
@@ -513,6 +513,7 @@ class AcpChat(
 
     /** Envia a próxima mensagem da fila; sem fila, o turno acabou (só aí [busy] volta a falso). */
     private fun sendNext() {
+        if (restoring > 0 && queue.isNotEmpty()) return
         val next = queue.removeFirstOrNull()
         if (next == null) {
             busy = false
@@ -573,6 +574,11 @@ class AcpChat(
                 add(ChatItem.Info(context.getString(R.string.chat_interrupted)))
             }
             val refused = error == null && result?.optString("stopReason") == "refusal"
+            // Só vale a resposta deste turno (depois da última mensagem da pessoa): um 429 antigo que o replay
+            // trouxe de volta não pode gerar o aviso de novo.
+            val lastUser = items.indexOfLast { it is ChatItem.User && !it.queued }
+            val lastReply = items.lastOrNull() as? ChatItem.Assistant
+            val quotaInReply = lastReply != null && items.lastIndex > lastUser && AcpParse.isQuotaText(lastReply.text)
             if (error != null) {
                 // Erro de login sempre mostra o cartão de login; outros erros não viram cartão se a pessoa tocou em Parar,
                 // nem quando o agente fechou sozinho no meio da resposta (onExited já avisou).
@@ -583,7 +589,7 @@ class AcpChat(
             }
             else if (refused) add(ChatItem.Info(context.getString(R.string.chat_acp_refused), isError = true))
             // O agy entrega o 429 como texto da resposta (não como erro do protocolo): oferece trocar de modelo.
-            else if ((items.lastOrNull() as? ChatItem.Assistant)?.text?.let { AcpParse.isQuotaText(it) } == true) {
+            else if (quotaInReply) {
                 add(usageLimitInfo(AcpParse.UsageLimit.QUOTA, null))
             }
             // Erro, login ou recusa: a fila não segue sozinha, a pessoa revisa antes.
@@ -592,7 +598,7 @@ class AcpChat(
             // Turno que acabou bem com o contexto cheio: o /compact entra na fila antes da próxima mensagem.
             if (!cancelled && error == null && !refused) autoCompactIfDue()
             // Turno que acabou bem, sem parar o agente: se ficou ação em segundo plano, a vigia do alcance arma.
-            if (!cancelled && error == null && !refused && !AcpParse.cancelled(result)) armCatchUpAfterTurn()
+            if (!cancelled && error == null && !refused && !quotaInReply && !AcpParse.cancelled(result)) armCatchUpAfterTurn()
             changed()
             // O turno acabou: a próxima mensagem da fila (se houver) vai agora.
             sendNext()
@@ -671,6 +677,13 @@ class AcpChat(
     private val restored = mutableSetOf<String>()
 
     /**
+     * Reaplicações de ajuste (modelo, raciocínio, modo) ainda sem resposta. O agente trata cada pedido em paralelo:
+     * um session/prompt que sai antes do session/set_model termina usando o modelo padrão dele (no agy, o de outra
+     * cota). Enquanto houver reaplicação pendente, as mensagens esperam na fila.
+     */
+    private var restoring = 0
+
+    /**
      * Ajustes (por categoria) que este chat usava antes de o agente parar. O agente recarregado volta ao modelo
      * padrão dele (o agy faz isso no session/load); o que vale ao acordar é o do próprio chat, não o último
      * escolhido em outro chat do mesmo agente.
@@ -690,13 +703,16 @@ class AcpChat(
         for (option in configOptions) {
             if (!remembered(option) || !restored.add(option.category)) continue
             val saved = choicesBeforeStop[option.category] ?: appSettings.acpDefault(agentId, option.category)?.first ?: continue
-            if (saved != option.current && option.choices.any { it.first == saved }) setOption(option, saved, remember = false)
+            if (saved != option.current && option.choices.any { it.first == saved }) setOption(option, saved, remember = false, restoring = true)
         }
     }
 
     /** Muda um ajuste da conversa (modelo, raciocínio, modo...). [remember]: guarda como padrão do agente. */
-    fun setOption(option: ConfigOption, value: String, remember: Boolean = true) {
+    fun setOption(option: ConfigOption, value: String, remember: Boolean = true) = setOption(option, value, remember, restoring = false)
+
+    private fun setOption(option: ConfigOption, value: String, remember: Boolean, restoring: Boolean) {
         val id = sessionId ?: return
+        if (restoring) this.restoring++
         if (remember && remembered(option)) {
             val name = option.choices.firstOrNull { it.first == value }?.second ?: value
             appSettings.setAcpDefault(agentId, option.category, value, name)
@@ -711,17 +727,27 @@ class AcpChat(
                 else if (error == null) option.current = value
                 else add(ChatItem.Info(context.getString(R.string.chat_acp_option_failed, option.name, error.optString("message")), isError = true))
                 changed()
+                restoreDone(restoring)
             }
             ConfigOption.Source.MODEL -> request("session/set_model", JSONObject().put("sessionId", id).put("modelId", value)) { _, error ->
                 if (error == null) option.current = value
                 else add(ChatItem.Info(context.getString(R.string.chat_acp_model_failed, error.optString("message")), isError = true))
                 changed()
+                restoreDone(restoring)
             }
             ConfigOption.Source.MODE -> request("session/set_mode", JSONObject().put("sessionId", id).put("modeId", value)) { _, error ->
                 if (error == null) option.current = value
                 changed()
+                restoreDone(restoring)
             }
         }
+    }
+
+    /** Uma reaplicação de ajuste respondeu (com ou sem erro); sem mais nenhuma pendente, a fila segue. */
+    private fun restoreDone(wasRestoring: Boolean) {
+        if (!wasRestoring || restoring == 0) return
+        restoring--
+        if (restoring == 0 && ready && !loadingHistory && !catchUpActive && queue.isNotEmpty()) sendNext()
     }
 
     /**
@@ -791,6 +817,7 @@ class AcpChat(
         val waiting = pending.values.toList()
         pending.clear()
         ready = false
+        restoring = 0
         loadingHistory = false
         // Parou: a vigia e o alcance em andamento acabam (o load pendente recebe a falha abaixo, sem efeito).
         disarmCatchUp()
