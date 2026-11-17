@@ -73,6 +73,36 @@ object AcpCatchUp {
         else -> Level.NONE
     }
 
+    /** O que fazer com a vigia depois de um alcance. */
+    enum class Next { KEEP, WEAKEN, DISARM }
+
+    /**
+     * Decide a vigia depois de um alcance. [level]: nível atual. [newMessages]: mensagem nova do agente.
+     * [strongOpen]/[anyOpen]: ação forte/vigiada ainda não concluída. [newLevel]: nível das ações novas do
+     * alcance. [quietRounds]: alcances seguidos sem novidade.
+     *
+     * Forte: com mensagem nova e nada forte aberto ou novo, o agente concluiu o que esperava. Se no mesmo
+     * alcance veio um comando novo já concluído (nível fraco), a vigia cai para fraca (janela curta, sem a
+     * faixa de status) em vez de seguir forte por até uma hora sem nada mais a esperar.
+     */
+    fun afterCatchUp(
+        level: Level,
+        newMessages: Boolean,
+        strongOpen: Boolean,
+        newLevel: Level,
+        quietRounds: Int,
+        anyOpen: Boolean,
+        quietLimit: Int,
+    ): Next = when (level) {
+        Level.STRONG -> when {
+            !newMessages || strongOpen || newLevel == Level.STRONG -> Next.KEEP
+            newLevel == Level.WEAK -> Next.WEAKEN
+            else -> Next.DISARM
+        }
+        Level.WEAK -> if (quietRounds >= quietLimit && !anyOpen) Next.DISARM else Next.KEEP
+        Level.NONE -> Next.KEEP
+    }
+
     /**
      * [replay]: updates guardados durante o load (sem o envelope). [knownToolIds]: ações que já estão na tela.
      * [screenTexts]: textos das mensagens do agente que já estão na tela.

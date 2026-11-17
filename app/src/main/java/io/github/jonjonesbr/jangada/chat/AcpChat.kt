@@ -957,6 +957,21 @@ class AcpChat(
     }
 
     /**
+     * Vigia forte cai para fraca: o agente respondeu e a ação esperada acabou, mas veio comando novo já concluído
+     * (o agy às vezes relata concluído e segue rodando). Janela curta, a faixa de status some e o chat volta a
+     * poder dormir depois dela.
+     */
+    private fun weakenWatch(now: Long) {
+        val was = watching
+        watchLevel = AcpCatchUp.Level.WEAK
+        watchArmedAtMs = now
+        quietRounds = 0
+        watchUntilMs = now + WEAK_WINDOW_MS
+        keepAwakeUntilMs = maxOf(scheduleKeepUntilMs, watchUntilMs)
+        if (was) changed()
+    }
+
+    /**
      * Um disparo da vigia: parou ou expirou, encerra; ocupado ou ainda não pronto, reprograma; senão, faz o alcance.
      */
     private fun watchOnce() {
@@ -1128,15 +1143,10 @@ class AcpChat(
         if (newLevel != AcpCatchUp.Level.NONE && watchUntilMs != 0L) armWatch(now, newLevel)
         val strongOpen = turnTools.any { levelOf(it) == AcpCatchUp.Level.STRONG && !it.done }
         val anyOpen = turnTools.any { levelOf(it) != AcpCatchUp.Level.NONE && !it.done }
-        when (watchLevel) {
-            // Forte: só desarma antes do prazo com mensagem nova do agente e a ação forte concluída ou ausente,
-            // sem outra ação vigiada nova. Parada e erro desarmam em outro lugar.
-            AcpCatchUp.Level.STRONG ->
-                if (plan.newMessages && !strongOpen && newLevel == AcpCatchUp.Level.NONE) disarmCatchUp()
-            // Fraco: alcances seguidos sem novidade e nada aberto desarmam antes da janela curta.
-            AcpCatchUp.Level.WEAK ->
-                if (quietRounds >= QUIET_ROUNDS && !anyOpen) disarmCatchUp()
-            AcpCatchUp.Level.NONE -> Unit
+        when (AcpCatchUp.afterCatchUp(watchLevel, plan.newMessages, strongOpen, newLevel, quietRounds, anyOpen, QUIET_ROUNDS)) {
+            AcpCatchUp.Next.KEEP -> Unit
+            AcpCatchUp.Next.WEAKEN -> weakenWatch(now)
+            AcpCatchUp.Next.DISARM -> disarmCatchUp()
         }
         // Com mensagens na fila, o aviso de fim fica para quando a resposta enfileirada também acabar.
         if (plan.hasNew && queue.isEmpty()) attention(ChatAttention.FINISHED)

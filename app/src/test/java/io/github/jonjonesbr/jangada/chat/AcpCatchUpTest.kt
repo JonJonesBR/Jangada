@@ -251,4 +251,41 @@ class AcpCatchUpTest {
         assertEquals(listOf("tool_call"), kindsOf(plan))
         assertFalse(plan.hasNew)
     }
+
+    // ---- Vigia depois do alcance ----
+
+    private fun next(
+        level: AcpCatchUp.Level,
+        newMessages: Boolean = false,
+        strongOpen: Boolean = false,
+        newLevel: AcpCatchUp.Level = AcpCatchUp.Level.NONE,
+        quietRounds: Int = 0,
+        anyOpen: Boolean = false,
+    ) = AcpCatchUp.afterCatchUp(level, newMessages, strongOpen, newLevel, quietRounds, anyOpen, quietLimit = 3)
+
+    @Test
+    fun vigiaForteCaiParaFracaComRespostaEComandoNovoJaConcluido() {
+        // Caso real: o build em segundo plano acabou, o agy baixou o APK (comando novo já concluído) e respondeu.
+        // Antes a vigia seguia forte e o aviso de segundo plano ficava na tela por até uma hora.
+        assertEquals(AcpCatchUp.Next.WEAKEN, next(AcpCatchUp.Level.STRONG, newMessages = true, newLevel = AcpCatchUp.Level.WEAK))
+    }
+
+    @Test
+    fun vigiaForteDesarmaComRespostaSemAcaoNova() {
+        assertEquals(AcpCatchUp.Next.DISARM, next(AcpCatchUp.Level.STRONG, newMessages = true))
+    }
+
+    @Test
+    fun vigiaForteSegueSemMensagemComAcaoAbertaOuComAcaoForteNova() {
+        assertEquals(AcpCatchUp.Next.KEEP, next(AcpCatchUp.Level.STRONG))
+        assertEquals(AcpCatchUp.Next.KEEP, next(AcpCatchUp.Level.STRONG, newMessages = true, strongOpen = true))
+        assertEquals(AcpCatchUp.Next.KEEP, next(AcpCatchUp.Level.STRONG, newMessages = true, newLevel = AcpCatchUp.Level.STRONG))
+    }
+
+    @Test
+    fun vigiaFracaDesarmaDepoisDeAlcancesQuietosSemNadaAberto() {
+        assertEquals(AcpCatchUp.Next.KEEP, next(AcpCatchUp.Level.WEAK, quietRounds = 2))
+        assertEquals(AcpCatchUp.Next.KEEP, next(AcpCatchUp.Level.WEAK, quietRounds = 3, anyOpen = true))
+        assertEquals(AcpCatchUp.Next.DISARM, next(AcpCatchUp.Level.WEAK, quietRounds = 3))
+    }
 }
