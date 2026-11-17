@@ -159,6 +159,7 @@ class AcpChat(
         tools.clear()
         pendingRounds.clear()
         stuckNoticed.clear()
+        continueAfterCatchUp = false
         waitAsyncIds.clear()
         autoAnswered.clear()
         // A conversa pedida já é a deste chat: se o agente falhar ao subir, o próximo envio tenta
@@ -1012,6 +1013,11 @@ class AcpChat(
         ready = true
         changed()
         sendNext()
+        // Aprovar tudo: a ação pendente foi vista no alcance; agora que o chat está pronto, cutuca o agente.
+        if (continueAfterCatchUp) {
+            continueAfterCatchUp = false
+            continueStuck()
+        }
         if (watchUntilMs != 0L && watchTick == null) scheduleWatch(SystemClock.elapsedRealtime())
     }
 
@@ -1021,6 +1027,8 @@ class AcpChat(
      */
     /** Quantos alcances seguidos cada ação ficou "pendente" (esperando confirmação que o app não recebeu). */
     private val pendingRounds = HashMap<String, Int>()
+    /** Pedido de Continuar (Aprovar tudo) feito durante o alcance, para sair quando o chat ficar pronto. */
+    private var continueAfterCatchUp = false
     /** Ações que já geraram o aviso "espera sua aprovação" (um por ação). */
     private val stuckNoticed = HashSet<String>()
 
@@ -1041,7 +1049,8 @@ class AcpChat(
             val what = tool.summary.ifBlank { tool.name }.take(120)
             if (autoApprove) {
                 add(ChatItem.Info(context.getString(R.string.chat_stuck_auto, what)))
-                continueStuck()
+                // Durante o alcance o chat ainda não está pronto (ready=false): o envio sai em resumeAfterCatchUp.
+                continueAfterCatchUp = true
             } else {
                 add(ChatItem.Info(context.getString(R.string.chat_stuck_waiting, what), continueAgent = true))
                 attention(ChatAttention.PERMISSION)
