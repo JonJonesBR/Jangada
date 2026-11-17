@@ -1,0 +1,1 @@
+Chat do agy: aviso Continuar quando o agente espera uma aprovação que não chegou. Aprovar tudo pode ser lembrado entre chats (opção nas Configurações). Claude lembra o modo de permissão.

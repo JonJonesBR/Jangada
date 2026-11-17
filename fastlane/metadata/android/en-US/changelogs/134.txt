@@ -1,0 +1,1 @@
+Agy chat: a Continue notice when the agent waits on an approval that never arrived. Approve all can be remembered between chats (setting). Claude remembers the permission mode.

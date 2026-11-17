@@ -1,5 +1,11 @@
 # Novidades
 
+## 1.28.0
+
+- Chat do agy: quando o agente acorda sozinho depois de um comando em segundo plano e pede aprovação de uma ação, o pedido não chegava ao app e o chat parecia parado. Agora o app avisa ("O agente espera sua aprovação para rodar…") com o link Continuar; com o "Aprovar tudo" ligado, continua sozinho.
+- "Aprovar tudo" pode ser lembrado entre chats, por agente (Claude, agy, OpenCode e os outros), por uma opção nas Configurações. Vem desligada; desligar a opção esquece o que estava salvo.
+- Chat do Claude: o modo de permissão que você escolheu passa aos chats seguintes (como já era nos outros agentes).
+
 ## 1.27.0
 
 - Chat do agy: enquanto o app acompanha algo que o agente deixou em segundo plano (um comando longo, um CI), a faixa de status mostra um spinner e o aviso de que o resultado aparece sozinho. Antes o chat parecia parado.
