@@ -326,6 +326,7 @@ class AcpChat(
     private fun openSession(resume: String?) {
         armSessionTimeout()
         restored.clear()
+        choicesBeforeStop = if (resume != null) configOptions.associate { it.category to it.current } else emptyMap()
         val params = JSONObject().put("cwd", cwd).put("mcpServers", JSONArray())
         if (resume != null && canLoad) {
             loadingHistory = true
@@ -669,6 +670,13 @@ class AcpChat(
     /** Ajustes (por categoria) que já foram reaplicados nesta sessão, para não repetir em laço. */
     private val restored = mutableSetOf<String>()
 
+    /**
+     * Ajustes (por categoria) que este chat usava antes de o agente parar. O agente recarregado volta ao modelo
+     * padrão dele (o agy faz isso no session/load); o que vale ao acordar é o do próprio chat, não o último
+     * escolhido em outro chat do mesmo agente.
+     */
+    private var choicesBeforeStop: Map<String, String> = emptyMap()
+
     /** Modelo, nível de raciocínio e modo de permissão são lembrados entre conversas (por agente). */
     private fun remembered(option: ConfigOption) =
         agentId.isNotEmpty() && (option.source == ConfigOption.Source.MODE || option.category in REMEMBERED)
@@ -681,7 +689,7 @@ class AcpChat(
     private fun restoreChoices() {
         for (option in configOptions) {
             if (!remembered(option) || !restored.add(option.category)) continue
-            val saved = appSettings.acpDefault(agentId, option.category)?.first ?: continue
+            val saved = choicesBeforeStop[option.category] ?: appSettings.acpDefault(agentId, option.category)?.first ?: continue
             if (saved != option.current && option.choices.any { it.first == saved }) setOption(option, saved, remember = false)
         }
     }
