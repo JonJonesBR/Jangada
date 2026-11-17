@@ -56,6 +56,11 @@ class AppSettings(context: Context) {
         prefs.edit().putStringSet(KEY_APPROVE_ALL_AGENTS, agents).apply()
     }
 
+    /** Janela de contexto que o Claude informou para o modelo ([model] como no init), ou 0 se nunca informou. */
+    fun claudeWindow(model: String): Long = prefs.getLong("$KEY_CLAUDE_WINDOW$model", 0L)
+
+    fun setClaudeWindow(model: String, size: Long) = prefs.edit().putLong("$KEY_CLAUDE_WINDOW$model", size).apply()
+
     /** Modelo do chat: "" = padrão da conta, ou "opus", "sonnet", "haiku". */
     var chatModel: String
         get() = prefs.getString(KEY_CHAT_MODEL, "") ?: ""
@@ -269,6 +274,7 @@ class AppSettings(context: Context) {
         private const val KEY_REMEMBER_APPROVE_ALL = "remember_approve_all"
         private const val KEY_APPROVE_ALL_AGENTS = "approve_all_agents"
         private const val KEY_CLAUDE_MODE = "claude_mode"
+        private const val KEY_CLAUDE_WINDOW = "claude_window|"
         private const val KEY_MODE = "mode"
         private const val MODE_SIMPLE = "simple"
         private const val MODE_PRO = "pro"

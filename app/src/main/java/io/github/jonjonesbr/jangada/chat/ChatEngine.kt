@@ -33,6 +33,10 @@ class ChatEngine(
     savedMode: String? = null,
     /** Chamado quando o usuário escolhe um modo, para o app lembrá-lo nos chats seguintes. */
     private val onModeChosen: ((String) -> Unit)? = null,
+    /** Janela de contexto que o Claude já informou para este modelo em outra execução (0 = não se sabe). */
+    private val savedWindow: (String) -> Long = { 0L },
+    /** Chamado quando o Claude informa a janela de um modelo, para o app guardá-la (ver [savedWindow]). */
+    private val onWindowLearned: ((String, Long) -> Unit)? = null,
 ) : ProcessChat(linux, TAG) {
 
     @Volatile override var sessionId: String? = null
@@ -81,6 +85,8 @@ class ChatEngine(
     private var requestCounter = 0
     /** Maior janela de contexto que o Claude informou (0 = ainda não sabemos). */
     private var contextWindow = 0L
+    /** Tokens do último uso medido, para mostrar o percentual quando a janela chegar depois (ver [updateUsage]). */
+    private var lastContextTokens = 0L
     private val limitsStore by lazy { PlanLimitsStore(context) }
 
     /**
@@ -98,6 +104,7 @@ class ChatEngine(
     ) {
         if (running) return
         contextUsage = null
+        lastContextTokens = 0L
         sentThisRun = false
         val previousId = previous?.sessionId
         val previousItems = previous?.items?.toList().orEmpty()
@@ -331,6 +338,7 @@ class ChatEngine(
                 // A conversa foi compactada: o uso volta a ser medido no próximo turno.
                 "compact_boundary" -> {
                     contextUsage = null
+                    lastContextTokens = 0L
                     add(ChatItem.Info(context.getString(R.string.chat_compacted)))
                     changed()
                 }
@@ -426,7 +434,12 @@ class ChatEngine(
         usage ?: return
         val used = ClaudeParse.contextTokens(usage)
         if (used <= 0) return
-        val size = contextWindow.takeIf { it > 0 } ?: if (model?.contains("[1m]") == true) 1_000_000L else 200_000L
+        lastContextTokens = used
+        // Ao retomar, a janela só chega no fim do primeiro turno ([updateWindow]). Até lá vale a que o Claude
+        // informou da última vez para este modelo, ou o "[1m]" do nome; sem nenhuma, não se mostra percentual
+        // (um chute de 200 mil dava 100% falso numa conversa de janela maior).
+        val size = contextWindow.takeIf { it > 0 } ?: model?.let(savedWindow)?.takeIf { it > 0 }
+            ?: if (model?.contains("[1m]") == true) 1_000_000L else return
         contextUsage = ContextUsage(used, size)
         changed()
     }
@@ -437,7 +450,10 @@ class ChatEngine(
         val largest = ClaudeParse.largestWindow(modelUsage)
         if (largest <= 0) return
         contextWindow = largest
-        contextUsage?.let { contextUsage = ContextUsage(it.used, largest) }
+        model?.let { onWindowLearned?.invoke(it, largest) }
+        // Sem uso mostrado ainda (janela desconhecida até agora), usa o último medido.
+        val used = contextUsage?.used ?: lastContextTokens
+        if (used > 0) contextUsage = ContextUsage(used, largest)
     }
 
     /** O CLI cancelou um pedido de permissão em aberto: o cartão fica recusado, sem resposta. */

@@ -316,6 +316,8 @@ class TerminalService : Service() {
                 autoCompact = settings.autoCompactFor(key),
                 savedMode = settings.claudeMode,
                 onModeChosen = { settings.claudeMode = it },
+                savedWindow = { settings.claudeWindow(it) },
+                onWindowLearned = { model, size -> settings.setClaudeWindow(model, size) },
             )
         } else {
             // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).
