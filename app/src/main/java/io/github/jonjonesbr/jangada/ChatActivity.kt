@@ -1997,12 +1997,16 @@ class ChatActivity : JangadaActivity() {
     private fun toggleApproveAll(chat: AgentChat) {
         if (chat.autoApprove) {
             chat.setAutoApprove(false)
+            settings.setApproveAllFor(agentId, false)
             return
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.chat_auto_approve)
             .setMessage(R.string.chat_mode_risky_confirm)
-            .setPositiveButton(R.string.chat_mode_risky_yes) { _, _ -> chat.setAutoApprove(true) }
+            .setPositiveButton(R.string.chat_mode_risky_yes) { _, _ ->
+                chat.setAutoApprove(true)
+                settings.setApproveAllFor(agentId, true)
+            }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }

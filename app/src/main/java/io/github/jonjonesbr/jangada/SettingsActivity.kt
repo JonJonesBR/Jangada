@@ -44,6 +44,9 @@ class SettingsActivity : JangadaActivity() {
         val enter = findViewById<Switch>(R.id.settings_enter_sends)
         enter.isChecked = settings.enterSends
         enter.setOnCheckedChangeListener { _, checked -> settings.enterSends = checked }
+        val rememberApprove = findViewById<Switch>(R.id.settings_remember_approve_all)
+        rememberApprove.isChecked = settings.rememberApproveAll
+        rememberApprove.setOnCheckedChangeListener { _, checked -> settings.rememberApproveAll = checked }
 
         val permissions = findViewById<RadioGroup>(R.id.settings_permissions)
         permissions.check(if (settings.askPermissions) R.id.permissions_ask else R.id.permissions_auto)

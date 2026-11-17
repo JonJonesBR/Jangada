@@ -127,6 +127,20 @@
                     android:text="@string/settings_permissions_auto" />
             </RadioGroup>
 
+            <Switch
+                android:id="@+id/settings_remember_approve_all"
+                style="@style/SettingsOption"
+                android:text="@string/settings_remember_approve_all" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_remember_approve_all_desc"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
             <Button
                 android:id="@+id/settings_max_agents"
                 style="?android:attr/borderlessButtonStyle"

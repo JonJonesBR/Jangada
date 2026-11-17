@@ -189,6 +189,8 @@
     <string name="settings_mode_simple">Simples — os agentes abrem como chat quando possível, com a caixa de texto ligada</string>
     <string name="settings_mode_pro">Pro — os agentes abrem primeiro no terminal</string>
     <string name="settings_typing">Digitação</string>
+    <string name="settings_remember_approve_all">Lembrar o \"Aprovar tudo\" entre chats</string>
+    <string name="settings_remember_approve_all_desc">Ligado, cada agente (Claude, agy, OpenCode e os outros) começa os chats novos com o \"Aprovar tudo\" como você o deixou. Ele deixa o agente rodar ações sem perguntar, então use com cuidado. Desligar esquece o que estava salvo.</string>
     <string name="settings_enter_sends">Enter do teclado envia a mensagem (em vez de pular linha)</string>
     <string name="settings_chat">Permissões no chat do Claude Code</string>
     <string name="settings_permissions_ask">Perguntar antes de cada ação (recomendado)</string>

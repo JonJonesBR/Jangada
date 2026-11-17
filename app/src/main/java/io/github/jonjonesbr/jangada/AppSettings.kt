@@ -31,6 +31,31 @@ class AppSettings(context: Context) {
         get() = prefs.getString(KEY_CLAUDE_MODE, null)
         set(value) = prefs.edit().putString(KEY_CLAUDE_MODE, value).apply()
 
+    /**
+     * Lembrar o "Aprovar tudo" entre chats (por agente). Desligado por padrão: o "Aprovar tudo" é arriscado, então
+     * só passa aos chats seguintes se o usuário pedir. Desligar apaga o que estava lembrado.
+     */
+    var rememberApproveAll: Boolean
+        get() = prefs.getBoolean(KEY_REMEMBER_APPROVE_ALL, false)
+        set(value) {
+            val edit = prefs.edit().putBoolean(KEY_REMEMBER_APPROVE_ALL, value)
+            if (!value) edit.remove(KEY_APPROVE_ALL_AGENTS)
+            edit.apply()
+        }
+
+    /** O último estado do "Aprovar tudo" deste agente era ligado (e a opção de lembrar está ativa). */
+    fun approveAllFor(agentId: String): Boolean =
+        rememberApproveAll && agentId in (prefs.getStringSet(KEY_APPROVE_ALL_AGENTS, emptySet()) ?: emptySet())
+
+    /** Guarda o estado do "Aprovar tudo" do agente; sem efeito com a opção de lembrar desligada. */
+    fun setApproveAllFor(agentId: String, on: Boolean) {
+        if (!rememberApproveAll) return
+        // Copia: o conjunto devolvido pelo SharedPreferences não pode ser alterado.
+        val agents = (prefs.getStringSet(KEY_APPROVE_ALL_AGENTS, emptySet()) ?: emptySet()).toMutableSet()
+        if (on) agents += agentId else agents -= agentId
+        prefs.edit().putStringSet(KEY_APPROVE_ALL_AGENTS, agents).apply()
+    }
+
     /** Modelo do chat: "" = padrão da conta, ou "opus", "sonnet", "haiku". */
     var chatModel: String
         get() = prefs.getString(KEY_CHAT_MODEL, "") ?: ""
@@ -241,6 +266,8 @@ class AppSettings(context: Context) {
         private const val KEY_CHAT_EFFORT = "chat_effort"
         private const val KEY_CHAT_MODEL = "chat_model"
         private const val KEY_ACP_DEFAULT = "acp_default|"
+        private const val KEY_REMEMBER_APPROVE_ALL = "remember_approve_all"
+        private const val KEY_APPROVE_ALL_AGENTS = "approve_all_agents"
         private const val KEY_CLAUDE_MODE = "claude_mode"
         private const val KEY_MODE = "mode"
         private const val MODE_SIMPLE = "simple"

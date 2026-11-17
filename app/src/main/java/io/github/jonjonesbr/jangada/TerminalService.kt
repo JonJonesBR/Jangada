@@ -328,7 +328,7 @@ class TerminalService : Service() {
         }
         // O agente que dormiu (ou foi reiniciado) volta num chat novo: Aprovar tudo e, no Claude, o modo
         // de permissão escolhidos nesta pasta não podem se perder nessa troca.
-        if (current?.autoApprove == true) chat.setAutoApprove(true)
+        if (current?.autoApprove == true || settings.approveAllFor(agentId)) chat.setAutoApprove(true)
         if (chat is ChatEngine) current?.currentMode?.let { chat.setMode(it) }
         // Para o chat anterior deste par (se havia) antes de o novo começar.
         current?.stop()

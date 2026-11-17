@@ -191,6 +191,8 @@
     <string name="settings_mode_simple">Simple — agents open as a chat when possible, with the text box on</string>
     <string name="settings_mode_pro">Pro — agents open in the terminal first</string>
     <string name="settings_typing">Typing</string>
+    <string name="settings_remember_approve_all">Remember \"Approve all\" between chats</string>
+    <string name="settings_remember_approve_all_desc">When on, each agent (Claude, agy, OpenCode and the others) starts new chats with \"Approve all\" as you last left it. It lets the agent run actions without asking, so use with care. Turning this off forgets what was saved.</string>
     <string name="settings_enter_sends">Keyboard Enter sends the message (instead of a new line)</string>
     <string name="settings_chat">Claude Code chat permissions</string>
     <string name="settings_permissions_ask">Ask before each action (recommended)</string>
