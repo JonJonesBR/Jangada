@@ -1,0 +1,1 @@
+Claude chat: resuming a conversation no longer shows a false 100% context.

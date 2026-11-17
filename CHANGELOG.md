@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.28.1
+
+- Chat do Claude: ao retomar uma conversa, o contexto não mostra mais 100% falso. O app lembra a janela de contexto de cada modelo e, enquanto não a conhece, esconde o percentual em vez de chutar.
+
 ## 1.28.0
 
 - Chat do agy: quando o agente acorda sozinho depois de um comando em segundo plano e pede aprovação de uma ação, o pedido não chegava ao app e o chat parecia parado. Agora o app avisa ("O agente espera sua aprovação para rodar…") com o link Continuar; com o "Aprovar tudo" ligado, continua sozinho.
