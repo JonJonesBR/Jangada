@@ -683,6 +683,13 @@ class AcpChat(
      */
     private var restoring = 0
 
+    /** Prazo das reaplicações: agente que não responde ao ajuste não pode prender a fila para sempre. */
+    private val restoreTimeout = Runnable {
+        if (restoring == 0) return@Runnable
+        restoring = 0
+        if (ready && !loadingHistory && !catchUpActive && queue.isNotEmpty()) sendNext()
+    }
+
     /**
      * Ajustes (por categoria) que este chat usava antes de o agente parar. O agente recarregado volta ao modelo
      * padrão dele (o agy faz isso no session/load); o que vale ao acordar é o do próprio chat, não o último
@@ -712,7 +719,11 @@ class AcpChat(
 
     private fun setOption(option: ConfigOption, value: String, remember: Boolean, restoring: Boolean) {
         val id = sessionId ?: return
-        if (restoring) this.restoring++
+        if (restoring) {
+            this.restoring++
+            main.removeCallbacks(restoreTimeout)
+            main.postDelayed(restoreTimeout, RESTORE_TIMEOUT_MS)
+        }
         if (remember && remembered(option)) {
             val name = option.choices.firstOrNull { it.first == value }?.second ?: value
             appSettings.setAcpDefault(agentId, option.category, value, name)
@@ -747,6 +758,7 @@ class AcpChat(
     private fun restoreDone(wasRestoring: Boolean) {
         if (!wasRestoring || restoring == 0) return
         restoring--
+        if (restoring == 0) main.removeCallbacks(restoreTimeout)
         if (restoring == 0 && ready && !loadingHistory && !catchUpActive && queue.isNotEmpty()) sendNext()
     }
 
@@ -818,6 +830,7 @@ class AcpChat(
         pending.clear()
         ready = false
         restoring = 0
+        main.removeCallbacks(restoreTimeout)
         loadingHistory = false
         // Parou: a vigia e o alcance em andamento acabam (o load pendente recebe a falha abaixo, sem efeito).
         disarmCatchUp()
@@ -1470,6 +1483,8 @@ class AcpChat(
         const val WATCH_SLOW_INTERVAL_MS = 45_000L
         /** Tempo limite do load do alcance: sem resposta, o chat segue (o replay tardio é descartado). */
         const val CATCH_UP_TIMEOUT_MS = 60_000L
+        /** Espera máxima pelas respostas da reaplicação do modelo/raciocínio/modo antes de mandar a mensagem. */
+        const val RESTORE_TIMEOUT_MS = 15_000L
         /** Limite final do load atrasado: sem resposta até aqui, o agente dorme (a próxima mensagem o religa). */
         const val CATCH_UP_LIMIT_MS = 120_000L
         /** Alcances seguidos sem novidade (e sem ação vigiada aberta) que desarmam a vigia antes do prazo. */

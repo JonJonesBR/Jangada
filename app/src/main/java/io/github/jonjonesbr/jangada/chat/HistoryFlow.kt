@@ -28,6 +28,12 @@ internal class HistoryFlow(private val activity: ChatActivity) {
 
     private fun getString(id: Int) = activity.getString(id)
 
+    /**
+     * Lista pedida ao agente ainda sem resposta. O agente pode demorar (o agy, com o login vencido, só responde
+     * depois de renová-lo): toques repetidos não pedem outra lista nem abrem vários painéis.
+     */
+    private var listing = false
+
     private fun getString(id: Int, vararg args: Any) = activity.getString(id, *args)
 
     /** Conversas anteriores: toque para retomar, 🗑 para apagar (a aberta já vira uma nova). */
@@ -44,7 +50,11 @@ internal class HistoryFlow(private val activity: ChatActivity) {
             // Dormindo ou parado: quem lista as conversas é o próprio agente.
             Toast.makeText(activity, getString(R.string.chat_history_asleep, agentName), Toast.LENGTH_LONG).show()
         } else if (chat is AcpChat && chat.supportsHistory) {
+            Toast.makeText(activity, R.string.chat_history_loading, Toast.LENGTH_SHORT).show()
+            if (listing) return
+            listing = true
             chat.listSessions { sessions ->
+                activity.runOnUiThread { listing = false }
                 if (activity.isDestroyed) return@listSessions
                 // Lista nula = falhou (agente parado ou erro): não mostra "sem conversas".
                 if (sessions == null) activity.runOnUiThread { Toast.makeText(activity, R.string.chat_history_list_failed, Toast.LENGTH_LONG).show() }
