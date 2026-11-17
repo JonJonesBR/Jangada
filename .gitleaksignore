@@ -1,0 +1,2 @@
+# Chave falsa usada só num teste de unidade (sk-teste-...): não é segredo.
+0b3382b42302fdef363c47c6ba8678c08b8f22bc:app/src/test/java/io/github/jonjonesbr/jangada/linux/OpenCodeAuthTest.kt:generic-api-key:111
