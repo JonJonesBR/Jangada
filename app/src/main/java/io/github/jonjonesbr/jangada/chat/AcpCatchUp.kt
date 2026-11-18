@@ -138,8 +138,10 @@ object AcpCatchUp {
         // O último bloco conhecido pode ter crescido: o agy manda duas mensagens seguidas (a do fim do turno e a
         // que ele escreve quando o comando em segundo plano acaba) sem messageId nem nada entre elas, e o replay as
         // junta num bloco só. A parte que ainda não está na tela entra como mensagem nova, na posição do bloco.
-        val tail = blockAt.getOrNull(cut)?.takeIf { !applyAll }?.let { unseenOf[it] }?.takeIf { it.isNotEmpty() }
-            ?.let { cut to JSONObject().put("sessionUpdate", "agent_message_chunk").put("content", JSONObject().put("type", "text").put("text", it)) }
+        // O último bloco conhecido (pode haver ação conhecida depois dele, com o corte nela).
+        val lastKnownChunk = known.lastOrNull { blockAt[it] != null }
+        val tail = lastKnownChunk?.takeIf { !applyAll }?.let { i -> blockAt[i]?.let { unseenOf[it] } }?.takeIf { it.isNotEmpty() }
+            ?.let { lastKnownChunk to JSONObject().put("sessionUpdate", "agent_message_chunk").put("content", JSONObject().put("type", "text").put("text", it)) }
 
         val newMessages = tail != null || fresh.any { replay[it].optString("sessionUpdate") == "agent_message_chunk" }
         val newToolIds = fresh.filter { isToolKind(replay[it]) }

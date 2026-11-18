@@ -299,6 +299,18 @@ class AcpCatchUpTest {
         assertEquals(setOf("t2"), plan.newToolIds)
     }
 
+    @Test
+    fun mensagemColadaNaoSePerdeComAcaoConhecidaDepois() {
+        val replay = listOf(
+            msg(fimDoTurno),
+            msg(respostaSozinha),
+            tool("tool_call_update", "t1", "completed"),
+        )
+        val plan = AcpCatchUp.plan(replay, setOf("t1"), listOf(fimDoTurno))
+        assertTrue(plan.newMessages)
+        assertEquals(listOf("agent_message_chunk", "tool_call_update"), kindsOf(plan))
+    }
+
     // ---- Vigia depois do alcance ----
 
     private fun next(

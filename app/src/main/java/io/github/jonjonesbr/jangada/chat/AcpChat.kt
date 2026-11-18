@@ -1176,6 +1176,8 @@ class AcpChat(
         // agy respondeu sozinho): já está na tela, então o plano não a vê como nova, mas ela conta para a vigia.
         // Lida antes de aplicar o plano: os chunks do próprio alcance também passam por handleUpdate.
         val live = liveNews
+        // Rascunho ao vivo aberto (resposta que chegou entre alcances): a mensagem do alcance não se cola a ele.
+        finishDrafts()
         for (update in plan.toApply) handleUpdate(JSONObject().put("update", update))
         liveNews = false
         finishDrafts()
