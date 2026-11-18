@@ -11,6 +11,11 @@ internal object ClaudeParse {
 
     /** Texto do resultado de erro que indica falta de login (mesma regra de antes). */
     private val LOGIN = Regex("login|log in|auth|api key|credential", RegexOption.IGNORE_CASE)
+    /** Texto de erro do Claude quando o limite do plano acabou (ex.: "usage limit reached", "hit your limit"). */
+    private val LIMIT_REACHED = Regex("usage limit|limit reached|hit your limit|quota reached", RegexOption.IGNORE_CASE)
+
+    /** Verdadeiro quando o erro diz que o limite do plano esgotou (não o aviso de 90%, que é outro caminho). */
+    fun isLimitText(text: String): Boolean = LIMIT_REACHED.containsMatchIn(text)
 
     /** Subtipo que o CLI manda ao encerrar um turno parado pelo usuário. */
     private const val STOPPED_SUBTYPE = "error_during_execution"

@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada.chat
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -14,6 +15,11 @@ class ChatHandoffTest {
         filesTitle = "ARQUIVOS",
         moreFiles = "+%d",
         closing = "FECHO",
+        branchLine = "BRANCH %1\$s",
+        isolatedNote = "ISOLADO",
+        errorTitle = "PAROU",
+        planTitle = "PLANO",
+        diffTitle = "DIFF",
     )
 
     @Test
@@ -103,5 +109,201 @@ class ChatHandoffTest {
         assertFalse(text.contains("plano-xyz"))
         assertFalse(text.contains("aviso-xyz"))
         assertFalse(text.contains("rascunho-xyz"))
+    }
+
+    private val agora = 1_000L
+
+    @Test
+    fun semCotaNaoHaJanela() {
+        assertNull(ChatHandoff.topWindow(null, agora))
+        assertNull(ChatHandoff.topWindow(PlanLimits(emptyList(), agora), agora))
+    }
+
+    @Test
+    fun escolheAJanelaComMaisUso() {
+        val limits = PlanLimits(
+            listOf(
+                LimitWindow(LimitWindow.Kind.FIVE_HOUR, 30, 2_000L),
+                LimitWindow(LimitWindow.Kind.WEEKLY, 70, 9_000L),
+            ),
+            agora,
+        )
+
+        assertEquals(LimitWindow.Kind.WEEKLY, ChatHandoff.topWindow(limits, agora)?.kind)
+        assertEquals(70, ChatHandoff.topWindow(limits, agora)?.usedPercent)
+    }
+
+    @Test
+    fun janelaJaRenovadaNaoConta() {
+        // A de 5 horas (95%) já renovou (horário 500 ≤ agora): vale 0%, e a semanal (20%) é a que conta.
+        val limits = PlanLimits(
+            listOf(
+                LimitWindow(LimitWindow.Kind.FIVE_HOUR, 95, 500L),
+                LimitWindow(LimitWindow.Kind.WEEKLY, 20, 9_000L),
+            ),
+            agora,
+        )
+
+        assertEquals(LimitWindow.Kind.WEEKLY, ChatHandoff.topWindow(limits, agora)?.kind)
+        assertEquals(20, ChatHandoff.topWindow(limits, agora)?.usedPercent)
+    }
+
+    @Test
+    fun ordenaPorUsoComSemCotaNoFimEEstavelEntreIguais() {
+        val usage = mapOf("a" to 50, "b" to null, "c" to 10, "d" to null, "e" to 50, "f" to 0)
+
+        val ordem = ChatHandoff.byUsage(listOf("a", "b", "c", "d", "e", "f")) { usage[it] }
+
+        assertEquals(listOf("f", "c", "a", "e", "b", "d"), ordem)
+    }
+
+    @Test
+    fun semNenhumaCotaMantemAOrdemOriginal() {
+        val lista = listOf("x", "y", "z")
+
+        assertEquals(lista, ChatHandoff.byUsage(lista) { null })
+    }
+
+    /** Ação de ferramenta que falhou, com a saída informada. */
+    private fun falha(nome: String, saida: String): ChatItem.Tool =
+        ChatItem.Tool("t-$nome", nome, "resumo-$nome").apply {
+            output = saida
+            mark(ToolState.FAILED, 1L)
+        }
+
+    @Test
+    fun planoMostraFeitosEPendentes() {
+        val plan = listOf(
+            PlanEntry("criar tela", "completed"),
+            PlanEntry("testar", "pending"),
+            PlanEntry("abrir PR", "in_progress"),
+        )
+
+        val text = ChatHandoff.summary(
+            listOf(ChatItem.User("Pedido")), "Você", "Claude", emptyList(), labels, plan = plan,
+        )
+
+        assertTrue(text.contains("PLANO\n[x] criar tela\n[ ] testar\n[ ] abrir PR"))
+    }
+
+    @Test
+    fun semPlanoNaoHaSecaoDePlano() {
+        val text = ChatHandoff.summary(listOf(ChatItem.User("Pedido")), "Você", "Claude", emptyList(), labels)
+
+        assertFalse(text.contains("PLANO"))
+    }
+
+    @Test
+    fun ultimoPlanoDaConversa() {
+        val items = listOf<ChatItem>(
+            ChatItem.Plan(listOf(PlanEntry("velho", "pending"))),
+            ChatItem.User("x"),
+            ChatItem.Plan(listOf(PlanEntry("novo", "completed"))),
+            ChatItem.Assistant("y", streaming = false),
+        )
+
+        assertEquals(listOf("novo"), ChatHandoff.lastPlan(items).map { it.text })
+        assertTrue(ChatHandoff.lastPlan(listOf(ChatItem.User("x"))).isEmpty())
+    }
+
+    @Test
+    fun falhaDaUltimaAcaoVaiParaParouEm() {
+        val items = listOf<ChatItem>(ChatItem.User("Pedido"), falha("Bash", "erro-xyz"))
+
+        assertEquals("Bash: erro-xyz", ChatHandoff.lastFailure(items))
+        val text = ChatHandoff.summary(
+            items, "Você", "Claude", emptyList(), labels, pendingError = ChatHandoff.lastFailure(items),
+        )
+        assertTrue(text.contains("PAROU\nBash: erro-xyz"))
+    }
+
+    @Test
+    fun acaoDepoisDaFalhaAnulaAFalha() {
+        val items = listOf<ChatItem>(falha("Bash", "erro-xyz"), ChatItem.Assistant("Tentei de novo", streaming = false))
+
+        assertNull(ChatHandoff.lastFailure(items))
+    }
+
+    @Test
+    fun avisoDeCotaNaoContaComoFalha() {
+        // O aviso de cota vem por último, mas a falha antes dele é a que conta.
+        val items = listOf<ChatItem>(falha("Bash", "erro-xyz"), ChatItem.Info("cota", isError = true, handoff = true))
+
+        assertEquals("Bash: erro-xyz", ChatHandoff.lastFailure(items))
+    }
+
+    @Test
+    fun recusadaNaoEFalhaMasAvisoDeErroEFalha() {
+        val recusada = ChatItem.Tool("t", "Edit", "x").apply { mark(ToolState.REJECTED, 1L) }
+
+        assertNull(ChatHandoff.lastFailure(listOf(recusada)))
+        assertEquals("Falhou x", ChatHandoff.lastFailure(listOf(ChatItem.Info("Falhou x", isError = true))))
+        assertNull(ChatHandoff.lastFailure(listOf(ChatItem.Info("Aviso"))))
+    }
+
+    @Test
+    fun falhaLongaCortadaEmQuatrocentos() {
+        val text = ChatHandoff.summary(
+            listOf(ChatItem.User("Pedido")), "Você", "Claude", emptyList(), labels, pendingError = "e".repeat(1000),
+        )
+
+        assertTrue(text.contains("PAROU\n" + "e".repeat(399) + "…\n\nFECHO"))
+    }
+
+    @Test
+    fun diffStatVazioSomEstaCortadoEmMilDuzentos() {
+        val items = listOf<ChatItem>(ChatItem.User("Pedido"))
+
+        val semDiff = ChatHandoff.summary(items, "Você", "Claude", emptyList(), labels, diffStat = "  \n")
+        assertFalse(semDiff.contains("DIFF"))
+
+        val longo = ChatHandoff.summary(items, "Você", "Claude", emptyList(), labels, diffStat = "d".repeat(1500))
+        assertTrue(longo.contains("DIFF\n" + "d".repeat(1199) + "…\n\nFECHO"))
+    }
+
+    @Test
+    fun branchEWorktreeIsolado() {
+        val items = listOf<ChatItem>(ChatItem.User("Pedido"))
+
+        val isolado = ChatHandoff.summary(items, "Você", "Claude", emptyList(), labels, branch = "trabalho/x", isolated = true)
+        assertTrue(isolado.startsWith("CABECALHO\n\nBRANCH trabalho/x\nISOLADO\n\nORIGINAL"))
+
+        val comum = ChatHandoff.summary(items, "Você", "Claude", emptyList(), labels, branch = "main")
+        assertTrue(comum.startsWith("CABECALHO\n\nBRANCH main\n\nORIGINAL"))
+        assertFalse(comum.contains("ISOLADO"))
+    }
+
+    @Test
+    fun secoesNovasCabemComMaxCharsSaiDiffPrimeiro() {
+        val items = listOf<ChatItem>(ChatItem.User("Pedido"))
+
+        val text = ChatHandoff.summary(
+            items, "Você", "Claude", emptyList(), labels, maxChars = 800,
+            plan = listOf(PlanEntry("a", "pending")), pendingError = "erro", diffStat = "d".repeat(1200),
+        )
+
+        assertTrue(text.length <= 800)
+        assertFalse(text.contains("DIFF"))
+        assertTrue(text.contains("PLANO\n[ ] a"))
+        assertTrue(text.contains("PAROU\nerro"))
+        assertTrue(text.contains("ORIGINAL\nPedido"))
+    }
+
+    @Test
+    fun secoesNovasEntramAntesDasRecentesQueSaemPrimeiro() {
+        val items = listOf<ChatItem>(ChatItem.User("Pedido")) +
+            (1..6).map { ChatItem.Assistant("m$it-" + "x".repeat(900), streaming = false) }
+
+        val text = ChatHandoff.summary(
+            items, "Você", "Claude", emptyList(), labels, maxChars = 3000,
+            pendingError = "e".repeat(500), diffStat = "d".repeat(1200),
+        )
+
+        assertTrue(text.length <= 3000)
+        assertTrue(text.contains("PAROU\n" + "e".repeat(399) + "…"))
+        assertTrue(text.contains("DIFF\n"))
+        // Sobra espaço para uma recente (a última); a penúltima já não cabe.
+        assertTrue(text.contains("m6-"))
+        assertFalse(text.contains("m5-"))
     }
 }

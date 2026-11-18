@@ -376,7 +376,11 @@ class ChatEngine(
                         }
                     }
                     is ResultOutcome.ErrorBySubtype -> add(errorBySubtype(outcome.subtype))
-                    is ResultOutcome.ErrorWithText -> add(ChatItem.Info(friendlyError(outcome.text), isError = true))
+                    is ResultOutcome.ErrorWithText -> add(ChatItem.Info(
+                        friendlyError(outcome.text),
+                        isError = true,
+                        handoff = ClaudeParse.isLimitText(outcome.text),
+                    ))
                 }
                 updateWindow(json.optJSONObject("modelUsage"))
                 // Turno com erro (inclusive login): a fila não segue sozinha, a pessoa revisa antes.

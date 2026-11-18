@@ -1466,7 +1466,10 @@ class AcpChat(
         ChildAgents.refresh(items)
     }
 
-    /** Aviso de limite do plano esgotado, com o que fazer e o link do OpenCode Go; a mensagem original vai em Detalhes. */
+    /**
+     * Aviso de limite do plano esgotado, com o que fazer e o link do OpenCode Go; a mensagem original vai em Detalhes.
+     * Todo limite esgotado oferece continuar com outro agente (cota de um tipo; a pessoa escolhe o caminho).
+     */
     private fun usageLimitInfo(limit: AcpParse.UsageLimit, error: JSONObject?): ChatItem.Info = ChatItem.Info(
         text = context.getString(
             when (limit) {
@@ -1476,6 +1479,7 @@ class AcpChat(
             },
         ),
         changeModel = limit == AcpParse.UsageLimit.QUOTA,
+        handoff = true,
         isError = true,
         details = error?.optString("message")?.takeIf { it.isNotBlank() },
         url = if (limit == AcpParse.UsageLimit.FREE) OPENCODE_GO_URL else null,

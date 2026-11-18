@@ -282,4 +282,12 @@ class ClaudeParseTest {
         assertEquals(ResultOutcome.Ok, ClaudeParse.resultOutcome(final, cancelled = false))
         assertEquals(200_000L, ClaudeParse.largestWindow(final.getJSONObject("modelUsage")))
     }
+
+    @Test
+    fun limiteEsgotadoReconheceTextoDeCota() {
+        assertTrue(ClaudeParse.isLimitText("Claude AI usage limit reached|1793862000"))
+        assertTrue(ClaudeParse.isLimitText("You've hit your limit · resets 5pm"))
+        // Erro comum, sem relação com cota: não vira link de troca de agente.
+        assertFalse(ClaudeParse.isLimitText("Erro de rede ao falar com a API"))
+    }
 }

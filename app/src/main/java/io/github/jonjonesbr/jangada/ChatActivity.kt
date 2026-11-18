@@ -204,9 +204,11 @@ class ChatActivity : JangadaActivity() {
     internal var folder = ""
         private set
     /** Branch do git da pasta (null = não é repositório, ou ainda não foi lido); lido fora da thread principal. */
-    private var folderBranch: String? = null
+    internal var folderBranch: String? = null
+        private set
     /** Repositório de origem, se a pasta é um trabalho isolado (worktree). */
-    private var folderWorktreeOf: String? = null
+    internal var folderWorktreeOf: String? = null
+        private set
     /** Arquivos alterados da pasta (git status); null = não lido ou sem git. */
     private var changedFiles: Int? = null
     /** Número da leitura de mudanças mais nova: resultado de uma leitura anterior é descartado. */
@@ -1411,6 +1413,11 @@ class ChatActivity : JangadaActivity() {
     /** Link "Continuar" do aviso de ação esperando aprovação (agy fora de turno). */
     internal fun continueAgent() {
         engine?.continueStuck()
+    }
+
+    /** Link "Continuar com outro agente" do aviso de cota esgotada; é o mesmo fluxo do item do menu. */
+    internal fun startHandoff() {
+        handoff.start()
     }
 
     internal fun showModelSheet() {

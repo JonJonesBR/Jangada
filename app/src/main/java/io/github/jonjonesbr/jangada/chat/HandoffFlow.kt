@@ -2,8 +2,14 @@ package io.github.jonjonesbr.jangada.chat
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.Gravity
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -19,6 +25,9 @@ import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.ui.Sheet
 import kotlin.concurrent.thread
 
+/** Pausa, em ms, depois da última tecla antes de procurar segredo de novo no resumo. */
+private const val SECRET_SCAN_DELAY_MS = 400L
+
 /**
  * "Continuar com outro agente": junta o resumo da conversa (ver [ChatHandoff]), deixa o usuário
  * revisá-lo e abre o chat do agente escolhido com o texto no campo. Nunca envia sozinho, e esta
@@ -26,7 +35,10 @@ import kotlin.concurrent.thread
  */
 internal class HandoffFlow(private val activity: ChatActivity) {
 
-    /** Toque no item do menu: sem conversa, avisa; senão lê os arquivos alterados e escolhe o agente. */
+    /** Estado do git da pasta, lido fora da thread principal (ver [start]). */
+    private class Repo(val files: List<String>, val diffStat: String, val branch: String?, val isolated: Boolean)
+
+    /** Toque no item do menu: sem conversa, avisa; senão lê o git da pasta e escolhe o agente. */
     fun start() {
         val items = activity.engine?.items?.toList().orEmpty()
         if (items.none { it is ChatItem.User || it is ChatItem.Assistant }) {
@@ -35,17 +47,20 @@ internal class HandoffFlow(private val activity: ChatActivity) {
         }
         val linux = activity.linux
         val cwd = Workspace.path(activity.folder)
+        // Branch e worktree já estão na tela (lidos ao abrir a conversa); lidos aqui na thread principal.
+        val branch = activity.folderBranch
+        val isolated = activity.folderWorktreeOf != null
         // O git lê o repositório e roda um processo: fora da thread principal.
         thread(name = "chat-handoff") {
-            val files = changedFiles(linux, cwd)
+            val repo = Repo(changedFiles(linux, cwd), diffStat(linux, cwd), branch, isolated)
             activity.runOnUiThread {
-                if (!activity.isDestroyed && !activity.isFinishing) chooseAgent(items, files)
+                if (!activity.isDestroyed && !activity.isFinishing) chooseAgent(items, repo)
             }
         }
     }
 
     /** Agentes com chat, instalados e diferentes do atual. Lista de instalados nunca gravada = todos (como o compartilhar). */
-    private fun chooseAgent(items: List<ChatItem>, files: List<String>) {
+    private fun chooseAgent(items: List<ChatItem>, repo: Repo) {
         val installed = AgentPrefs.installedCommands(activity)
         val others = AgentCatalog.load(activity).filter { agent ->
             agent.hasChat && agent.id != activity.agentId && (installed == null || agent.command in installed)
@@ -54,14 +69,24 @@ internal class HandoffFlow(private val activity: ChatActivity) {
             Toast.makeText(activity, R.string.chat_handoff_none, Toast.LENGTH_LONG).show()
             return
         }
+        // Cota conhecida de cada agente (a que o próprio agente informou); sem ela, a lista segue como estava.
+        val store = PlanLimitsStore(activity)
+        val now = System.currentTimeMillis()
+        val windows = others.associateWith { agent -> ChatHandoff.topWindow(store.load(agent.id), now) }
+        val sorted = ChatHandoff.byUsage(others) { windows[it]?.usedPercent }
         Sheet(activity)
             .title(activity.getString(R.string.chat_handoff_choose))
-            .rows(others.map { agent -> Sheet.Row(title = agent.name) { review(agent, items, files) } })
+            .rows(sorted.map { agent ->
+                Sheet.Row(
+                    title = agent.name,
+                    description = windows[agent]?.let { limitName(activity, it) },
+                ) { review(agent, items, repo) }
+            })
             .show()
     }
 
     /** Mostra o resumo num campo editável; só Continuar abre o chat do agente, com o texto no campo. */
-    private fun review(agent: AgentRecipe, items: List<ChatItem>, files: List<String>) {
+    private fun review(agent: AgentRecipe, items: List<ChatItem>, repo: Repo) {
         val labels = ChatHandoff.Labels(
             header = activity.getString(R.string.chat_handoff_header, activity.agentName),
             originalTitle = activity.getString(R.string.chat_handoff_original),
@@ -69,13 +94,23 @@ internal class HandoffFlow(private val activity: ChatActivity) {
             filesTitle = activity.getString(R.string.chat_handoff_files),
             moreFiles = activity.getString(R.string.chat_handoff_more),
             closing = activity.getString(R.string.chat_handoff_closing),
+            branchLine = activity.getString(R.string.chat_handoff_branch),
+            isolatedNote = activity.getString(R.string.chat_handoff_isolated),
+            errorTitle = activity.getString(R.string.chat_handoff_error),
+            planTitle = activity.getString(R.string.chat_handoff_plan),
+            diffTitle = activity.getString(R.string.chat_handoff_diff),
         )
         val summary = ChatHandoff.summary(
             items,
             activity.getString(R.string.chat_export_you),
             activity.agentName,
-            files,
+            repo.files,
             labels,
+            plan = ChatHandoff.lastPlan(items),
+            pendingError = ChatHandoff.lastFailure(items),
+            diffStat = repo.diffStat,
+            branch = repo.branch,
+            isolated = repo.isolated,
         )
         val pad = (activity.resources.displayMetrics.density * 16).toInt()
         val warning = TextView(activity)
@@ -86,21 +121,62 @@ internal class HandoffFlow(private val activity: ChatActivity) {
         field.gravity = Gravity.TOP or Gravity.START
         field.minLines = 6
         field.maxLines = 14
+        // Possível segredo no texto editado: só aviso (Continuar segue habilitado). Reavalia com uma pausa curta.
+        val alert = TextView(activity)
+        alert.setTextColor(activity.getColor(R.color.setup_error_text))
+        alert.setTypeface(null, Typeface.BOLD)
+        alert.visibility = View.GONE
+        val handler = Handler(Looper.getMainLooper())
+        val scan = Runnable {
+            val found = SecretScan.find(field.text.toString())
+            if (found.isEmpty()) {
+                alert.visibility = View.GONE
+            } else {
+                val listed = found.joinToString(", ") { f ->
+                    activity.getString(R.string.chat_handoff_secret_item, kindLabel(f.kind), f.snippet)
+                }
+                alert.text = activity.getString(R.string.chat_handoff_secret, listed)
+                alert.visibility = View.VISIBLE
+            }
+        }
+        field.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                handler.removeCallbacks(scan)
+                handler.postDelayed(scan, SECRET_SCAN_DELAY_MS)
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+        scan.run()
         val content = LinearLayout(activity)
         content.orientation = LinearLayout.VERTICAL
         content.setPadding(pad, pad / 2, pad, 0)
         content.addView(warning)
+        content.addView(alert)
         content.addView(
             field,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT),
         )
-        AlertDialog.Builder(activity)
+        val dialog = AlertDialog.Builder(activity)
             .setTitle(R.string.chat_handoff_review_title)
             .setView(content)
             .setPositiveButton(R.string.chat_handoff_go) { _, _ -> open(agent, field.text.toString()) }
             .setNegativeButton(android.R.string.cancel, null)
-            .show()
+            .create()
+        dialog.setOnDismissListener { handler.removeCallbacks(scan) }
+        dialog.show()
     }
+
+    /** Nome traduzido do tipo de segredo, para a linha de aviso. */
+    private fun kindLabel(kind: SecretScan.Kind): String = activity.getString(
+        when (kind) {
+            SecretScan.Kind.API_KEY -> R.string.chat_handoff_secret_api_key
+            SecretScan.Kind.TOKEN -> R.string.chat_handoff_secret_token
+            SecretScan.Kind.PRIVATE_KEY -> R.string.chat_handoff_secret_private_key
+            SecretScan.Kind.PASSWORD -> R.string.chat_handoff_secret_password
+            SecretScan.Kind.SECRET -> R.string.chat_handoff_secret_secret
+        },
+    )
 
     /**
      * Abre o chat do agente nesta pasta com o texto no campo. Sem chat dele aqui, pede uma conversa
@@ -114,6 +190,18 @@ internal class HandoffFlow(private val activity: ChatActivity) {
             .putExtra(ChatActivity.EXTRA_SHARED_TEXT, text)
         if (existing == null) intent.putExtra(ChatActivity.EXTRA_NEW, true)
         activity.startActivity(intent)
+    }
+
+    /**
+     * Saída do `git diff --stat` da pasta (só leitura, com tempo limite). Pasta sem git ou erro: vazio.
+     * `--no-optional-locks` (como no status) para não brigar com um commit ou um agente no índice.
+     */
+    private fun diffStat(linux: LinuxEnv, cwd: String): String {
+        // Com HEAD: mostra o que está no stage e fora dele. Sem HEAD (repositório sem commits), tenta sem ele.
+        val withHead = Git.run(linux, cwd, "--no-optional-locks", "diff", "HEAD", "--stat")
+        if (withHead.code == 0) return withHead.output
+        val plain = Git.run(linux, cwd, "--no-optional-locks", "diff", "--stat")
+        return if (plain.code == 0) plain.output else ""
     }
 
     /** Caminhos alterados da pasta (git status). Pasta sem git, erro ou saída cortada: o que deu para ler. */

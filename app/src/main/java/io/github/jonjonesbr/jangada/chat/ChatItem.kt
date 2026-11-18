@@ -130,6 +130,8 @@ sealed class ChatItem {
         val changeModel: Boolean = false,
         /** Mostra o link "Continuar" (o agente espera algo que o app não recebeu; ver [AgentChat.continueStuck]). */
         val continueAgent: Boolean = false,
+        /** Mostra o link "Continuar com outro agente" (cota esgotada; ver [HandoffFlow]). Nunca envia nada sozinho. */
+        val handoff: Boolean = false,
     ) : ChatItem()
     /** Raciocínio do agente: sempre guardado na conversa; a tela decide se mostra (ver [ChatView]). */
     class Thinking(var text: String) : ChatItem()

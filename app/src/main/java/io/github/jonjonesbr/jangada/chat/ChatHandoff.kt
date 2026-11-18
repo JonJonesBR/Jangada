@@ -3,7 +3,8 @@ package io.github.jonjonesbr.jangada.chat
 /**
  * Resumo para continuar a conversa com outro agente (função pura, sem Android e sem IA). Quando a
  * cota de um agente acaba, o trabalho passa a outro agente na mesma pasta: a sessão não migra, então
- * o resumo leva o pedido original, as últimas mensagens e os arquivos alterados.
+ * o resumo leva o pedido original, as últimas mensagens, o plano, a última falha, o branch e os
+ * arquivos alterados.
  */
 object ChatHandoff {
 
@@ -18,6 +19,16 @@ object ChatHandoff {
         val moreFiles: String,
         /** Fecho que pede ao agente para conferir o git diff e continuar. */
         val closing: String,
+        /** Linha do branch; tem um %1$s com o nome (ex.: "Branch: %1$s"). */
+        val branchLine: String,
+        /** Aviso de trabalho isolado (worktree de outro repositório). */
+        val isolatedNote: String,
+        /** Título da seção "Parou em" (a última ação que falhou). */
+        val errorTitle: String,
+        /** Título da seção do plano; cada item sai com [x] (feito) ou [ ] (falta). */
+        val planTitle: String,
+        /** Título da seção do git diff --stat. */
+        val diffTitle: String,
     )
 
     /** Quantas mensagens recentes entram (além do pedido original). */
@@ -29,14 +40,31 @@ object ChatHandoff {
     /** Quantos arquivos alterados são listados. */
     const val MAX_FILES = 30
 
+    /** Tamanho máximo do texto da falha ("Parou em"), em caracteres. */
+    const val ERROR_CHARS = 400
+
+    /** Tamanho máximo da saída do git diff --stat, em caracteres. */
+    const val DIFF_CHARS = 1200
+
+    /** Quantos itens do plano entram e o tamanho máximo de cada um, em caracteres. */
+    const val MAX_PLAN = 30
+    const val PLAN_ENTRY_CHARS = 200
+
     private const val SEP = "\n\n"
     private const val ELLIPSIS = "…"
+    private const val SECTION_DIFF = "diff"
+    private const val SECTION_PLAN = "plan"
+    private const val SECTION_ERROR = "error"
+    /** Ordem em que as seções novas saem quando não cabem (a primeira sai antes). */
+    private val DROP_ORDER = listOf(SECTION_DIFF, SECTION_PLAN, SECTION_ERROR)
 
     /**
-     * Monta o resumo. Ordem: cabeçalho, pedido original, últimas mensagens, arquivos alterados e fecho.
-     * [maxChars] corta primeiro as mensagens recentes mais antigas; o pedido original sempre fica
-     * (só é cortado se sozinho passar de metade do limite). Conversa sem mensagens sai só com o
-     * cabeçalho, os arquivos e o fecho.
+     * Monta o resumo. Ordem: cabeçalho, branch (se houver), pedido original, "Parou em" (se houver),
+     * plano (se houver), git diff --stat (se houver), últimas mensagens, arquivos alterados e fecho.
+     * As seções novas são reservadas antes das mensagens recentes: [maxChars] corta primeiro as
+     * recentes mais antigas. Se nem as seções couberem, sai primeiro o diff, depois o plano e por
+     * último o "Parou em". O pedido original sempre fica (só é cortado se sozinho passar de metade
+     * do limite). Os dados novos têm padrão vazio: sem eles, o resumo sai como antes.
      */
     fun summary(
         items: List<ChatItem>,
@@ -45,6 +73,11 @@ object ChatHandoff {
         changedFiles: List<String>,
         labels: Labels,
         maxChars: Int = 6000,
+        plan: List<PlanEntry> = emptyList(),
+        pendingError: String? = null,
+        diffStat: String = "",
+        branch: String? = null,
+        isolated: Boolean = false,
     ): String {
         // O pedido original é a primeira mensagem do usuário que chegou ao agente (a descartada não chegou).
         val firstUser = items.firstOrNull { it is ChatItem.User && textOf(it) != null }
@@ -63,24 +96,104 @@ object ChatHandoff {
             if (more > 0) append("\n").append(labels.moreFiles.format(more))
         }
 
-        fun assemble(recentSection: String?): String =
-            listOfNotNull(labels.header, original, recentSection, filesSection, labels.closing).joinToString(SEP)
+        val branchSection = if (branch == null && !isolated) null else buildString {
+            if (branch != null) append(labels.branchLine.format(branch))
+            if (isolated) {
+                if (branch != null) append("\n")
+                append(labels.isolatedNote)
+            }
+        }
+
+        val errorSection = pendingError?.trim()?.takeIf { it.isNotEmpty() }
+            ?.let { "${labels.errorTitle}\n${limit(it, ERROR_CHARS)}" }
+
+        val planSection = if (plan.isEmpty()) null else buildString {
+            append(labels.planTitle)
+            for (entry in plan.take(MAX_PLAN)) {
+                val mark = if (entry.status == "completed") "[x]" else "[ ]"
+                append("\n").append(mark).append(' ').append(limit(entry.text.trim(), PLAN_ENTRY_CHARS))
+            }
+        }
+
+        val diffText = diffStat.trim().takeIf { it.isNotEmpty() }?.let { limit(it, DIFF_CHARS) }
+        val diffSection = diffText?.let { labels.diffTitle + "\n" + it }
+
+        // Seções novas que ainda entram; as que não couberem saem na ordem de DROP_ORDER.
+        val kept = HashSet(DROP_ORDER)
+
+        fun assemble(recentSection: String?): String = listOfNotNull(
+            labels.header,
+            branchSection,
+            original,
+            errorSection.takeIf { SECTION_ERROR in kept },
+            planSection.takeIf { SECTION_PLAN in kept },
+            diffSection.takeIf { SECTION_DIFF in kept },
+            recentSection,
+            filesSection,
+            labels.closing,
+        ).joinToString(SEP)
+
+        var base = assemble(null)
+        for (name in DROP_ORDER) {
+            if (base.length <= maxChars) break
+            kept.remove(name)
+            base = assemble(null)
+        }
 
         // Espaço que sobra para as recentes: conta cada uma com o separador (conservador, não passa do limite).
-        val base = assemble(null)
         var room = maxChars - base.length - SEP.length - labels.recentTitle.length - 1
-        val kept = ArrayList<String>()
+        val recentKept = ArrayList<String>()
         for ((who, text) in recent.asReversed()) {
             val entry = "$who: ${limit(text, MESSAGE_CHARS)}"
             val cost = entry.length + SEP.length
             // Para na primeira que não cabe: as mais antigas ficam de fora.
             if (cost > room) break
             room -= cost
-            kept.add(0, entry)
+            recentKept.add(0, entry)
         }
-        val recentSection = if (kept.isEmpty()) null else labels.recentTitle + "\n" + kept.joinToString(SEP)
+        val recentSection = if (recentKept.isEmpty()) null else labels.recentTitle + "\n" + recentKept.joinToString(SEP)
         return assemble(recentSection)
     }
+
+    /**
+     * Último plano da conversa (o último ChatItem.Plan), ou vazio se não houve plano. Os itens saem
+     * na ordem do agente; quem monta o resumo marca o que está feito.
+     */
+    fun lastPlan(items: List<ChatItem>): List<PlanEntry> =
+        (items.lastOrNull { it is ChatItem.Plan } as? ChatItem.Plan)?.entries.orEmpty()
+
+    /**
+     * Falha que deixou a conversa parada: vale só se o ÚLTIMO item for uma ação (Tool) com falha
+     * (estado FAILED; recusada ou cancelada não conta) ou um aviso de erro (Info isError). Avisos
+     * de cota ou de troca de modelo (handoff, changeModel) são pulados. Null = sem falha pendente.
+     * Texto: "nome: saída" (a saída da ação, ou o resumo dela se não há saída).
+     */
+    fun lastFailure(items: List<ChatItem>): String? {
+        val last = items.lastOrNull { item -> !(item is ChatItem.Info && (item.handoff || item.changeModel)) }
+            ?: return null
+        return when (last) {
+            is ChatItem.Tool -> if (!last.failed) null else {
+                val detail = last.output?.trim()?.takeIf { it.isNotEmpty() } ?: last.summary.trim()
+                "${last.name}: $detail".trim().takeIf { it.isNotEmpty() }
+            }
+            is ChatItem.Info -> if (last.isError) last.text.trim().takeIf { it.isNotEmpty() } else null
+            else -> null
+        }
+    }
+
+    /**
+     * Janela com mais uso do agente, já com as renovadas até [nowMs] zeradas (ver [PlanLimitsParser.current]).
+     * Null quando não há cota conhecida.
+     */
+    fun topWindow(limits: PlanLimits?, nowMs: Long): LimitWindow? =
+        limits?.let { PlanLimitsParser.current(it, nowMs).windows.maxByOrNull { w -> w.usedPercent } }
+
+    /**
+     * Ordem da lista de agentes: menor uso primeiro; sem cota conhecida ([usedPercent] null) no fim.
+     * Entre iguais (e entre os sem cota), vale a ordem original (a ordenação é estável).
+     */
+    fun <T> byUsage(agents: List<T>, usedPercent: (T) -> Int?): List<T> =
+        agents.sortedWith(compareBy<T> { usedPercent(it) == null }.thenBy { usedPercent(it) })
 
     /** Texto da mensagem (sem espaços nas pontas), ou null se não é mensagem do usuário/agente ou está vazia. */
     private fun textOf(item: ChatItem): String? {
