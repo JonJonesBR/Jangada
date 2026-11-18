@@ -61,6 +61,7 @@ import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.ChildSummary
+import io.github.jonjonesbr.jangada.chat.HandoffFlow
 import io.github.jonjonesbr.jangada.chat.HistoryFlow
 import io.github.jonjonesbr.jangada.chat.OpenCodeDialogs
 import io.github.jonjonesbr.jangada.chat.OpenCodeStats
@@ -193,6 +194,8 @@ class ChatActivity : JangadaActivity() {
     private val worktrees = WorktreeFlow(this)
     /** Histórico de conversas (lista, busca e apagar), fora desta tela; ver [HistoryFlow]. */
     private val history = HistoryFlow(this)
+    /** "Continuar com outro agente" (resumo para outro agente da mesma pasta); ver [HandoffFlow]. */
+    private val handoff = HandoffFlow(this)
     /** Diálogo "já há agentes demais" aberto (evita abrir dois). */
     private var jobsFullDialog: Dialog? = null
     /** Painel de pouca memória aberto (evita abrir dois). */
@@ -1897,6 +1900,11 @@ class ChatActivity : JangadaActivity() {
             description = getString(R.string.chat_export_desc),
             icon = "⇩",
         ) { exportConversation() }
+        rows += Sheet.Row(
+            title = getString(R.string.chat_handoff),
+            description = getString(R.string.chat_handoff_desc),
+            icon = "⇢",
+        ) { handoff.start() }
         rows += Sheet.Row(
             title = getString(R.string.chat_menu_settings),
             description = getString(R.string.chat_menu_settings_desc),
