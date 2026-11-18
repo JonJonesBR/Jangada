@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.28.3
+
+- Chat do agy: o aviso "O agente segue esperando algo em segundo plano" some quando o agente termina o que estava em segundo plano e responde sozinho. Antes podia ficar na tela por até uma hora, com a resposta mostrando o cursor de digitação parado.
+
 ## 1.28.2
 
 - Chat do agy: ao acordar do sono, o agente volta com o modelo que o chat usava (antes voltava ao padrão e podia dar cota esgotada). A primeira mensagem espera o modelo ser reaplicado, sem prender a fila mais de 15 s.

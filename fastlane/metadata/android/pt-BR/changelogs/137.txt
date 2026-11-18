@@ -1,0 +1,1 @@
+Chat do agy: o aviso de segundo plano some quando o agente termina e responde sozinho; a resposta não fica mais com o cursor parado.

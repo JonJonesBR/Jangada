@@ -1,0 +1,1 @@
+agy chat: the background notice goes away when the agent finishes and replies on its own; the reply no longer keeps a frozen cursor.
