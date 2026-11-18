@@ -252,6 +252,53 @@ class AcpCatchUpTest {
         assertFalse(plan.hasNew)
     }
 
+    // ---- Mensagens coladas no replay (caso real do agy) ----
+
+    private val fimDoTurno = "\n\nAcompanho o build do APK de teste; assim que terminar, baixo para a pasta Download."
+    private val respostaSozinha = "\n\nAPK de teste gerado e salvo na pasta Download. Pode instalar."
+
+    @Test
+    fun mensagemColadaNaDaTelaEntraComoNova() {
+        // O agy manda a mensagem do fim do turno e a que escreve quando o comando em segundo plano acaba sem
+        // messageId nem nada entre elas: o replay junta as duas num bloco. Antes, o bloco contava como conhecido
+        // (a tela tem o começo dele), a vigia não via a resposta e o aviso de segundo plano seguia na tela.
+        val replay = listOf(
+            tool("tool_call", "t1", "completed"),
+            msg(fimDoTurno),
+            msg(respostaSozinha),
+        )
+        val plan = AcpCatchUp.plan(replay, setOf("t1"), listOf(fimDoTurno))
+        assertTrue(plan.hasNew)
+        assertTrue(plan.newMessages)
+        assertEquals(listOf("tool_call", "agent_message_chunk"), kindsOf(plan))
+        assertEquals(respostaSozinha.trim(), plan.toApply.last().getJSONObject("content").getString("text"))
+    }
+
+    @Test
+    fun mensagemColadaQueJaEstaNaTelaNaoRepete() {
+        // No alcance seguinte, a resposta já está na tela como bolha própria: nada novo.
+        val replay = listOf(
+            tool("tool_call", "t1", "completed"),
+            msg(fimDoTurno),
+            msg(respostaSozinha),
+        )
+        val plan = AcpCatchUp.plan(replay, setOf("t1"), listOf(fimDoTurno, respostaSozinha))
+        assertFalse(plan.hasNew)
+        assertEquals(listOf("tool_call"), kindsOf(plan))
+    }
+
+    @Test
+    fun mensagemColadaVemAntesDoQueChegouDepoisDela() {
+        val replay = listOf(
+            msg(fimDoTurno),
+            msg(respostaSozinha),
+            tool("tool_call", "t2", "completed"),
+        )
+        val plan = AcpCatchUp.plan(replay, emptySet(), listOf(fimDoTurno))
+        assertEquals(listOf("agent_message_chunk", "tool_call"), kindsOf(plan))
+        assertEquals(setOf("t2"), plan.newToolIds)
+    }
+
     // ---- Vigia depois do alcance ----
 
     private fun next(

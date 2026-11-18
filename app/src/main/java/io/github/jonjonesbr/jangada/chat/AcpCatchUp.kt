@@ -114,7 +114,9 @@ object AcpCatchUp {
         val blocks = groupBlocks(replay, blockAt)
         // Só depois, descarta o que não entra na comparação com a tela.
         val candidates = replay.indices.filter { replay[it].optString("sessionUpdate") !in IGNORED }
-        val knownBlocks = blocks.filter { isKnown(it, screenTexts) }.toSet()
+        val unseenOf = blocks.associateWith { unseen(it.text.toString(), screenTexts) }
+        // Conhecido (todo ou só o começo): o que casa com a tela marca até onde a tela já foi.
+        val knownBlocks = blocks.filter { unseenOf[it] != it.text.toString().trim() }.toSet()
         // O último update que já está na tela: tudo que vem depois dele é novo.
         val known = candidates.filter { i ->
             val block = blockAt[i]
@@ -133,13 +135,19 @@ object AcpCatchUp {
         // Ações já na tela que ainda estão antes do corte: o status (e a saída) pode ter mudado.
         val earlierKnownTools = candidates.filter { it <= cut && isKnownTool(replay[it], knownToolIds) }
         val fresh = after.filter { isFresh(replay[it], blockAt[it]) }
+        // O último bloco conhecido pode ter crescido: o agy manda duas mensagens seguidas (a do fim do turno e a
+        // que ele escreve quando o comando em segundo plano acaba) sem messageId nem nada entre elas, e o replay as
+        // junta num bloco só. A parte que ainda não está na tela entra como mensagem nova, na posição do bloco.
+        val tail = blockAt.getOrNull(cut)?.takeIf { !applyAll }?.let { unseenOf[it] }?.takeIf { it.isNotEmpty() }
+            ?.let { cut to JSONObject().put("sessionUpdate", "agent_message_chunk").put("content", JSONObject().put("type", "text").put("text", it)) }
 
-        val newMessages = fresh.any { replay[it].optString("sessionUpdate") == "agent_message_chunk" }
+        val newMessages = tail != null || fresh.any { replay[it].optString("sessionUpdate") == "agent_message_chunk" }
         val newToolIds = fresh.filter { isToolKind(replay[it]) }
             .map { replay[it].optString("toolCallId") }
             .filter { it !in knownToolIds }
             .toSet()
-        val toApply = (earlierKnownTools + fresh).sorted().map { replay[it] }
+        val toApply = ((earlierKnownTools + fresh).map { it to replay[it] } + listOfNotNull(tail))
+            .sortedBy { it.first }.map { it.second }
         return Plan(toApply, hasNew = newMessages || newToolIds.isNotEmpty(), newToolIds = newToolIds, newMessages = newMessages)
     }
 
@@ -181,18 +189,22 @@ object AcpCatchUp {
     }
 
     /**
-     * O bloco já está na tela: igual a um texto da tela, contido nele (só se for longo o bastante) ou começo
-     * parcial de um texto da tela (a resposta ainda chegava quando o turno parou).
+     * O que do texto de um bloco ainda não está na tela: "" se já está todo (igual a um texto da tela ou contido
+     * nele, só se for longo o bastante); o texto inteiro (sem espaços nas pontas) se nada casar.
+     *
+     * Bloco que começa com um texto da tela: se o resto vem no meio do parágrafo, a tela tem a resposta cortada
+     * (o turno parou enquanto ela chegava) e o bloco conta como conhecido. Se o resto começa num parágrafo novo, é
+     * outra mensagem colada à da tela (ver [plan]), conferida da mesma forma (pode já estar na tela, à parte).
      */
-    private fun isKnown(block: Block, screenTexts: List<String>): Boolean {
-        val text = block.text.toString().trim()
-        if (text.isEmpty()) return false
-        return screenTexts.any { screen ->
-            val shown = screen.trim()
-            shown.isNotEmpty() && (shown == text ||
-                (text.length >= MIN_PARTIAL && shown.contains(text)) ||
-                (shown.length >= MIN_PARTIAL && text.startsWith(shown)))
-        }
+    private fun unseen(text: String, screenTexts: List<String>): String {
+        val t = text.trim()
+        if (t.isEmpty()) return ""
+        val shown = screenTexts.map { it.trim() }.filter { it.isNotEmpty() }
+        if (shown.any { it == t || (t.length >= MIN_PARTIAL && it.contains(t)) }) return ""
+        val prefix = shown.filter { it.length >= MIN_PARTIAL && t.startsWith(it) }.maxByOrNull { it.length } ?: return t
+        val rest = t.substring(prefix.length)
+        if ('\n' !in rest.takeWhile { it.isWhitespace() }) return ""
+        return unseen(rest, screenTexts)
     }
 
     private fun isToolKind(update: JSONObject): Boolean = update.optString("sessionUpdate") in TOOL_KINDS
