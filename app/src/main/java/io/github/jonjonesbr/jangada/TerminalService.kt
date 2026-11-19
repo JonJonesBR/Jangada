@@ -484,6 +484,11 @@ class TerminalService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        memoryWatch.onTrimMemory(level)
+    }
+
     override fun onDestroy() {
         memoryWatch.stop()
         main.removeCallbacks(autoCleanCheck)

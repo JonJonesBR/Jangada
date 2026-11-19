@@ -44,6 +44,20 @@ class MemoryPolicyTest {
         assertEquals(Level.CRITICAL, MemoryPolicy.level(limit + 900 * mib, limit, lowMemory = true))
     }
 
+    @Test
+    fun trimMemoryMapeiaApenasNiveisDeFaltaDeMemoria() {
+        assertEquals(Level.CRITICAL, MemoryPolicy.trimLevel(MemoryPolicy.TRIM_RUNNING_CRITICAL))
+        assertEquals(Level.CRITICAL, MemoryPolicy.trimLevel(MemoryPolicy.TRIM_COMPLETE))
+        assertEquals(Level.TIGHT, MemoryPolicy.trimLevel(MemoryPolicy.TRIM_RUNNING_MODERATE))
+        assertEquals(Level.TIGHT, MemoryPolicy.trimLevel(MemoryPolicy.TRIM_RUNNING_LOW))
+        assertEquals(Level.TIGHT, MemoryPolicy.trimLevel(MemoryPolicy.TRIM_MODERATE))
+        // UI_HIDDEN (20) e BACKGROUND (40) indicam ida para segundo plano, não falta de memória.
+        assertNull(MemoryPolicy.trimLevel(20))
+        assertNull(MemoryPolicy.trimLevel(40))
+        assertEquals(Level.CRITICAL, MemoryPolicy.maxLevel(Level.TIGHT, Level.CRITICAL))
+        assertEquals(Level.TIGHT, MemoryPolicy.maxLevel(Level.TIGHT, Level.OK))
+    }
+
     // ---- Pressão ----
 
     @Test

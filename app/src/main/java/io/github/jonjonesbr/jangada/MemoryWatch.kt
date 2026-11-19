@@ -22,6 +22,26 @@ object MemoryPolicy {
     private const val MIB = 1024L * 1024L
     private const val MINUTE_MS = 60_000L
 
+    /** Valores públicos de android.content.ComponentCallbacks2 (mantém a política sem importar Android). */
+    const val TRIM_RUNNING_MODERATE = 5
+    const val TRIM_RUNNING_LOW = 10
+    const val TRIM_RUNNING_CRITICAL = 15
+    const val TRIM_MODERATE = 60
+    const val TRIM_COMPLETE = 80
+
+    /**
+     * Nível mínimo vindo de [android.content.ComponentCallbacks2.onTrimMemory] (null = não dispara).
+     * UI_HIDDEN (20) e BACKGROUND (40) só indicam troca de app, não falta de memória.
+     */
+    fun trimLevel(trim: Int): Level? = when (trim) {
+        TRIM_RUNNING_CRITICAL, TRIM_COMPLETE -> Level.CRITICAL
+        TRIM_RUNNING_LOW, TRIM_RUNNING_MODERATE, TRIM_MODERATE -> Level.TIGHT
+        else -> null
+    }
+
+    /** O nível mais severo entre [a] e [b]. */
+    fun maxLevel(a: Level, b: Level): Level = if (a.ordinal >= b.ordinal) a else b
+
     /**
      * Nível pela memória disponível em relação ao limite do sistema ([thresholdBytes]).
      * [lowMemory] é o aviso do próprio Android: vale como crítico.
@@ -110,6 +130,8 @@ class MemoryWatch(private val service: TerminalService) {
     private var scheduled = false
     /** Leitura dos relatórios em andamento: a próxima conferência só é agendada depois dela. */
     private var reading = false
+    /** Nível de onTrimMemory que chegou durante uma leitura (aplicado assim que ela terminar). */
+    private var pendingTrim: MemoryPolicy.Level? = null
     /** Muda a cada [stop]: a resposta de uma leitura antiga é descartada. */
     private var generation = 0
     /** elapsedRealtime do último agente posto para dormir por pressão (null = nenhum ainda). */
@@ -145,10 +167,38 @@ class MemoryWatch(private val service: TerminalService) {
         main.removeCallbacks(tick)
         scheduled = false
         reading = false
+        pendingTrim = null
         generation++
         lastUsage = emptyMap()
         lastUsageAt = null
         clearNotice()
+    }
+
+    /**
+     * Reage ao aviso de falta de memória do Android ([android.content.ComponentCallbacks2.onTrimMemory]).
+     * Em níveis de pressão (ver [MemoryPolicy.trimLevel]), dispara uma conferência imediata sem
+     * concorrer com o tique normal: se já há uma leitura em andamento, guarda o nível para aplicá-lo
+     * assim que ela terminar.
+     */
+    fun onTrimMemory(trim: Int) {
+        val floor = MemoryPolicy.trimLevel(trim) ?: return
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            main.post { onTrimMemory(trim) }
+            return
+        }
+        if (!anyRunning()) {
+            clearNotice()
+            return
+        }
+        if (reading) {
+            pendingTrim = pendingTrim?.let { MemoryPolicy.maxLevel(it, floor) } ?: floor
+            return
+        }
+        if (scheduled) {
+            main.removeCallbacks(tick)
+            scheduled = false
+        }
+        onTick(floor = floor, fromTrim = true)
     }
 
     /** Some com o aviso de pouca memória, se está no canal. */
@@ -205,14 +255,14 @@ class MemoryWatch(private val service: TerminalService) {
         return result
     }
 
-    private fun onTick() {
+    private fun onTick(floor: MemoryPolicy.Level = MemoryPolicy.Level.OK, fromTrim: Boolean = false) {
         scheduled = false
         if (!anyRunning()) {
             clearNotice()
             return
         }
         val info = memoryInfo()
-        val level = MemoryPolicy.level(info.availMem, info.threshold, info.lowMemory)
+        val level = MemoryPolicy.maxLevel(MemoryPolicy.level(info.availMem, info.threshold, info.lowMemory), floor)
         if (level == MemoryPolicy.Level.OK) clearNotice()
         val targets = sleepable()
         // Com agente rodando, os relatórios são sempre lidos: é deles que sai o pico de cada agente.
@@ -226,10 +276,17 @@ class MemoryWatch(private val service: TerminalService) {
             main.post {
                 if (gen != generation) return@post
                 reading = false
+                val pending = pendingTrim
+                pendingTrim = null
+                val effectiveLevel = if (pending != null) MemoryPolicy.maxLevel(level, pending) else level
+                val urgent = fromTrim || pending != null
+                val currentTargets = if (pending != null) sleepable() else targets
                 rememberUsage(running, usage)
                 recordPeaks(running, usage)
                 // Quem dorme só é escolhido quando há quem possa dormir, ou a memória está crítica.
-                if (targets.isNotEmpty() || level == MemoryPolicy.Level.CRITICAL) decide(level, targets, usage)
+                if (currentTargets.isNotEmpty() || effectiveLevel == MemoryPolicy.Level.CRITICAL) {
+                    decide(effectiveLevel, currentTargets, usage, urgent)
+                }
                 ensureRunning()
             }
         }
@@ -271,11 +328,18 @@ class MemoryWatch(private val service: TerminalService) {
     }
 
     /** Põe para dormir quem a política escolher (thread principal). */
-    private fun decide(level: MemoryPolicy.Level, targets: Map<String, AgentChat>, usage: Map<String, JobMemory.Usage?>) {
+    private fun decide(
+        level: MemoryPolicy.Level,
+        targets: Map<String, AgentChat>,
+        usage: Map<String, JobMemory.Usage?>,
+        urgent: Boolean = false,
+    ) {
         val now = SystemClock.elapsedRealtime()
         val candidates = candidatesOf(targets, usage)
-        // Depois de um sono por pressão, a memória leva um tempo para voltar: espera antes de outro.
-        val pausing = lastPressureSleep?.let { now - it < PRESSURE_PAUSE_MS } == true
+        // Depois de um sono por pressão, a memória leva um tempo para voltar: espera antes de outro,
+        // salvo quando o próprio Android avisa pressão crítica por onTrimMemory.
+        val pausing = !(urgent && level == MemoryPolicy.Level.CRITICAL) &&
+            lastPressureSleep?.let { now - it < PRESSURE_PAUSE_MS } == true
         val byPressure = if (pausing) emptyList() else MemoryPolicy.toSleepForPressure(candidates, level)
         val slept = sleepEach(byPressure, targets)
         if (slept.isNotEmpty()) lastPressureSleep = now
