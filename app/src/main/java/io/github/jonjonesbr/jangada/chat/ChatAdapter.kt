@@ -154,12 +154,19 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
             setSpan(RelativeSizeSpan(0.8f), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
         val maxTextWidth = ((activity.contentWidthPx() * 0.82).toInt() - dp(28)).coerceAtLeast(dp(120))
-        box.addView(TextView(activity).apply {
-            text = shown
-            setTextColor(getColor(R.color.key_text))
-            textSize = 16f * chatScale
-            maxWidth = maxTextWidth
-        })
+        // WRAP_CONTENT explícito: o padrão de LinearLayout vertical é MATCH_PARENT, o que faz o
+        // LinearLayout medir a bolha só pela largura do horário (WRAP_CONTENT) e espremer o texto.
+        box.addView(
+            TextView(activity).apply {
+                text = shown
+                setTextColor(getColor(R.color.key_text))
+                textSize = 16f * chatScale
+                maxWidth = maxTextWidth
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ),
+        )
         if (!item.dropped && item.timestampMs > 0L) {
             box.addView(
                 TextView(activity).apply {
