@@ -1,5 +1,14 @@
 # Novidades
 
+## 1.29.0
+
+- Chat: "Continuar com outro agente" (no menu ⋮ e no atalho quando a cota acaba) monta um resumo editável com pedido original, últimas mensagens, plano, última falha, branch/worktree, `git diff --stat` e arquivos alterados, sem enviar sozinho. A lista de agentes é ordenada pelo uso da cota e o campo avisa se encontrar possíveis segredos no texto.
+- Tela inicial: cartão de aviso quando as notificações do app estão desligadas no Android, levando direto aos ajustes de notificação (some assim que são ligadas).
+- Memória: o app reage na hora aos avisos de falta de memória do Android (`onTrimMemory`) para pôr agentes ociosos para dormir, e a leitura do uso de memória na Home e no painel de trabalhos agora roda fora da thread principal.
+- Chat: as ações dos avisos da conversa (Continuar, Trocar de modelo, Continuar com outro agente, Detalhes e links) agora são botões maiores (48 dp) para facilitar o toque.
+- Histórico do chat: conversas sem título são puladas antes do limite da lista (evita abrir conversa nova sem aviso ao retomar a última do Claude).
+- Correções no terminal, serviço e CI: cancelamento da digitação lenta ao trocar de sessão ou sair, `stderr` isolado por execução do agente, debounce ao atualizar o DNS da rede e publicação da `nightly` pela API sem guardar credenciais no git.
+
 ## 1.28.3
 
 - Chat do agy: o aviso "O agente segue esperando algo em segundo plano" some quando o agente termina o que estava em segundo plano e responde sozinho. Antes podia ficar na tela por até uma hora, com a resposta mostrando o cursor de digitação parado.

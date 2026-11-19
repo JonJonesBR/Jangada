@@ -1,0 +1,1 @@
+Chat: "Continue with another agent" (in the ⋮ menu and quota-exhausted shortcut) builds an editable summary with the request, plan, error, branch and changes, sorted by usage limit with a secret warning. Home screen warns when app notifications are off. Immediate low-memory reaction, easier-to-tap chat notice actions, and history and terminal fixes.
