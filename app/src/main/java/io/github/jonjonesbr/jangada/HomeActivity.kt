@@ -1026,8 +1026,8 @@ class HomeActivity : JangadaActivity() {
      * Bloco de memória (acima da lista): quanto os agentes usam, o resto dos apps e o livre, com o
      * que dá para usar antes de o Android fechar apps, e a previsão para mais um agente. Também põe o
      * detalhe de memória em cada linha de trabalho. Some sem agente aberto ou sem o Linux pronto.
-     * Chamado a cada atualização da lista e pelo [jobsTicker] (leitura de arquivos pequenos e do
-     * ActivityManager, sem timer próprio).
+     * Chamado a cada atualização da lista e pelo [jobsTicker] (lê os relatórios fora da thread
+     * principal via [MemoryWatch.readUsageByKey] e atualiza a tela na volta).
      */
     private fun renderMemory() {
         val svc = service

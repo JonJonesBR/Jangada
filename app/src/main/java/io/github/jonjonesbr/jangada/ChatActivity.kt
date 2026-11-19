@@ -504,6 +504,7 @@ class ChatActivity : JangadaActivity() {
         connection.unbind()
         service = null
         loadingJobs = false
+        jobsGen++
         super.onStop()
     }
 
@@ -571,6 +572,7 @@ class ChatActivity : JangadaActivity() {
         onDisconnected = {
             service = null
             loadingJobs = false
+            jobsGen++
         },
     )
 
@@ -1853,18 +1855,21 @@ class ChatActivity : JangadaActivity() {
         }
     }
 
+    /** Evita abrir dois painéis de trabalhos ao tocar duas vezes enquanto o uso de memória é lido. */
+    private var loadingJobs = false
+    private var jobsGen = 0
+
     /**
      * Trabalhos abertos (agente · pasta · estado), com ● no início do desta tela. Tocar em
      * outro abre a tela dele; "Novo trabalho…" escolhe uma pasta para o mesmo agente.
      */
-    /** Evita abrir dois painéis de trabalhos ao tocar duas vezes enquanto o uso de memória é lido. */
-    private var loadingJobs = false
-
     private fun showJobs() {
         if (loadingJobs) return
         val svc = service ?: return
         loadingJobs = true
+        val gen = ++jobsGen
         svc.memoryWatch.readUsageByKey { usage ->
+            if (gen != jobsGen) return@readUsageByKey
             loadingJobs = false
             if (!started || isDestroyed || isFinishing) return@readUsageByKey
             val current = service ?: return@readUsageByKey

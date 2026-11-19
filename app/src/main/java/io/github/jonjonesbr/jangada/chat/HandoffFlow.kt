@@ -206,7 +206,6 @@ internal class HandoffFlow(private val activity: ChatActivity) {
             }
             override fun afterTextChanged(s: Editable?) = Unit
         })
-        scan.run()
         val content = LinearLayout(activity)
         content.orientation = LinearLayout.VERTICAL
         content.setPadding(pad, pad / 2, pad, 0)
@@ -231,6 +230,7 @@ internal class HandoffFlow(private val activity: ChatActivity) {
         }
         openDialog = dialog
         dialog.show()
+        scan.run()
     }
 
     /** Nome traduzido do tipo de segredo, para a linha de aviso. */
