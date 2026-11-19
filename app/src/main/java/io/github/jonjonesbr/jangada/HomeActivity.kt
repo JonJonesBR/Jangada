@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada
 import android.Manifest
 import android.app.AlertDialog
 import android.app.Dialog
+import android.app.NotificationManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -105,6 +106,8 @@ class HomeActivity : JangadaActivity() {
     private var jobFilter: JobFilter = JobFilter.All
     /** Cartão de boas-vindas; null depois de tirado da tela. */
     private var welcomeCard: View? = null
+    /** Aviso quando as notificações do app estão desligadas no Android. */
+    private lateinit var notificationsCard: View
 
     /** null = ainda verificando; senão, os comandos encontrados no Debian. */
     private var installed: Set<String>? = null
@@ -196,6 +199,8 @@ class HomeActivity : JangadaActivity() {
         findViewById<Button>(R.id.open_terminal).setOnClickListener { openTerminal() }
         findViewById<Button>(R.id.storage_allow).setOnClickListener { requestStorage() }
         findViewById<Button>(R.id.storage_details).setOnClickListener { showSpaceDetails() }
+        notificationsCard = findViewById(R.id.notifications_card)
+        findViewById<Button>(R.id.notifications_open).setOnClickListener { openNotificationSettings() }
         findViewById<Button>(R.id.projects_open).setOnClickListener { startActivity(Intent(this, ProjectsActivity::class.java)) }
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
@@ -211,6 +216,23 @@ class HomeActivity : JangadaActivity() {
         renderAgents()
         fetchLatestVersions()
         showLastCrash()
+    }
+
+    /** Mostra o cartão quando as notificações do app estão desligadas no sistema; some assim que ligam. */
+    private fun renderNotifications() {
+        val enabled = (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).areNotificationsEnabled()
+        notificationsCard.visibility = if (enabled) View.GONE else View.VISIBLE
+    }
+
+    /** Abre os ajustes de notificação do app no Android (com fallback para os detalhes do app). */
+    private fun openNotificationSettings() {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        runCatching { startActivity(intent) }.onFailure {
+            runCatching {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+            }
+        }
     }
 
     /** Tira o cartão de boas-vindas da tela, sem recriar a tela. */
@@ -386,6 +408,7 @@ class HomeActivity : JangadaActivity() {
         paused = false
         service?.homeScreenVisible = true
         if (!::agentsList.isInitialized) return
+        renderNotifications()
         if (askedStorage) afterStorageRequest() else renderStorage()
         // Sem serviço, não há o que mudar nos cartões: onServiceConnected desenha quando ligar.
         if (service != null) {

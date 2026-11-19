@@ -130,6 +130,47 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
+        <!-- Aviso quando as notificações do app estão desligadas no Android (ver HomeActivity.renderNotifications). -->
+        <LinearLayout
+            android:id="@+id/notifications_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/notifications_off_title"
+                android:textColor="@color/setup_text"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.15"
+                android:text="@string/notifications_off_body"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/notifications_open"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:minHeight="48dp"
+                android:backgroundTint="@color/key_active"
+                android:text="@string/notifications_off_open"
+                android:textAllCaps="false"
+                android:textColor="@color/setup_on_accent"
+                android:textStyle="bold" />
+        </LinearLayout>
+
         <!-- Projetos (~/projetos): entrada própria, fora do cartão de arquivos. Visível com o Linux pronto (ver HomeActivity.renderStorage). -->
         <Button
             android:id="@+id/projects_open"

@@ -119,6 +119,9 @@
     <string name="storage_allow">Permitir acesso</string>
     <string name="storage_ready">Projetos: ~/projetos · Arquivos do celular: ~/celular (Downloads em ~/celular/Download)</string>
     <string name="storage_denied">Acesso não liberado. Você pode permitir nas configurações do Android, no app Jangada.</string>
+    <string name="notifications_off_title">Notificações desligadas</string>
+    <string name="notifications_off_body">Sem notificações, o app não avisa quando um agente pede permissão, precisa de login ou termina uma resposta.</string>
+    <string name="notifications_off_open">Abrir ajustes de notificação</string>
     <string name="storage_new_sessions">Sessões já abertas só enxergam os arquivos do celular depois de reabertas.</string>
     <string name="storage_space">Celular: %1$s livres de %2$s.</string>
     <string name="storage_space_low">Celular: só %1$s livres de %2$s. Libere espaço para os agentes não falharem.</string>
