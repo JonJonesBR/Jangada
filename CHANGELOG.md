@@ -1,5 +1,9 @@
 # Novidades
 
+## 1.30.1
+
+- Chat: corrige a largura das bolhas das mensagens enviadas quando exibem horário (antes o texto podia ficar espremido na largura do carimbo de hora).
+
 ## 1.30.0
 
 - Chat: as mensagens e respostas agora mostram o horário (respeitando o formato 12h/24h do Android) e um separador de dia ("Hoje", "Ontem", data) sempre que a conversa atravessa dias. O histórico do Claude lê a data e hora gravadas de cada mensagem; em agentes ACP, mensagens antigas sem horário no protocolo ficam sem carimbo, sem chutar data.

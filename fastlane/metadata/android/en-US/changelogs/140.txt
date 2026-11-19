@@ -1,0 +1,1 @@
+Chat: fix sent message bubble width when timestamps are shown so text is no longer squeezed to the timestamp width.

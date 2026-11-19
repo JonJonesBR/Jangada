@@ -1,0 +1,1 @@
+Chat: corrige a largura das bolhas das mensagens enviadas quando exibem o horário, evitando que o texto fique espremido e quebrado na largura da hora.
