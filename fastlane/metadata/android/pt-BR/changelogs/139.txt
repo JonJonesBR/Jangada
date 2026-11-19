@@ -1,0 +1,1 @@
+Chat: mensagens e respostas agora mostram horário (no formato 12h/24h do Android) e separador de dia ("Hoje", "Ontem", data) quando a conversa passa de um dia para outro. O histórico do Claude lê a data e hora reais de cada mensagem, e a exportação em Markdown também inclui data e hora quando conhecidas.

@@ -1,5 +1,10 @@
 # Novidades
 
+## 1.30.0
+
+- Chat: as mensagens e respostas agora mostram o horário (respeitando o formato 12h/24h do Android) e um separador de dia ("Hoje", "Ontem", data) sempre que a conversa atravessa dias. O histórico do Claude lê a data e hora gravadas de cada mensagem; em agentes ACP, mensagens antigas sem horário no protocolo ficam sem carimbo, sem chutar data.
+- Exportação do chat: o Markdown salvo passa a incluir data e hora nas mensagens que têm horário conhecido.
+
 ## 1.29.0
 
 - Chat: "Continuar com outro agente" (no menu ⋮ e no atalho quando a cota acaba) monta um resumo editável com pedido original, últimas mensagens, plano, última falha, branch/worktree, `git diff --stat` e arquivos alterados, sem enviar sozinho. A lista de agentes é ordenada pelo uso da cota e o campo avisa se encontrar possíveis segredos no texto.

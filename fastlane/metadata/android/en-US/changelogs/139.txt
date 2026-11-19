@@ -1,0 +1,1 @@
+Chat: messages and replies now show timestamps (following Android’s 12h/24h format) and day separators ("Today", "Yesterday", date) whenever a conversation spans multiple days. Claude history reads the real timestamp of each message, and Markdown export includes dates and times when available.
