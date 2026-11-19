@@ -4,9 +4,15 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.io.File
 
 class ChatHistoryTest {
+
+    @get:Rule
+    val tmp = TemporaryFolder()
 
     private val transcript = listOf(
         """{"type":"summary","summary":"Resumo"}""",
@@ -132,5 +138,30 @@ class ChatHistoryTest {
         assertEquals("linha um linha dois", ChatHistory.snippet("linha um\nlinha dois", "dois", radius = 60))
         assertNull(ChatHistory.snippet("nada aqui", "outra"))
         assertNull(ChatHistory.snippet("nada aqui", "   "))
+    }
+
+    @Test
+    fun listaPulaArquivosSemTituloAntesDoLimite() {
+        val dir = tmp.newFolder("conv")
+        val valida = File(dir, "real.jsonl").apply {
+            writeText("""{"type":"user","message":{"role":"user","content":"Primeira conversa"}}""")
+            setLastModified(10_000L)
+        }
+        val antiga = File(dir, "antiga.jsonl").apply {
+            writeText("""{"type":"user","message":{"role":"user","content":"Mais antiga"}}""")
+            setLastModified(5_000L)
+        }
+        val semTitulo = File(dir, "so-meta.jsonl").apply {
+            writeText("""{"type":"user","isMeta":true,"message":{"role":"user","content":"interno"}}""")
+            setLastModified(20_000L)
+        }
+        assertTrue(valida.exists() && antiga.exists() && semTitulo.exists())
+
+        val uma = ChatHistory.listIn(dir, limit = 1)
+        assertEquals(listOf("real"), uma.map { it.id })
+        assertEquals(listOf("Primeira conversa"), uma.map { it.title })
+
+        val duas = ChatHistory.listIn(dir, limit = 2)
+        assertEquals(listOf("real", "antiga"), duas.map { it.id })
     }
 }
