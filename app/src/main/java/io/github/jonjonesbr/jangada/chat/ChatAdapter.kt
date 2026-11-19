@@ -7,10 +7,8 @@ import android.os.SystemClock
 import android.text.InputType
 import android.text.SpannableStringBuilder
 import android.text.Spanned
-import android.text.TextPaint
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
-import android.text.style.ClickableSpan
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.URLSpan
@@ -99,7 +97,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
                 is ChatItem.Permission -> permissionCard(item)
                 is ChatItem.Plan -> planView(item, old as? TextView)
                 is ChatItem.Login -> loginCard(item)
-                is ChatItem.Info -> infoText(item, old as? TextView)
+                is ChatItem.Info -> infoView(item, old as? LinearLayout)
                 is ChatItem.Thinking -> thinkingView(item, old as? TextView)
                 is ChatItem.ToolGroup -> toolGroupLine(item, old as? TextView)
                 is ChatItem.Child -> childCard(item)
@@ -1086,46 +1084,44 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
         setPadding(dp(14), dp(10), dp(14), dp(10))
     }
 
-    /** Aviso da conversa; com [ChatItem.Info.details], um link "Detalhes" abre o erro completo. */
-    private fun infoText(item: ChatItem.Info, old: TextView?) = (old ?: TextView(activity)).apply {
+    /** Aviso da conversa; ações (link, Continuar, Trocar de modelo, outro agente, Detalhes) viram botões de 48 dp. */
+    private fun infoView(item: ChatItem.Info, old: LinearLayout?): View {
+        val box = (old ?: LinearLayout(activity)).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            removeAllViews()
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+        }
+        val label = TextView(activity).apply {
+            text = item.text
+            gravity = Gravity.CENTER
+            textSize = 13f * chatScale
+            setTextColor(getColor(if (item.isError) R.color.setup_error_text else R.color.setup_muted_text))
+            setOnLongClickListener { activity.copy(item.text); true }
+        }
+        box.addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        fun action(title: String, onClick: () -> Unit) {
+            val button = Button(activity, null, android.R.attr.borderlessButtonStyle).apply {
+                text = title
+                isAllCaps = false
+                textSize = 13f * chatScale
+                minHeight = dp(48)
+                minimumHeight = dp(48)
+                setTextColor(getColor(R.color.accent_text))
+                setOnClickListener { onClick() }
+            }
+            box.addView(
+                button,
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT),
+            )
+        }
         val details = item.details
         val url = item.url
-        val changeModel = item.changeModel
-        val handoff = item.handoff
-        val hasLink = details != null || url != null || changeModel || item.continueAgent || handoff
-        text = if (!hasLink) {
-            item.text
-        } else {
-            SpannableStringBuilder(item.text).apply {
-                // Cada link numa linha própria: o do endereço (ex.: assinar o plano) e o de Detalhes.
-                fun link(label: String, action: () -> Unit) {
-                    append("\n")
-                    val start = length
-                    append(label)
-                    setSpan(
-                        object : ClickableSpan() {
-                            override fun onClick(widget: View) = action()
-
-                            override fun updateDrawState(ds: TextPaint) {
-                                ds.isUnderlineText = true
-                                ds.color = getColor(R.color.accent_text)
-                            }
-                        },
-                        start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
-                    )
-                }
-                if (url != null) link(item.urlLabel ?: url) { activity.openInfoUrl(url) }
-                if (item.continueAgent) link(getString(R.string.chat_stuck_continue)) { activity.continueAgent() }
-                if (changeModel) link(getString(R.string.chat_change_model)) { activity.showModelSheet() }
-                if (handoff) link(getString(R.string.chat_handoff)) { activity.startHandoff() }
-                if (details != null) link(getString(R.string.chat_error_details)) { activity.showDetails(R.string.chat_error_details, details) }
-            }
-        }
-        movementMethod = if (hasLink) LinkMovementMethod.getInstance() else null
-        gravity = Gravity.CENTER
-        textSize = 13f * chatScale
-        setTextColor(getColor(if (item.isError) R.color.setup_error_text else R.color.setup_muted_text))
-        setPadding(dp(12), dp(6), dp(12), dp(6))
-        setOnLongClickListener { activity.copy(item.text); true }
+        if (url != null) action(item.urlLabel ?: url) { activity.openInfoUrl(url) }
+        if (item.continueAgent) action(getString(R.string.chat_stuck_continue)) { activity.continueAgent() }
+        if (item.changeModel) action(getString(R.string.chat_change_model)) { activity.showModelSheet() }
+        if (item.handoff) action(getString(R.string.chat_handoff)) { activity.startHandoff() }
+        if (details != null) action(getString(R.string.chat_error_details)) { activity.showDetails(R.string.chat_error_details, details) }
+        return box
     }
 }
