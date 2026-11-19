@@ -146,11 +146,12 @@ object ChatHistory {
             val json = runCatching { JSONObject(line) }.getOrNull() ?: continue
             if (json.optBoolean("isMeta") || json.optBoolean("isSidechain")) continue
             val message = json.optJSONObject("message") ?: continue
+            val ts = ChatTime.parseIso(json.optString("timestamp"))
             when (json.optString("type")) {
                 "user" -> {
                     val content = message.opt("content")
                     if (content is String && content.isNotBlank() && !isInternal(content)) {
-                        add(ChatItem.User(content))
+                        add(ChatItem.User(content, timestampMs = ts))
                     } else if (content is JSONArray) {
                         for (i in 0 until content.length()) {
                             val block = content.optJSONObject(i) ?: continue
@@ -167,7 +168,7 @@ object ChatHistory {
                             }
                             val text = block.optString("text")
                             if (block.optString("type") == "text" && text.isNotBlank() && !isInternal(text)) {
-                                add(ChatItem.User(text))
+                                add(ChatItem.User(text, timestampMs = ts))
                             }
                         }
                     }
@@ -178,7 +179,7 @@ object ChatHistory {
                         val block = content.optJSONObject(i) ?: continue
                         when (block.optString("type")) {
                             "text" -> block.optString("text").takeIf { it.isNotBlank() }
-                                ?.let { add(ChatItem.Assistant(it, streaming = false)) }
+                                ?.let { add(ChatItem.Assistant(it, streaming = false, timestampMs = ts)) }
                             "thinking" -> block.optString("thinking").takeIf { it.isNotBlank() }
                                 ?.let { add(ChatItem.Thinking(it)) }
                             "tool_use" -> if (block.optString("name") == ChatEngine.TODO_TOOL) {

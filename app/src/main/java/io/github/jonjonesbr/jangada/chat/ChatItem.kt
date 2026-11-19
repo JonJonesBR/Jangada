@@ -1,6 +1,7 @@
 package io.github.jonjonesbr.jangada.chat
 
 import org.json.JSONObject
+import java.time.LocalDate
 
 /**
  * Ciclo de vida de uma ação do agente ([ChatItem.Tool]). CANCELLED é o turno parado antes de a ação
@@ -16,13 +17,15 @@ enum class ChildState { RUNNING, DONE, FAILED, INTERRUPTED }
 
 /** Um item da conversa mostrada no chat (igual para todos os agentes). */
 sealed class ChatItem {
-    class User(val text: String, val attachments: List<String> = emptyList()) : ChatItem() {
+    /** Mensagem enviada pelo usuário; [timestampMs] é época em ms (0 = desconhecido, ex.: replay ACP antigo). */
+    class User(val text: String, val attachments: List<String> = emptyList(), val timestampMs: Long = 0L) : ChatItem() {
         /** Na fila: ainda não foi enviada ao agente (espera o turno atual terminar). */
         var queued = false
         /** Descartada antes de ir ao agente (Parar, agente encerrado ou turno com erro); toque para editar. */
         var dropped = false
     }
-    class Assistant(var text: String, var streaming: Boolean) : ChatItem()
+    /** Resposta do agente; [timestampMs] é época em ms (0 = desconhecido), atualizado ao fim do streaming. */
+    class Assistant(var text: String, var streaming: Boolean, var timestampMs: Long = 0L) : ChatItem()
     class Tool(val id: String, var name: String, var summary: String) : ChatItem() {
         var done = false
         var failed = false
@@ -140,6 +143,11 @@ sealed class ChatItem {
      * `chat.items`; [ChatView.arrange] monta na hora, a partir das ações de verdade.
      */
     class ToolGroup(val tools: List<Tool>) : ChatItem()
+    /**
+     * Separador de dia entre mensagens ("Hoje", "Ontem", "17 de nov."). Só de exibição: nunca entra
+     * em `chat.items`; [ChatView.arrange] monta na hora a partir do horário das mensagens visíveis.
+     */
+    class DateHeader(val day: LocalDate) : ChatItem()
 
     /**
      * Subagente que o agente abriu (sessão filha; hoje só o opencode manda). Só de exibição: o

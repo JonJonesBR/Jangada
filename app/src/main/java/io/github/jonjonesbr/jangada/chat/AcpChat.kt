@@ -502,7 +502,7 @@ class AcpChat(
         if (!running) start(resume = sessionId)
         // Mensagem nova: o turno cuida de si (a vigia volta a ser armada no fim dele).
         disarmCatchUp()
-        val item = ChatItem.User(text, attachments.map { it.name })
+        val item = ChatItem.User(text, attachments.map { it.name }, timestampMs = System.currentTimeMillis())
         add(item)
         // Turno em andamento (ou agente ainda subindo): a mensagem espera na fila, sem um segundo session/prompt.
         if (busy || !ready || restoring > 0) {
@@ -626,7 +626,7 @@ class AcpChat(
         autoCompactArmed = false
         add(ChatItem.Info(context.getString(R.string.chat_auto_compacting, used)))
         // Mesmo caminho de uma mensagem enviada com turno em andamento: entra na fila e sai em sendNext().
-        val item = ChatItem.User(COMPACT_TEXT)
+        val item = ChatItem.User(COMPACT_TEXT, timestampMs = System.currentTimeMillis())
         item.queued = true
         add(item)
         queue += QueuedMessage(COMPACT_TEXT, emptyList(), item)
@@ -1301,8 +1301,9 @@ class AcpChat(
                 val continues = current != null && (items.lastOrNull() === current ||
                     (messageId != null && messageId == draftMessageId && items.lastOrNull { it !is ChatItem.Thinking } === current))
                 if (current == null || (messageId != null && messageId != draftMessageId) || !continues) {
-                    current?.streaming = false
-                    draft = ChatItem.Assistant(text, streaming = !loadingHistory).also { items += it }
+                    finishAssistantDraft()
+                    val ts = if (loadingHistory) 0L else System.currentTimeMillis()
+                    draft = ChatItem.Assistant(text, streaming = !loadingHistory, timestampMs = ts).also { items += it }
                     draftMessageId = messageId
                 } else {
                     current.text += text
@@ -1320,25 +1321,24 @@ class AcpChat(
                 changed(throttle = true)
             }
             "user_message_chunk" -> {
-                draft?.streaming = false
-                draft = null
+                finishAssistantDraft()
                 thoughtDraft = null
                 val text = AcpParse.contentText(update.optJSONObject("content")) ?: return
                 // Eco da mensagem que o app já mostrou (o agy devolve no turno ao vivo): não duplica.
                 if (!loadingHistory && userDraft == null && items.lastOrNull { it is ChatItem.User }.let { it is ChatItem.User && it.text == text }) return
                 val current = userDraft
                 if (current != null && items.lastOrNull() === current) {
-                    val merged = ChatItem.User(current.text + text)
+                    val merged = ChatItem.User(current.text + text, timestampMs = current.timestampMs)
                     items[items.size - 1] = merged
                     userDraft = merged
                 } else {
-                    userDraft = ChatItem.User(text).also { items += it }
+                    val ts = if (loadingHistory) 0L else System.currentTimeMillis()
+                    userDraft = ChatItem.User(text, timestampMs = ts).also { items += it }
                 }
                 changed(throttle = true)
             }
             "tool_call" -> {
-                draft?.streaming = false
-                draft = null
+                finishAssistantDraft()
                 userDraft = null
                 thoughtDraft = null
                 val id = update.optString("toolCallId")
@@ -1426,9 +1426,19 @@ class AcpChat(
         if (loadingHistory && !tool.done) tool.mark(ToolState.DONE, now)
     }
 
-    private fun finishDrafts() {
-        draft?.streaming = false
+    /** Fecha a resposta em streaming e marca a hora de conclusão (replay antigo sem streaming segue em 0). */
+    private fun finishAssistantDraft() {
+        draft?.let {
+            if (it.streaming) {
+                it.streaming = false
+                it.timestampMs = System.currentTimeMillis()
+            }
+        }
         draft = null
+    }
+
+    private fun finishDrafts() {
+        finishAssistantDraft()
         userDraft = null
         thoughtDraft = null
     }

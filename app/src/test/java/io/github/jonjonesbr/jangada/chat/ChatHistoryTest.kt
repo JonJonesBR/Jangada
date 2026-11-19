@@ -164,4 +164,20 @@ class ChatHistoryTest {
         val duas = ChatHistory.listIn(dir, limit = 2)
         assertEquals(listOf("real", "antiga"), duas.map { it.id })
     }
+
+    @Test
+    fun leTimestampDasMensagensDoHistorico() {
+        val lines = sequenceOf(
+            """{"type":"user","timestamp":"2026-11-18T22:10:00.000Z","message":{"role":"user","content":"Oi"}}""",
+            """{"type":"assistant","timestamp":"2026-11-18T22:10:15.500Z","message":{"content":[{"type":"text","text":"Olá"}]}}""",
+            """{"type":"user","message":{"role":"user","content":"Sem hora"}}""",
+        )
+
+        val items = ChatHistory.parse(lines, max = 10)
+
+        assertEquals(3, items.size)
+        assertEquals(java.time.Instant.parse("2026-11-18T22:10:00.000Z").toEpochMilli(), (items[0] as ChatItem.User).timestampMs)
+        assertEquals(java.time.Instant.parse("2026-11-18T22:10:15.500Z").toEpochMilli(), (items[1] as ChatItem.Assistant).timestampMs)
+        assertEquals(0L, (items[2] as ChatItem.User).timestampMs)
+    }
 }

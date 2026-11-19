@@ -5,6 +5,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 class ChatViewTest {
 
@@ -119,5 +122,48 @@ class ChatViewTest {
         // Sem a notificação da filha (tool não escondido), o cartão do pai não some.
         val visible = ChatItem.Tool("p2", "Subagent", "outro").apply { toolName = "subagent" }
         assertTrue(ChatView.arrange(listOf(visible, other), AppSettings.VIEW_NORMAL).any { it === visible })
+    }
+
+    @Test
+    fun separadorDeDiaEntraQuandoADataMudaEIgnoraQuemNaoTemHora() {
+        val utc = ZoneId.of("UTC")
+        val day1 = Instant.parse("2026-11-18T10:00:00Z").toEpochMilli()
+        val day1Later = Instant.parse("2026-11-18T10:05:00Z").toEpochMilli()
+        val day2 = Instant.parse("2026-11-19T09:00:00Z").toEpochMilli()
+        val items = listOf(
+            ChatItem.User("ontem", timestampMs = day1),
+            tool("t1"),
+            ChatItem.Assistant("ok", streaming = false, timestampMs = day1Later),
+            ChatItem.User("hoje", timestampMs = day2),
+        )
+
+        val shown = ChatView.arrange(items, AppSettings.VIEW_NORMAL, utc)
+
+        assertEquals(6, shown.size)
+        assertEquals(LocalDate.of(2026, 11, 18), (shown[0] as ChatItem.DateHeader).day)
+        assertTrue(shown[1] is ChatItem.User)
+        assertTrue(shown[2] is ChatItem.Tool)
+        assertTrue(shown[3] is ChatItem.Assistant)
+        assertEquals(LocalDate.of(2026, 11, 19), (shown[4] as ChatItem.DateHeader).day)
+        assertTrue(shown[5] is ChatItem.User)
+    }
+
+    @Test
+    fun replaySemHoraNaoGeraSeparadorAteChegarMensagemNova() {
+        val utc = ZoneId.of("UTC")
+        val today = Instant.parse("2026-11-19T12:00:00Z").toEpochMilli()
+        val items = listOf(
+            ChatItem.User("antiga"),
+            ChatItem.Assistant("resposta antiga", streaming = false),
+            ChatItem.User("nova", timestampMs = today),
+        )
+
+        val shown = ChatView.arrange(items, AppSettings.VIEW_SUMMARY, utc)
+
+        assertEquals(4, shown.size)
+        assertTrue(shown[0] is ChatItem.User)
+        assertTrue(shown[1] is ChatItem.Assistant)
+        assertEquals(LocalDate.of(2026, 11, 19), (shown[2] as ChatItem.DateHeader).day)
+        assertTrue(shown[3] is ChatItem.User)
     }
 }

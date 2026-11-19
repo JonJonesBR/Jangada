@@ -8,6 +8,7 @@ import android.text.InputType
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.TextUtils
+import android.text.format.DateFormat
 import android.text.method.LinkMovementMethod
 import android.text.style.ForegroundColorSpan
 import android.text.style.RelativeSizeSpan
@@ -26,6 +27,8 @@ import android.widget.Toast
 import io.github.jonjonesbr.jangada.AppSettings
 import io.github.jonjonesbr.jangada.ChatActivity
 import io.github.jonjonesbr.jangada.R
+import java.time.LocalDate
+import java.util.Locale
 import java.util.WeakHashMap
 
 /** Monta cada item da conversa (sem XML: são poucos tipos e bem simples). */
@@ -57,7 +60,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
     private val stateViews = WeakHashMap<ChatItem.Child, TextView>()
 
     /** Um tipo de linha para cada tipo de item (o Android reaproveita só dentro do mesmo tipo). */
-    override fun getViewTypeCount() = 10
+    override fun getViewTypeCount() = 11
 
     override fun getItemViewType(position: Int): Int = when (snapshot[position]) {
         is ChatItem.User -> 0
@@ -70,6 +73,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
         is ChatItem.Thinking -> 7
         is ChatItem.ToolGroup -> 8
         is ChatItem.Child -> 9
+        is ChatItem.DateHeader -> 10
     }
 
     /**
@@ -91,7 +95,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
         row.removeAllViews()
         row.addView(
             when (item) {
-                is ChatItem.User -> userBubble(item, old as? TextView)
+                is ChatItem.User -> userBubble(item, old as? LinearLayout)
                 is ChatItem.Assistant -> assistantView(item, old as? LinearLayout)
                 is ChatItem.Tool -> toolLine(item, old as? TextView)
                 is ChatItem.Permission -> permissionCard(item)
@@ -101,13 +105,42 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
                 is ChatItem.Thinking -> thinkingView(item, old as? TextView)
                 is ChatItem.ToolGroup -> toolGroupLine(item, old as? TextView)
                 is ChatItem.Child -> childCard(item)
+                is ChatItem.DateHeader -> dateHeaderView(item, old as? TextView)
             },
         )
         return row
     }
 
-    /** Mensagem do usuário; na fila ou descartada, uma linha pequena embaixo diz o que houve. */
-    private fun userBubble(item: ChatItem.User, old: TextView?) = (old ?: TextView(activity)).apply {
+    /** Mensagem do usuário; na fila ou descartada, uma linha pequena embaixo diz o que houve; com hora, ela vai discreta no canto. */
+    private fun userBubble(item: ChatItem.User, old: LinearLayout?): View {
+        val box = (old ?: LinearLayout(activity)).apply {
+            removeAllViews()
+            orientation = LinearLayout.VERTICAL
+            // Na fila ou não enviada, a bolha fica mais apagada; as views são reaproveitadas, então isto vale em todo uso.
+            alpha = if (item.queued || item.dropped) 0.6f else 1f
+            setBackgroundResource(R.drawable.bubble_user)
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            layoutParams = LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            ).apply { gravity = Gravity.END; leftMargin = dp(40) }
+            setOnLongClickListener { activity.copy(item.text); true }
+            contentDescription = null
+            if (item.dropped) {
+                // Não enviada: toque devolve o texto para a caixa, para editar e enviar de novo.
+                setOnClickListener {
+                    // Já há texto na caixa: não apaga, acrescenta numa linha nova.
+                    val typed = activity.input.text.toString().trimEnd()
+                    activity.input.setText(if (typed.isEmpty()) item.text else typed + "\n" + item.text)
+                    activity.input.setSelection(activity.input.text.length)
+                    activity.input.requestFocus()
+                }
+                isClickable = true
+            } else {
+                // Mesmo cuidado de toolLine: uma view reaproveitada não pode ficar clicável à toa.
+                setOnClickListener(null)
+                isClickable = false
+            }
+        }
         val body = item.text + item.attachments.joinToString("") { "\n📎 $it" }
         val note = when {
             item.queued -> getString(R.string.chat_queued)
@@ -120,37 +153,31 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
             append(note)
             setSpan(RelativeSizeSpan(0.8f), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        text = shown
-        // Na fila ou não enviada, a bolha fica mais apagada; as views são reaproveitadas, então isto vale em todo uso.
-        alpha = if (item.queued || item.dropped) 0.6f else 1f
-        setTextColor(getColor(R.color.key_text))
-        textSize = 16f * chatScale
-        setBackgroundResource(R.drawable.bubble_user)
-        setPadding(dp(14), dp(10), dp(14), dp(10))
-        maxWidth = (activity.contentWidthPx() * 0.82).toInt()
-        layoutParams = LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-        ).apply { gravity = Gravity.END; leftMargin = dp(40) }
-        setOnLongClickListener { activity.copy(item.text); true }
-        contentDescription = null
-        if (item.dropped) {
-            // Não enviada: toque devolve o texto para a caixa, para editar e enviar de novo.
-            setOnClickListener {
-                // Já há texto na caixa: não apaga, acrescenta numa linha nova.
-                val typed = activity.input.text.toString().trimEnd()
-                activity.input.setText(if (typed.isEmpty()) item.text else typed + "\n" + item.text)
-                activity.input.setSelection(activity.input.text.length)
-                activity.input.requestFocus()
-            }
-            isClickable = true
-        } else {
-            // Mesmo cuidado de toolLine: uma view reaproveitada não pode ficar clicável à toa.
-            setOnClickListener(null)
-            isClickable = false
+        val maxTextWidth = ((activity.contentWidthPx() * 0.82).toInt() - dp(28)).coerceAtLeast(dp(120))
+        box.addView(TextView(activity).apply {
+            text = shown
+            setTextColor(getColor(R.color.key_text))
+            textSize = 16f * chatScale
+            maxWidth = maxTextWidth
+        })
+        if (!item.dropped && item.timestampMs > 0L) {
+            box.addView(
+                TextView(activity).apply {
+                    text = formatTime(item.timestampMs)
+                    setTextColor(getColor(R.color.key_text))
+                    alpha = 0.85f
+                    textSize = 11.5f * chatScale
+                    setPadding(0, dp(3), 0, 0)
+                },
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply { gravity = Gravity.END },
+            )
         }
+        return box
     }
 
-    /** Resposta: texto com Markdown e blocos de código com botão Copiar. */
+    /** Resposta: texto com Markdown, blocos de código com botão Copiar e hora discreta ao terminar. */
     private fun assistantView(item: ChatItem.Assistant, old: LinearLayout?): View {
         val box = (old ?: LinearLayout(activity)).apply {
             removeAllViews()
@@ -163,7 +190,43 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
             val last = index == answer.parts.size - 1
             if (body == null) box.addView(codeBlock(part)) else box.addView(prose(body, item, last))
         }
+        if (!item.streaming && item.timestampMs > 0L) {
+            box.addView(TextView(activity).apply {
+                text = formatTime(item.timestampMs)
+                setTextColor(getColor(R.color.setup_muted_text))
+                textSize = 11.5f * chatScale
+                setPadding(dp(4), dp(2), dp(4), 0)
+            })
+        }
         return box
+    }
+
+    /** Separador de dia discreto (Hoje, Ontem, 17 de nov.), centralizado em pílula. */
+    private fun dateHeaderView(item: ChatItem.DateHeader, old: TextView?) = (old ?: TextView(activity)).apply {
+        text = formatDay(item.day)
+        setTextColor(getColor(R.color.setup_muted_text))
+        textSize = 12f * chatScale
+        setBackgroundResource(R.drawable.chip_bg)
+        setPadding(dp(12), dp(4), dp(12), dp(4))
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+        ).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(8); bottomMargin = dp(4) }
+    }
+
+    private fun formatTime(timestampMs: Long): String =
+        ChatTime.timeLabel(timestampMs, DateFormat.is24HourFormat(activity), locale = Locale.getDefault())
+
+    private fun formatDay(day: LocalDate): String {
+        val locale = Locale.getDefault()
+        return ChatTime.dayLabel(
+            day = day,
+            today = LocalDate.now(),
+            todayLabel = getString(R.string.chat_date_today),
+            yesterdayLabel = getString(R.string.chat_date_yesterday),
+            locale = locale,
+            sameYearPattern = DateFormat.getBestDateTimePattern(locale, "MMMd"),
+            otherYearPattern = DateFormat.getBestDateTimePattern(locale, "yMMMd"),
+        )
     }
 
     /** Resposta já separada e formatada. Só guarda no cache o que não está em streaming. */

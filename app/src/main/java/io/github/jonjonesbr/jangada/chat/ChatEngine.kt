@@ -169,7 +169,7 @@ class ChatEngine(
     override fun sendMessage(text: String, attachments: List<Attachment>) {
         if (!running) start(resume = sessionId)
         sentThisRun = true
-        val item = ChatItem.User(text, attachments.map { it.name })
+        val item = ChatItem.User(text, attachments.map { it.name }, timestampMs = System.currentTimeMillis())
         add(item)
         // Turno em andamento: a mensagem espera na fila e vai quando o turno acabar (ver "result").
         if (busy) {
@@ -478,8 +478,12 @@ class ChatEngine(
     /** Nenhuma resposta fica com o cursor piscando depois que o Claude parou de escrever. */
     private fun endStreaming() {
         draft = null
+        val now = System.currentTimeMillis()
         for (item in items) {
-            if (item is ChatItem.Assistant) item.streaming = false
+            if (item is ChatItem.Assistant && item.streaming) {
+                item.streaming = false
+                item.timestampMs = now
+            }
         }
     }
 
@@ -491,7 +495,7 @@ class ChatEngine(
                 val delta = event.optJSONObject("delta") ?: return
                 if (delta.optString("type") != "text_delta") return
                 val piece = delta.optString("text")
-                val current = draft ?: ChatItem.Assistant("", streaming = true).also {
+                val current = draft ?: ChatItem.Assistant("", streaming = true, timestampMs = System.currentTimeMillis()).also {
                     draft = it
                     items += it
                 }
@@ -532,12 +536,14 @@ class ChatEngine(
             }
         }
         if (text.isNotEmpty() && !fromSubagent) {
+            val now = System.currentTimeMillis()
             val current = draft
             if (current != null) {
                 current.text = text.toString()
                 current.streaming = false
+                current.timestampMs = now
             } else {
-                items += ChatItem.Assistant(text.toString(), streaming = false)
+                items += ChatItem.Assistant(text.toString(), streaming = false, timestampMs = now)
             }
         }
         draft = null
