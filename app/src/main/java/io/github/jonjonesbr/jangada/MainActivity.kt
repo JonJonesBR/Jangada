@@ -60,6 +60,8 @@ class MainActivity : ComponentActivity() {
     private var commandMode = false
     /** Enviando um comando tecla por tecla. */
     private var typing = false
+    /** Passo pendente de [typeSlowly] (ou Enter final), para cancelar ao trocar de sessão ou sair. */
+    private var typingRunnable: Runnable? = null
     private var enterAt = -1
     private val appSettings by lazy { AppSettings(this) }
     private val agents by lazy { io.github.jonjonesbr.jangada.agents.AgentCatalog.load(this) }
@@ -274,6 +276,11 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    override fun onDestroy() {
+        cancelTyping()
+        super.onDestroy()
+    }
+
     /** Ligação ao serviço (onStart liga, onStop desliga). */
     private val connection = ServiceBind(
         this,
@@ -400,6 +407,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun show(newSession: TerminalSession) {
+        if (session !== newSession) cancelTyping()
         session = newSession
         TerminalThemes.apply(appSettings.terminalTheme)
         findViewById<TextView>(R.id.session_title_bar).text = newSession.mSessionName ?: TerminalService.DEFAULT_TITLE
@@ -485,24 +493,39 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun cancelTyping() {
+        typingRunnable?.let { if (::terminalView.isInitialized) terminalView.removeCallbacks(it) }
+        typingRunnable = null
+        typing = false
+    }
+
     private fun typeSlowly(target: TerminalSession, text: String, then: () -> Unit) {
+        cancelTyping()
         val codePoints = text.codePoints().toArray()
         var index = 0
         typing = true
         val step = object : Runnable {
             override fun run() {
+                if (session !== target || isDestroyed) {
+                    cancelTyping()
+                    return
+                }
                 if (index < codePoints.size) {
                     target.write(String(Character.toChars(codePoints[index])))
                     index++
                     terminalView.postDelayed(this, KEY_DELAY_MS)
                 } else {
-                    terminalView.postDelayed({
+                    val finish = Runnable {
+                        typingRunnable = null
                         typing = false
-                        then()
-                    }, COMMAND_ENTER_DELAY_MS)
+                        if (session === target && !isDestroyed) then()
+                    }
+                    typingRunnable = finish
+                    terminalView.postDelayed(finish, COMMAND_ENTER_DELAY_MS)
                 }
             }
         }
+        typingRunnable = step
         terminalView.post(step)
     }
 

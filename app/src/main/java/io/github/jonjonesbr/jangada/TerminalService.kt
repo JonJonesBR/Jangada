@@ -492,6 +492,8 @@ class TerminalService : Service() {
     override fun onDestroy() {
         memoryWatch.stop()
         main.removeCallbacks(autoCleanCheck)
+        main.removeCallbacks(applyDns)
+        pendingDns = null
         tearDownSessions().forEach { it.stop() }
         linkWatcher?.stopWatching()
         cpuAwakeListener?.let { AppSettings(this).unwatchCpuAwake(it) }
@@ -506,18 +508,30 @@ class TerminalService : Service() {
         super.onDestroy()
     }
 
+    /** Últimos servidores DNS vindos da rede, aguardando o debounce antes de regravar o resolv.conf. */
+    private var pendingDns: List<java.net.InetAddress>? = null
+    private val applyDns = Runnable {
+        val servers = pendingDns ?: return@Runnable
+        pendingDns = null
+        thread(name = "jangada-dns") {
+            runCatching { LinuxEnv(this@TerminalService).takeIf { it.isReady }?.updateDns(servers) }
+        }
+    }
+
     /**
      * Quando a rede muda (Wi-Fi, dados, VPN), regrava o DNS do Debian com os
      * servidores da nova rede. Sem isso, apt e agentes não resolvem nomes em
-     * redes que bloqueiam o DNS público.
+     * redes que bloqueiam o DNS público. Com debounce para agrupar rajadas do Android.
      */
     private fun watchNetworkDns() {
         val manager = getSystemService(ConnectivityManager::class.java) ?: return
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
-                val servers = linkProperties.dnsServers
-                thread(name = "jangada-dns") {
-                    runCatching { LinuxEnv(this@TerminalService).takeIf { it.isReady }?.updateDns(servers) }
+                val servers = linkProperties.dnsServers.toList()
+                main.post {
+                    pendingDns = servers
+                    main.removeCallbacks(applyDns)
+                    main.postDelayed(applyDns, DNS_DEBOUNCE_MS)
                 }
             }
         }
@@ -1711,6 +1725,8 @@ class TerminalService : Service() {
         /** Limpeza automática: no máximo uma por dia, checada 2 min depois de o serviço ser pedido. */
         private const val AUTO_CLEAN_INTERVAL_MS = 24L * 60 * 60 * 1000
         private const val AUTO_CLEAN_DELAY_MS = 2L * 60 * 1000
+        /** Espera curta antes de regravar o DNS do Debian (agrupa rajadas de onLinkPropertiesChanged). */
+        private const val DNS_DEBOUNCE_MS = 1_500L
         const val DEFAULT_TITLE = "Terminal"
         const val CLAUDE = "claude-code"
 

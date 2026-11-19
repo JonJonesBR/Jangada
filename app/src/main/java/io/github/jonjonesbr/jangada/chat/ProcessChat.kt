@@ -110,6 +110,8 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         val writer: ExecutorService = Executors.newSingleThreadExecutor()
         @Volatile var process: Process? = null
         var closed = false
+        /** Últimas linhas de erro desta execução, mostradas se o processo fechar sozinho. */
+        val stderrTail = ArrayDeque<String>()
     }
 
     /** Execução atual do agente (só a thread principal mexe). */
@@ -148,8 +150,6 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         return true
     }
 
-    /** Últimas linhas de erro do agente, mostradas se ele fechar sozinho. */
-    private val stderrTail = ArrayDeque<String>()
     private var lastPost = 0L
 
     /**
@@ -167,7 +167,6 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         lastEventAtMs = now
         lastExitCode = null
         running = true
-        synchronized(stderrTail) { stderrTail.clear() }
         changed()
         c.writer.execute {
             val proc = try {
@@ -199,12 +198,12 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
             thread(name = "$tag-stderr") {
                 // Ao fechar o chat, a leitura é interrompida de propósito: não é erro.
                 runCatching {
-                    // A saída do agente não vai para o logcat: fica só em stderrTail (Detalhes).
+                    // A saída do agente não vai para o logcat: fica só em c.stderrTail (Detalhes).
                     proc.errorStream.bufferedReader().useLines { lines ->
                         lines.forEach {
-                            synchronized(stderrTail) {
-                                stderrTail.addLast(it)
-                                while (stderrTail.size > STDERR_LINES) stderrTail.removeFirst()
+                            synchronized(c.stderrTail) {
+                                c.stderrTail.addLast(it)
+                                while (c.stderrTail.size > STDERR_LINES) c.stderrTail.removeFirst()
                             }
                         }
                     }
@@ -343,7 +342,7 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
                 // o Parar (que desliga a conexão) nunca deixa um código para trás.
                 if (code != 0 || midTurn) lastExitCode = code
                 // A mensagem da saída (inclusive a de resposta pela metade) fica com onExited: um texto só.
-                onExited(code, synchronized(stderrTail) { stderrTail.joinToString("\n") }, midTurn)
+                onExited(code, synchronized(c.stderrTail) { c.stderrTail.joinToString("\n") }, midTurn)
                 // O AcpChat pode mostrar o cartão de login na saída: aí o cartão é o único aviso.
                 val loginShown = loginBefore || items.lastOrNull() is ChatItem.Login
                 // Continuar só faz sentido se a mesma conversa pode ser retomada.

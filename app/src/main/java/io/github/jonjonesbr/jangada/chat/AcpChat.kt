@@ -898,13 +898,13 @@ class AcpChat(
     /** Nível de uma ação do turno (ver AcpCatchUp.levelOf). */
     private fun levelOf(tool: ChatItem.Tool): AcpCatchUp.Level = AcpCatchUp.levelOf(tool, tool.id in waitAsyncIds)
 
+    /** Vigia forte armada: a faixa de status mostra que o agente segue com algo em segundo plano. */
+    override val watching: Boolean get() = watchUntilMs != 0L && watchLevel == AcpCatchUp.Level.STRONG
+
     /**
      * Arma ou estende a vigia no [level]. Nível forte sobrepõe o fraco (a janela e o intervalo passam a ser
      * os dele); a janela só cresce. O chat não dorme enquanto a vigia estiver armada.
      */
-    /** Vigia forte armada: a faixa de status mostra que o agente segue com algo em segundo plano. */
-    override val watching: Boolean get() = watchUntilMs != 0L && watchLevel == AcpCatchUp.Level.STRONG
-
     private fun armWatch(now: Long, level: AcpCatchUp.Level) {
         val before = watching
         if (watchUntilMs == 0L) {
