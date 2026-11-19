@@ -228,31 +228,43 @@ class MemoryWatch(private val service: TerminalService) {
     }
 
     /**
-     * Memória de cada agente que [sleepIdleNow] poria para dormir agora (rssKb * 1024 do relatório
-     * atual), menos [exceptKey]: quem tem comando em segundo plano não dorme, então não conta. Sem
-     * relatório conta 0. Para a previsão da tela inicial; só na thread principal.
+     * Memória de cada agente que [sleepIdleNow] poria para dormir agora (rssKb * 1024), menos
+     * [exceptKey], usando o mapa [usage] já lido fora da thread principal (sem leitura de arquivo
+     * aqui). Quem tem comando em segundo plano não dorme, então não conta; sem relatório conta 0.
      */
-    fun idleUsageBytes(exceptKey: String?): List<Long> {
+    fun idleUsageBytes(exceptKey: String?, usage: Map<String, JobMemory.Usage?>): List<Long> {
         val targets = sleepable().filterKeys { it != exceptKey }
-        val linux = LinuxEnv(service)
-        val usage = targets.mapValues { (_, chat) -> usageOf(linux, chat) }
         val keys = MemoryPolicy.toSleepForPressure(candidatesOf(targets, usage), MemoryPolicy.Level.CRITICAL)
         return keys.map { (usage[it]?.rssKb ?: 0L) * 1024L }
     }
 
     /**
-     * Memória de cada trabalho aberto (chave de [TerminalService.chatKey]), para a tela: o relatório
-     * de quem roda; null para os parados e os dormindo, e para quem não tem relatório. Só na thread
-     * principal; lê só os arquivos pequenos dos trabalhos que rodam.
+     * Lê fora da thread principal o uso de memória de cada trabalho aberto (chave de
+     * [TerminalService.chatKey]) e entrega o mapa na thread principal: o relatório de quem roda;
+     * null para os parados e os dormindo, e para quem não tem relatório.
      */
-    fun usageByKey(): Map<String, JobMemory.Usage?> {
-        val linux = LinuxEnv(service)
-        val result = LinkedHashMap<String, JobMemory.Usage?>()
+    fun readUsageByKey(onReady: (Map<String, JobMemory.Usage?>) -> Unit) {
+        val jobs = LinkedHashMap<String, String?>()
         for ((key, slot) in service.chats) {
             val chat = slot.chat
-            result[key] = if (chat.running && chatState(chat) != ChatState.ASLEEP) usageOf(linux, chat) else null
+            jobs[key] = if (chat.running && chatState(chat) != ChatState.ASLEEP) chat.jobId else null
         }
-        return result
+        if (jobs.values.all { it == null }) {
+            onReady(jobs.mapValues { null })
+            return
+        }
+        val linux = LinuxEnv(service)
+        val gen = generation
+        thread(name = "jangada-uso") {
+            val result = LinkedHashMap<String, JobMemory.Usage?>(jobs.size)
+            for ((key, jobId) in jobs) {
+                result[key] = jobId?.let { JobMemory.read(linux, it) }
+            }
+            main.post {
+                if (gen != generation) return@post
+                onReady(result)
+            }
+        }
     }
 
     private fun onTick(floor: MemoryPolicy.Level = MemoryPolicy.Level.OK, fromTrim: Boolean = false) {

@@ -156,6 +156,8 @@ class HomeActivity : JangadaActivity() {
     }
     /** Estados dos trabalhos na última vez que a lista foi desenhada. */
     private var drawnJobStates: List<Pair<String, ChatState>> = emptyList()
+    /** Muda ao iniciar nova leitura ou pausar a tela: descarta resultado velho de [renderMemory]. */
+    private var memoryGen = 0
     private val simpleMode get() = AppSettings(this).simpleMode
     /** Flag do cálculo de espaço em andamento; vira true ao fechar o painel de espera ou a tela. */
     private var measuring: AtomicBoolean? = null
@@ -419,6 +421,7 @@ class HomeActivity : JangadaActivity() {
 
     override fun onPause() {
         paused = true
+        memoryGen++
         service?.homeScreenVisible = false
         mainHandler.removeCallbacks(jobsTicker)
         super.onPause()
@@ -1029,11 +1032,25 @@ class HomeActivity : JangadaActivity() {
     private fun renderMemory() {
         val svc = service
         if (svc == null || svc.chats.isEmpty() || !linux.isReady) {
+            memoryGen++
             memoryBlock.visibility = View.GONE
             return
         }
+        val gen = ++memoryGen
+        svc.memoryWatch.readUsageByKey { usage ->
+            if (gen != memoryGen || paused || isDestroyed || isFinishing) return@readUsageByKey
+            val current = service ?: return@readUsageByKey
+            if (current.chats.isEmpty() || !linux.isReady) {
+                memoryBlock.visibility = View.GONE
+                return@readUsageByKey
+            }
+            applyMemory(current, usage)
+        }
+    }
+
+    /** Desenha o bloco de memória e o detalhe das linhas com o mapa já lido fora da thread principal. */
+    private fun applyMemory(svc: TerminalService, usage: Map<String, JobMemory.Usage?>) {
         val info = svc.memoryWatch.memoryInfo()
-        val usage = svc.memoryWatch.usageByKey()
         renderJobDetails(svc, usage)
         val ov = MemoryReport.overview(info.totalMem, info.availMem, info.threshold, usage.values)
         if (ov.agentsBytes + ov.otherBytes + ov.availBytes <= 0L) {
@@ -1053,7 +1070,7 @@ class HomeActivity : JangadaActivity() {
         if (memoryLegend.contentDescription?.toString() != legendDescription) memoryLegend.contentDescription = legendDescription
         val usableText = getString(R.string.home_memory_usable, size(ov.usableBytes))
         if (memoryText.text.toString() != usableText) memoryText.text = usableText
-        renderFit(fitMessage(svc, ov.usableBytes))
+        renderFit(fitMessage(svc, ov.usableBytes, usage))
         memoryBlock.visibility = View.VISIBLE
     }
 
@@ -1094,7 +1111,7 @@ class HomeActivity : JangadaActivity() {
      * Previsão "cabe mais um?" para o agente do último trabalho aberto: o texto e se não cabe (true =
      * em vermelho). Null sem histórico de pico desse agente ou sem nome dele.
      */
-    private fun fitMessage(svc: TerminalService, usableBytes: Long): Pair<String, Boolean>? {
+    private fun fitMessage(svc: TerminalService, usableBytes: Long, usage: Map<String, JobMemory.Usage?>): Pair<String, Boolean>? {
         val agentId = svc.chats.values.lastOrNull()?.agentId ?: return null
         val name = recipes.firstOrNull { it.id == agentId }?.name ?: return null
         val peak = svc.memoryWatch.peaks.typicalBytes(agentId) ?: return null
@@ -1102,7 +1119,7 @@ class HomeActivity : JangadaActivity() {
         val fit = MemoryReport.fit(
             usableBytes,
             peak,
-            svc.memoryWatch.idleUsageBytes(null),
+            svc.memoryWatch.idleUsageBytes(null, usage),
             running,
             svc.maxChats(),
         )

@@ -503,6 +503,7 @@ class ChatActivity : JangadaActivity() {
         // Sempre desfaz o bind feito em onStart, mesmo que o serviço ainda não tenha respondido.
         connection.unbind()
         service = null
+        loadingJobs = false
         super.onStop()
     }
 
@@ -567,7 +568,10 @@ class ChatActivity : JangadaActivity() {
                 }
             }
         },
-        onDisconnected = { service = null },
+        onDisconnected = {
+            service = null
+            loadingJobs = false
+        },
     )
 
     /**
@@ -1853,23 +1857,32 @@ class ChatActivity : JangadaActivity() {
      * Trabalhos abertos (agente · pasta · estado), com ● no início do desta tela. Tocar em
      * outro abre a tela dele; "Novo trabalho…" escolhe uma pasta para o mesmo agente.
      */
+    /** Evita abrir dois painéis de trabalhos ao tocar duas vezes enquanto o uso de memória é lido. */
+    private var loadingJobs = false
+
     private fun showJobs() {
+        if (loadingJobs) return
         val svc = service ?: return
-        val slots = svc.chats.values.toList()
-        val usage = svc.memoryWatch.usageByKey()
-        val rows = slots.map { slot ->
-            Sheet.Row(
-                title = jobName(agentNameOf(slot.agentId), slot.folder),
-                value = stateText(this, chatState(slot.chat)),
-                description = jobMemoryText(this, slot.chat, usage[TerminalService.chatKey(slot.agentId, slot.folder)]),
-                checked = slot.agentId == agentId && slot.folder == folder,
-            ) {
-                if (slot.agentId != agentId || slot.folder != folder) openJobScreen(slot.agentId, slot.folder)
+        loadingJobs = true
+        svc.memoryWatch.readUsageByKey { usage ->
+            loadingJobs = false
+            if (!started || isDestroyed || isFinishing) return@readUsageByKey
+            val current = service ?: return@readUsageByKey
+            val slots = current.chats.values.toList()
+            val rows = slots.map { slot ->
+                Sheet.Row(
+                    title = jobName(agentNameOf(slot.agentId), slot.folder),
+                    value = stateText(this, chatState(slot.chat)),
+                    description = jobMemoryText(this, slot.chat, usage[TerminalService.chatKey(slot.agentId, slot.folder)]),
+                    checked = slot.agentId == agentId && slot.folder == folder,
+                ) {
+                    if (slot.agentId != agentId || slot.folder != folder) openJobScreen(slot.agentId, slot.folder)
+                }
+            } + Sheet.Row(title = getString(R.string.chat_jobs_new), icon = "＋") {
+                loadFolders { folders -> chooseFolder(folders) }
             }
-        } + Sheet.Row(title = getString(R.string.chat_jobs_new), icon = "＋") {
-            loadFolders { folders -> chooseFolder(folders) }
+            Sheet(this).title(getString(R.string.chat_jobs)).rows(rows).show()
         }
-        Sheet(this).title(getString(R.string.chat_jobs)).rows(rows).show()
     }
 
     /** Nome de um trabalho na lista: o agente e, se não for a raiz, a pasta. */
