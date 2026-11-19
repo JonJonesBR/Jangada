@@ -91,6 +91,7 @@ class ChatHandoffTest {
     @Test
     fun ignoraItensQueNaoSaoMensagens() {
         val dropped = ChatItem.User("rascunho-xyz").apply { dropped = true }
+        val queued = ChatItem.User("na-fila-xyz").apply { queued = true }
         val items = listOf<ChatItem>(
             ChatItem.User("Pedido"),
             ChatItem.Tool("t1", "Bash", "ferramenta-xyz"),
@@ -98,6 +99,7 @@ class ChatHandoffTest {
             ChatItem.Plan(listOf(PlanEntry("plano-xyz", "pending"))),
             ChatItem.Info("aviso-xyz"),
             dropped,
+            queued,
             ChatItem.Assistant("Resposta", streaming = false),
         )
 
@@ -109,6 +111,33 @@ class ChatHandoffTest {
         assertFalse(text.contains("plano-xyz"))
         assertFalse(text.contains("aviso-xyz"))
         assertFalse(text.contains("rascunho-xyz"))
+        assertFalse(text.contains("na-fila-xyz"))
+        // Só descartada/na fila não conta como conversa pronta para passar.
+        assertFalse(ChatHandoff.hasConversation(listOf(dropped, queued, ChatItem.Info("aviso"))))
+        assertTrue(ChatHandoff.hasConversation(items))
+    }
+
+    @Test
+    fun caminhoLongoECortadoESecaoDeArquivosEntraNoCorte() {
+        val longPath = "dir/" + "a".repeat(250) + ".kt"
+        val oneFile = ChatHandoff.summary(
+            listOf(ChatItem.User("Pedido")), "Você", "Claude", listOf(longPath), labels,
+        )
+        val fileLine = oneFile.lines().first { it.startsWith("- dir/") }
+        assertEquals(2 + ChatHandoff.FILE_PATH_CHARS, fileLine.length)
+        assertTrue(fileLine.endsWith("…"))
+
+        // Muitos caminhos longos: a seção de arquivos sai no corte e não zera as mensagens recentes.
+        val manyFiles = (1..30).map { i -> "caminho$i/" + "x".repeat(180) + ".kt" }
+        val items = listOf<ChatItem>(
+            ChatItem.User("Pedido"),
+            ChatItem.Assistant("Ultima resposta importante", streaming = false),
+        )
+        val tight = ChatHandoff.summary(items, "Você", "Claude", manyFiles, labels, maxChars = 1000)
+
+        assertTrue(tight.length <= 1000)
+        assertFalse(tight.contains("ARQUIVOS"))
+        assertTrue(tight.contains("Claude: Ultima resposta importante"))
     }
 
     private val agora = 1_000L

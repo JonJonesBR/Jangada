@@ -31,6 +31,8 @@ class SecretScanTest {
         assertEquals(listOf(Kind.TOKEN), kinds("gho_" + "Z9".repeat(18)))
         assertEquals(listOf(Kind.TOKEN), kinds("github_pat_" + "A1_".repeat(8)))
         assertEquals(listOf(Kind.TOKEN), kinds("xoxb-" + "1234567890-abcd"))
+        assertEquals(listOf(Kind.TOKEN), kinds("glpat-" + "A1_b-".repeat(4)))
+        assertEquals(listOf(Kind.API_KEY), kinds("gsk_" + "B2c3".repeat(5)))
         assertEquals(listOf(Kind.API_KEY), kinds("AKIA" + "Q7".repeat(8)))
         assertEquals(listOf(Kind.API_KEY), kinds("AIza" + "B1-_".repeat(8) + "CD3"))
     }
@@ -60,6 +62,28 @@ class SecretScanTest {
         assertEquals(listOf(Kind.SECRET), kinds("secret: " + "abcd1234efgh"))
         // Aspas coladas no fim do valor saem do trecho mascarado.
         assertEquals(listOf(SecretScan.Finding(Kind.PASSWORD, "ab…")), SecretScan.find("password: \"abc12345\","))
+        // JSON com aspas envolvendo a chave também casa.
+        assertEquals(listOf(Kind.API_KEY), kinds("{\"api_key\": \"" + "k3y-value-123\"}"))
+        assertEquals(listOf(Kind.PASSWORD), kinds("{'senha': '" + "minha99senha'}"))
+    }
+
+    @Test
+    fun mascaraNaoMostraTrechoGrandeDeSenhaOuValorCurto() {
+        // Senha e segredo longos: sempre só 2 caracteres (nunca o fim).
+        val pwd = "s3nha" + "1234567890" + "final"
+        assertEquals(listOf(SecretScan.Finding(Kind.PASSWORD, "s3…")), SecretScan.find("password=$pwd"))
+        val sec = "seg99" + "abcdefghij" + "wxyz"
+        assertEquals(listOf(SecretScan.Finding(Kind.SECRET, "se…")), SecretScan.find("secret=$sec"))
+        // Token de 16 caracteres (abaixo de 24): só 2 caracteres, não 9 de 16.
+        val tok16 = "tok1" + "23456789" + "abcd"
+        assertEquals(listOf(SecretScan.Finding(Kind.TOKEN, "to…")), SecretScan.find("token=$tok16"))
+    }
+
+    @Test
+    fun limitaTamanhoDaVarredura() {
+        val lateKey = "sk-" + "ab" + "c".repeat(20) + "wxyz"
+        val huge = "a".repeat(SecretScan.MAX_CHARS + 100) + " $lateKey"
+        assertTrue(SecretScan.find(huge).isEmpty())
     }
 
     @Test

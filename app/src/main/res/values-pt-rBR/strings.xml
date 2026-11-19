@@ -808,8 +808,11 @@
     <string name="chat_handoff_desc">Passa o pedido e as mudanças para outro agente nesta pasta</string>
     <string name="chat_handoff_empty">Ainda não há conversa para passar</string>
     <string name="chat_handoff_none">Nenhum outro agente com chat está instalado</string>
+    <string name="chat_handoff_open_catalog">Abrir catálogo</string>
     <string name="chat_handoff_choose">Continuar com qual agente?</string>
+    <string name="chat_handoff_no_limit">Sem cota conhecida</string>
     <string name="chat_handoff_review_title">Resumo para o próximo agente</string>
+    <string name="chat_handoff_review_hint">Resumo para enviar ao próximo agente</string>
     <string name="chat_handoff_warning">O resumo pode ter trechos sensíveis e vai para outro agente, talvez de outra empresa. Revise antes de continuar.</string>
     <string name="chat_handoff_go">Continuar</string>
     <string name="chat_handoff_header">Esta conversa veio de outro agente (%1$s), cuja sessão não dá para migrar. Use este resumo como contexto; não presuma que está completo.</string>
@@ -823,7 +826,7 @@
     <string name="chat_handoff_error">Parou em</string>
     <string name="chat_handoff_plan">Plano (o que falta)</string>
     <string name="chat_handoff_diff">Mudanças (git diff --stat)</string>
-    <string name="chat_handoff_secret">Possível segredo no resumo: %1$s. Remova antes de continuar.</string>
+    <string name="chat_handoff_secret">Possível segredo no resumo: %1$s. Apague do texto se não quiser enviar.</string>
     <string name="chat_handoff_secret_item">%1$s (%2$s)</string>
     <string name="chat_handoff_secret_api_key">chave de API</string>
     <string name="chat_handoff_secret_token">token</string>

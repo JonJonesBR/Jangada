@@ -37,8 +37,9 @@ object ChatHandoff {
     /** Tamanho máximo de cada mensagem recente, em caracteres (o corte leva "…"). */
     const val MESSAGE_CHARS = 800
 
-    /** Quantos arquivos alterados são listados. */
+    /** Quantos arquivos alterados são listados e o tamanho máximo de cada caminho, em caracteres. */
     const val MAX_FILES = 30
+    const val FILE_PATH_CHARS = 200
 
     /** Tamanho máximo do texto da falha ("Parou em"), em caracteres. */
     const val ERROR_CHARS = 400
@@ -53,17 +54,21 @@ object ChatHandoff {
     private const val SEP = "\n\n"
     private const val ELLIPSIS = "…"
     private const val SECTION_DIFF = "diff"
+    private const val SECTION_FILES = "files"
     private const val SECTION_PLAN = "plan"
     private const val SECTION_ERROR = "error"
-    /** Ordem em que as seções novas saem quando não cabem (a primeira sai antes). */
-    private val DROP_ORDER = listOf(SECTION_DIFF, SECTION_PLAN, SECTION_ERROR)
+    /** Ordem em que as seções opcionais saem quando não cabem (a primeira sai antes). */
+    private val DROP_ORDER = listOf(SECTION_DIFF, SECTION_FILES, SECTION_PLAN, SECTION_ERROR)
+
+    /** Há alguma mensagem aproveitável (enviada ou resposta) para passar a outro agente? */
+    fun hasConversation(items: List<ChatItem>): Boolean = items.any { textOf(it) != null }
 
     /**
      * Monta o resumo. Ordem: cabeçalho, branch (se houver), pedido original, "Parou em" (se houver),
      * plano (se houver), git diff --stat (se houver), últimas mensagens, arquivos alterados e fecho.
      * As seções novas são reservadas antes das mensagens recentes: [maxChars] corta primeiro as
-     * recentes mais antigas. Se nem as seções couberem, sai primeiro o diff, depois o plano e por
-     * último o "Parou em". O pedido original sempre fica (só é cortado se sozinho passar de metade
+     * recentes mais antigas. Se nem as seções couberem, sai primeiro o diff, depois os arquivos
+     * alterados, depois o plano e por último o "Parou em". O pedido original sempre fica (só é cortado se sozinho passar de metade
      * do limite). Os dados novos têm padrão vazio: sem eles, o resumo sai como antes.
      */
     fun summary(
@@ -91,7 +96,7 @@ object ChatHandoff {
 
         val filesSection = if (changedFiles.isEmpty()) null else buildString {
             append(labels.filesTitle)
-            for (path in changedFiles.take(MAX_FILES)) append("\n- ").append(path)
+            for (path in changedFiles.take(MAX_FILES)) append("\n- ").append(limit(path, FILE_PATH_CHARS))
             val more = changedFiles.size - MAX_FILES
             if (more > 0) append("\n").append(labels.moreFiles.format(more))
         }
@@ -129,7 +134,7 @@ object ChatHandoff {
             planSection.takeIf { SECTION_PLAN in kept },
             diffSection.takeIf { SECTION_DIFF in kept },
             recentSection,
-            filesSection,
+            filesSection.takeIf { SECTION_FILES in kept },
             labels.closing,
         ).joinToString(SEP)
 
@@ -198,8 +203,8 @@ object ChatHandoff {
     /** Texto da mensagem (sem espaços nas pontas), ou null se não é mensagem do usuário/agente ou está vazia. */
     private fun textOf(item: ChatItem): String? {
         val text = when (item) {
-            // Mensagem descartada (Parar, agente encerrado, erro) nunca foi ao agente: não entra.
-            is ChatItem.User -> if (item.dropped) null else item.text
+            // Mensagem descartada ou ainda na fila nunca foi ao agente: não entra.
+            is ChatItem.User -> if (item.dropped || item.queued) null else item.text
             is ChatItem.Assistant -> item.text
             else -> null
         }

@@ -812,8 +812,11 @@
     <string name="chat_handoff_desc">Pass the request and the changes to another agent in this folder</string>
     <string name="chat_handoff_empty">There is no conversation to pass on yet</string>
     <string name="chat_handoff_none">No other installed agent with chat</string>
+    <string name="chat_handoff_open_catalog">Open catalog</string>
     <string name="chat_handoff_choose">Continue with which agent?</string>
+    <string name="chat_handoff_no_limit">No known usage limit</string>
     <string name="chat_handoff_review_title">Summary for the next agent</string>
+    <string name="chat_handoff_review_hint">Summary to send to the next agent</string>
     <string name="chat_handoff_warning">The summary may contain sensitive parts and goes to another agent, possibly from another company. Review it before continuing.</string>
     <string name="chat_handoff_go">Continue</string>
     <string name="chat_handoff_header">This conversation comes from another agent (%1$s) whose session can’t be moved. Use this summary as context; don’t assume it is complete.</string>
@@ -827,7 +830,7 @@
     <string name="chat_handoff_error">Stopped at</string>
     <string name="chat_handoff_plan">Plan (what is left)</string>
     <string name="chat_handoff_diff">Changes (git diff --stat)</string>
-    <string name="chat_handoff_secret">Possible secret in the summary: %1$s. Remove it before continuing.</string>
+    <string name="chat_handoff_secret">Possible secret in the summary: %1$s. Delete it from the text if you don’t want to send it.</string>
     <string name="chat_handoff_secret_item">%1$s (%2$s)</string>
     <string name="chat_handoff_secret_api_key">API key</string>
     <string name="chat_handoff_secret_token">token</string>

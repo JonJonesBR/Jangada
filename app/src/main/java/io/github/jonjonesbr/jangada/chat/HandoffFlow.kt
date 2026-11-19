@@ -16,6 +16,7 @@ import android.widget.TextView
 import android.widget.Toast
 import io.github.jonjonesbr.jangada.AgentPrefs
 import io.github.jonjonesbr.jangada.ChatActivity
+import io.github.jonjonesbr.jangada.HomeActivity
 import io.github.jonjonesbr.jangada.R
 import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
@@ -38,48 +39,96 @@ internal class HandoffFlow(private val activity: ChatActivity) {
     /** Estado do git da pasta, lido fora da thread principal (ver [start]). */
     private class Repo(val files: List<String>, val diffStat: String, val branch: String?, val isolated: Boolean)
 
-    /** Toque no item do menu: sem conversa, avisa; senão lê o git da pasta e escolhe o agente. */
+    private val handler = Handler(Looper.getMainLooper())
+    private var openDialog: AlertDialog? = null
+    private var pendingScan: Runnable? = null
+    private var scanGeneration = 0
+    private var starting = false
+
+    /** Fecha o diálogo aberto e cancela varredura pendente quando a tela é destruída. */
+    fun destroy() {
+        pendingScan?.let { handler.removeCallbacks(it) }
+        pendingScan = null
+        scanGeneration++
+        openDialog?.dismiss()
+        openDialog = null
+    }
+
+    /** Toque no item do menu: sem conversa, avisa; senão lê catálogo, cotas e git fora da thread principal. */
     fun start() {
+        if (starting) return
         val items = activity.engine?.items?.toList().orEmpty()
-        if (items.none { it is ChatItem.User || it is ChatItem.Assistant }) {
+        if (!ChatHandoff.hasConversation(items)) {
             Toast.makeText(activity, R.string.chat_handoff_empty, Toast.LENGTH_SHORT).show()
             return
         }
+        starting = true
+        val app = activity.applicationContext
         val linux = activity.linux
         val cwd = Workspace.path(activity.folder)
+        val currentAgent = activity.agentId
         // Branch e worktree já estão na tela (lidos ao abrir a conversa); lidos aqui na thread principal.
         val branch = activity.folderBranch
         val isolated = activity.folderWorktreeOf != null
-        // O git lê o repositório e roda um processo: fora da thread principal.
+        // Catálogo, cotas e git lêem arquivos/processos: fora da thread principal.
         thread(name = "chat-handoff") {
-            val repo = Repo(changedFiles(linux, cwd), diffStat(linux, cwd), branch, isolated)
+            val result = runCatching {
+                val installed = AgentPrefs.installedCommands(app)
+                val others = AgentCatalog.load(app).filter { agent ->
+                    agent.hasChat && agent.id != currentAgent && (installed == null || agent.command in installed)
+                }
+                if (others.isEmpty()) return@runCatching null
+                // Cota conhecida de cada agente (a que o próprio agente informou); sem ela, a lista segue como estava.
+                val store = PlanLimitsStore(app)
+                val now = System.currentTimeMillis()
+                val windows = others.associateWith { agent -> ChatHandoff.topWindow(store.load(agent.id), now) }
+                val sorted = ChatHandoff.byUsage(others) { windows[it]?.usedPercent }
+                val repo = Repo(changedFiles(linux, cwd), diffStat(linux, cwd), branch, isolated)
+                Triple(repo, sorted, windows)
+            }
             activity.runOnUiThread {
-                if (!activity.isDestroyed && !activity.isFinishing) chooseAgent(items, repo)
+                starting = false
+                if (activity.isDestroyed || activity.isFinishing) return@runOnUiThread
+                val prepared = result.getOrNull()
+                if (prepared == null) {
+                    if (result.isSuccess) showNoAgents()
+                } else {
+                    chooseAgent(items, prepared.first, prepared.second, prepared.third)
+                }
             }
         }
     }
 
-    /** Agentes com chat, instalados e diferentes do atual. Lista de instalados nunca gravada = todos (como o compartilhar). */
-    private fun chooseAgent(items: List<ChatItem>, repo: Repo) {
-        val installed = AgentPrefs.installedCommands(activity)
-        val others = AgentCatalog.load(activity).filter { agent ->
-            agent.hasChat && agent.id != activity.agentId && (installed == null || agent.command in installed)
-        }
-        if (others.isEmpty()) {
-            Toast.makeText(activity, R.string.chat_handoff_none, Toast.LENGTH_LONG).show()
-            return
-        }
-        // Cota conhecida de cada agente (a que o próprio agente informou); sem ela, a lista segue como estava.
-        val store = PlanLimitsStore(activity)
-        val now = System.currentTimeMillis()
-        val windows = others.associateWith { agent -> ChatHandoff.topWindow(store.load(agent.id), now) }
-        val sorted = ChatHandoff.byUsage(others) { windows[it]?.usedPercent }
+    /** Nenhum outro agente instalado: explica e oferece abrir o catálogo na tela inicial. */
+    private fun showNoAgents() {
+        openDialog?.dismiss()
+        val dialog = AlertDialog.Builder(activity)
+            .setTitle(R.string.chat_handoff)
+            .setMessage(R.string.chat_handoff_none)
+            .setPositiveButton(R.string.chat_handoff_open_catalog) { _, _ ->
+                activity.startActivity(Intent(activity, HomeActivity::class.java))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .create()
+        dialog.setOnDismissListener { if (openDialog === dialog) openDialog = null }
+        openDialog = dialog
+        dialog.show()
+    }
+
+    /** Mostra a lista de agentes já ordenada por uso da cota. */
+    private fun chooseAgent(
+        items: List<ChatItem>,
+        repo: Repo,
+        sorted: List<AgentRecipe>,
+        windows: Map<AgentRecipe, LimitWindow?>,
+    ) {
         Sheet(activity)
             .title(activity.getString(R.string.chat_handoff_choose))
             .rows(sorted.map { agent ->
                 Sheet.Row(
                     title = agent.name,
-                    description = windows[agent]?.let { limitName(activity, it) },
+                    description = windows[agent]?.let { limitName(activity, it) }
+                        ?: activity.getString(R.string.chat_handoff_no_limit),
                 ) { review(agent, items, repo) }
             })
             .show()
@@ -116,29 +165,39 @@ internal class HandoffFlow(private val activity: ChatActivity) {
         val warning = TextView(activity)
         warning.text = activity.getString(R.string.chat_handoff_warning)
         val field = EditText(activity)
+        field.hint = activity.getString(R.string.chat_handoff_review_hint)
         field.setText(summary)
         field.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
         field.gravity = Gravity.TOP or Gravity.START
         field.minLines = 6
         field.maxLines = 14
-        // Possível segredo no texto editado: só aviso (Continuar segue habilitado). Reavalia com uma pausa curta.
+        // Possível segredo no texto editado: só aviso (Continuar segue habilitado). Reavalia em thread após pausa curta.
         val alert = TextView(activity)
         alert.setTextColor(activity.getColor(R.color.setup_error_text))
         alert.setTypeface(null, Typeface.BOLD)
+        alert.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         alert.visibility = View.GONE
-        val handler = Handler(Looper.getMainLooper())
+        pendingScan?.let { handler.removeCallbacks(it) }
         val scan = Runnable {
-            val found = SecretScan.find(field.text.toString())
-            if (found.isEmpty()) {
-                alert.visibility = View.GONE
-            } else {
-                val listed = found.joinToString(", ") { f ->
-                    activity.getString(R.string.chat_handoff_secret_item, kindLabel(f.kind), f.snippet)
+            val snapshot = field.text.toString()
+            val gen = ++scanGeneration
+            thread(name = "handoff-secret-scan") {
+                val found = SecretScan.find(snapshot)
+                activity.runOnUiThread {
+                    if (gen != scanGeneration || activity.isDestroyed || activity.isFinishing) return@runOnUiThread
+                    if (found.isEmpty()) {
+                        alert.visibility = View.GONE
+                    } else {
+                        val listed = found.joinToString(", ") { f ->
+                            activity.getString(R.string.chat_handoff_secret_item, kindLabel(f.kind), f.snippet)
+                        }
+                        alert.text = activity.getString(R.string.chat_handoff_secret, listed)
+                        alert.visibility = View.VISIBLE
+                    }
                 }
-                alert.text = activity.getString(R.string.chat_handoff_secret, listed)
-                alert.visibility = View.VISIBLE
             }
         }
+        pendingScan = scan
         field.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -157,13 +216,20 @@ internal class HandoffFlow(private val activity: ChatActivity) {
             field,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT),
         )
+        openDialog?.dismiss()
         val dialog = AlertDialog.Builder(activity)
             .setTitle(R.string.chat_handoff_review_title)
             .setView(content)
             .setPositiveButton(R.string.chat_handoff_go) { _, _ -> open(agent, field.text.toString()) }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
-        dialog.setOnDismissListener { handler.removeCallbacks(scan) }
+        dialog.setOnDismissListener {
+            handler.removeCallbacks(scan)
+            if (pendingScan === scan) pendingScan = null
+            scanGeneration++
+            if (openDialog === dialog) openDialog = null
+        }
+        openDialog = dialog
         dialog.show()
     }
 
@@ -179,16 +245,15 @@ internal class HandoffFlow(private val activity: ChatActivity) {
     )
 
     /**
-     * Abre o chat do agente nesta pasta com o texto no campo. Sem chat dele aqui, pede uma conversa
-     * nova; com chat já ligado (ou dormindo), reaproveita o que existe, para não reiniciar a conversa dele.
+     * Abre o chat do agente nesta pasta com o texto no campo. A ChatActivity decide na ligação com
+     * o serviço: com chat já aberto (ou dormindo), reaproveita; sem chat dele aqui, abre conversa nova.
      */
     private fun open(agent: AgentRecipe, text: String) {
-        val existing = activity.service?.chat(agent.id, activity.folder)
         val intent = Intent(activity, ChatActivity::class.java)
             .putExtra(ChatActivity.EXTRA_AGENT_ID, agent.id)
             .putExtra(ChatActivity.EXTRA_FOLDER, activity.folder)
             .putExtra(ChatActivity.EXTRA_SHARED_TEXT, text)
-        if (existing == null) intent.putExtra(ChatActivity.EXTRA_NEW, true)
+            .putExtra(ChatActivity.EXTRA_NEW_IF_NONE, true)
         activity.startActivity(intent)
     }
 

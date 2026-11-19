@@ -58,6 +58,7 @@ import io.github.jonjonesbr.jangada.chat.BackgroundTask
 import io.github.jonjonesbr.jangada.chat.ChatAdapter
 import io.github.jonjonesbr.jangada.chat.ChatDrafts
 import io.github.jonjonesbr.jangada.chat.ChatExport
+import io.github.jonjonesbr.jangada.chat.ChatHandoff
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.ChildSummary
@@ -507,6 +508,7 @@ class ChatActivity : JangadaActivity() {
 
     override fun onDestroy() {
         // Nada que esperava a tela (instalação, por exemplo) roda depois que ela sai.
+        handoff.destroy()
         stopStatusClock()
         handler.removeCallbacksAndMessages(null)
         // Saiu de vez (não vai ser recriada): os anexos guardados não voltam, e a memória é liberada.
@@ -540,8 +542,10 @@ class ChatActivity : JangadaActivity() {
             if (opening) return@ServiceBind
             val resume = intent.getStringExtra(EXTRA_RESUME)
             val fresh = intent.getBooleanExtra(EXTRA_NEW, false)
+            val freshIfNone = intent.getBooleanExtra(EXTRA_NEW_IF_NONE, false)
             intent.removeExtra(EXTRA_RESUME)
             intent.removeExtra(EXTRA_NEW)
+            intent.removeExtra(EXTRA_NEW_IF_NONE)
             // O chat aberto deste agente e pasta é reaproveitado.
             val current = svc.chat(agentId, folder)
             when {
@@ -550,6 +554,7 @@ class ChatActivity : JangadaActivity() {
                 }
                 fresh -> openWhenReady { withRoom(svc) { attach(svc.openChat(agentId, folder = folder, restart = true)) } }
                 current != null -> attach(current)
+                freshIfNone -> openWhenReady { withRoom(svc) { attach(svc.openChat(agentId, folder = folder)) } }
                 else -> openWhenReady {
                     withRoom(svc) {
                         // No Claude, continua a conversa mais recente (se houver; o chat confere fora da thread principal).
@@ -1907,10 +1912,12 @@ class ChatActivity : JangadaActivity() {
             description = getString(R.string.chat_export_desc),
             icon = "⇩",
         ) { exportConversation() }
+        val canHandoff = ChatHandoff.hasConversation(engine?.items?.toList().orEmpty())
         rows += Sheet.Row(
             title = getString(R.string.chat_handoff),
-            description = getString(R.string.chat_handoff_desc),
+            description = getString(if (canHandoff) R.string.chat_handoff_desc else R.string.chat_handoff_empty),
             icon = "⇢",
+            enabled = canHandoff,
         ) { handoff.start() }
         rows += Sheet.Row(
             title = getString(R.string.chat_menu_settings),
@@ -2524,6 +2531,8 @@ class ChatActivity : JangadaActivity() {
         const val EXTRA_AGENT_ID = "agent_id"
         const val EXTRA_RESUME = "resume"
         const val EXTRA_NEW = "new"
+        /** Conversa nova só se este par agente+pasta ainda não tiver chat aberto (reaproveita se tiver). */
+        const val EXTRA_NEW_IF_NONE = "new_if_none"
         /** Pasta do trabalho (agente + pasta) que a tela abre; sem ela, a última pasta usada. */
         const val EXTRA_FOLDER = "folder"
         /** Arquivos recebidos pelo "Compartilhar" (ArrayList<Uri>). */
