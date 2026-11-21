@@ -743,13 +743,14 @@ class AcpChat(
             ) { result, error ->
                 if (result != null && result.has("configOptions")) parseConfig(result)
                 else if (error == null) option.current = value
-                else add(ChatItem.Info(context.getString(R.string.chat_acp_option_failed, option.name, error.optString("message")), isError = true))
+                // Agente parou (dormiu, Parar): o pedido não falhou por culpa do ajuste, então sem erro.
+                else if (!isStopped(error)) add(ChatItem.Info(context.getString(R.string.chat_acp_option_failed, option.name, error.optString("message")), isError = true))
                 changed()
                 restoreDone(restoring)
             }
             ConfigOption.Source.MODEL -> request("session/set_model", JSONObject().put("sessionId", id).put("modelId", value)) { _, error ->
                 if (error == null) option.current = value
-                else add(ChatItem.Info(context.getString(R.string.chat_acp_model_failed, error.optString("message")), isError = true))
+                else if (!isStopped(error)) add(ChatItem.Info(context.getString(R.string.chat_acp_model_failed, error.optString("message")), isError = true))
                 changed()
                 restoreDone(restoring)
             }
