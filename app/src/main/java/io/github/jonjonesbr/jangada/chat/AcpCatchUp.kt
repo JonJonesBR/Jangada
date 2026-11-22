@@ -28,6 +28,15 @@ object AcpCatchUp {
     private val SUBAGENT_TOOLS = setOf("subagent", "task")
 
     /**
+     * Ferramentas do /swarm do agy: criam, consultam e esperam membros que seguem trabalhando (cada um numa
+     * conversa própria do agy) depois que a chamada volta. Ficar em silêncio esperando é o normal delas.
+     */
+    private val SWARM_TOOLS = setOf("swarm", "manage_swarm", "swarm_wait")
+
+    /** A ação é do /swarm do agy (ver [SWARM_TOOLS]). */
+    fun isSwarm(tool: ChatItem.Tool): Boolean = tool.toolName.lowercase() in SWARM_TOOLS
+
+    /**
      * Tamanho mínimo de um texto para casar por contenção ou por começo parcial. Abaixo disso, só casa igual:
      * um "Ok." curto não pode dar como conhecido um bloco novo que apenas contém esse trecho.
      */
@@ -56,6 +65,8 @@ object AcpCatchUp {
      */
     fun levelOf(tool: ChatItem.Tool, waitsAsync: Boolean): Level {
         val name = tool.toolName.lowercase()
+        // Swarm: os membros seguem depois da chamada (mesmo concluída), então o turno todo é vigiado.
+        if (name in SWARM_TOOLS) return Level.STRONG
         val command = name in COMMAND_TOOLS || tool.kind == "execute"
         val subagent = name in SUBAGENT_TOOLS
         if (waitsAsync && !tool.done) return Level.STRONG

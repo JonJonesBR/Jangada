@@ -63,9 +63,10 @@ object AgentStatus {
         if (!busy) return State.Idle
 
         val silentMs = (now - lastEventAtMs).coerceAtLeast(0)
-        val stalled = silentMs >= stallMs
         val active = items.filterIsInstance<ChatItem.Tool>().filter { it.state == ToolState.RUNNING }
         val tool = active.lastOrNull()
+        // Esperar os membros do /swarm do agy é ficar sem eventos de propósito: não é travamento.
+        val stalled = silentMs >= stallMs && active.none { AcpCatchUp.isSwarm(it) }
         return when {
             tool != null -> State.Running(
                 label = tool.summary.ifEmpty { tool.name },

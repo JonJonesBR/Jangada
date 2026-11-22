@@ -95,6 +95,14 @@ class AgentStatusTest {
     }
 
     @Test
+    fun esperarOSwarmSemSinalNaoContaComoTravado() {
+        val swarm = tool("t1", ToolState.RUNNING, now - 8_000, "swarm wait").apply { toolName = "swarm" }
+        val state = status(items = listOf(swarm), busy = true, lastEventAtMs = now - stallMs)
+
+        assertEquals(AgentStatus.State.Running("swarm wait", 8_000, stallMs, false, 0), state)
+    }
+
+    @Test
     fun semAcaoESemSinalOTurnoTravou() {
         val state = status(busy = true, lastEventAtMs = now - 6_000, turnStartedAtMs = now - 20_000)
 

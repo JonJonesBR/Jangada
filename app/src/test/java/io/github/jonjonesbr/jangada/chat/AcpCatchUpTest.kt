@@ -150,6 +150,15 @@ class AcpCatchUpTest {
     }
 
     @Test
+    fun swarmEForteMesmoConcluido() {
+        // Os membros do swarm seguem trabalhando depois que a chamada volta.
+        val done = ChatItem.Tool("t7", "Swarm", "").apply { toolName = "swarm"; mark(ToolState.DONE, 1L) }
+        val wait = ChatItem.Tool("t8", "Swarm", "").apply { toolName = "swarm_wait"; mark(ToolState.DONE, 1L) }
+        assertEquals(AcpCatchUp.Level.STRONG, level(done))
+        assertEquals(AcpCatchUp.Level.STRONG, level(wait))
+    }
+
+    @Test
     fun leituraEmAndamentoNaoArmaNada() {
         // RUNNING visto de passagem, em ação que não é comando nem subagente, não arma.
         val running = ChatItem.Tool("t5", "Ler", "").apply { toolName = "read"; mark(ToolState.RUNNING, 1L) }
