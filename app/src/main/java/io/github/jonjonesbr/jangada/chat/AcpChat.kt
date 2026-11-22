@@ -180,7 +180,7 @@ class AcpChat(
         skipReplay = resume != null && items.isNotEmpty()
         launch(interactive = true) {
             runCatching { linux.refreshIntegration(trustFolder = cwd) }.onFailure { Log.w(TAG, "integração", it) }
-            "${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(command, jobId)}"
+            "${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(launchCommand(command, agentId, autoApprove), jobId)}"
         }
 
         val capabilities = JSONObject()
@@ -1530,6 +1530,17 @@ class AcpChat(
         send(JSONObject().put("jsonrpc", "2.0").put("id", id).put("result", result))
 
     internal companion object {
+        /** Opção do `agy acp` que aprova sozinho todo pedido de permissão (inclusive o dos membros do /swarm). */
+        const val AGY_SKIP_PERMISSIONS = "--dangerously-skip-permissions"
+
+        /**
+         * Comando que sobe o agente. Os membros do /swarm do agy pedem permissão por um canal que não chega ao
+         * app (a chamada expira em 60 s), então o "Aprovar tudo" não os alcança: com ele ligado, o agy já sobe
+         * aprovando tudo. Só vale na subida do processo; ligar depois exige reiniciar o agente.
+         */
+        fun launchCommand(command: String, agentId: String, autoApprove: Boolean): String =
+            if (agentId == AGY_ID && autoApprove && AGY_SKIP_PERMISSIONS !in command) "$command $AGY_SKIP_PERMISSIONS" else command
+
         const val TAG = "JangadaAcp"
         /** Categorias de ajuste que o app lembra entre conversas (por agente). */
         val REMEMBERED = setOf("model", "thought_level", "mode")
