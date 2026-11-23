@@ -5,6 +5,8 @@
     <!-- Lê os DNS da rede do celular para o Debian usar os mesmos servidores. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Android 13+: sem esta permissão o usuário não vê o progresso da instalação nem os avisos dos agentes. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Arquivos do celular (Downloads, Documentos...) para os agentes. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />

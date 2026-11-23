@@ -5,9 +5,11 @@
     android:background="@color/setup_bg"
     android:orientation="vertical">
 
+    <!-- Altura mínima em vez de fixa: com fonte grande o título não corta. -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
         android:background="@color/bar_bg"
         android:gravity="center_vertical"
         android:orientation="horizontal">
@@ -57,6 +59,7 @@
                     android:text="@string/settings_mode_pro" />
             </RadioGroup>
 
+            <!-- Aparência: tema do app, tema do terminal e tamanho do texto do chat. -->
             <TextView
                 style="@style/HomeSection"
                 android:text="@string/settings_appearance" />
@@ -89,27 +92,15 @@
                 android:minHeight="48dp"
                 android:textColor="@color/accent_text" />
 
-            <Button
-                android:id="@+id/settings_chat_stall"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAllCaps="false"
-                android:minHeight="48dp"
-                android:textColor="@color/accent_text" />
-
+            <!-- Chat: digitação, permissões, avisos, atraso de silêncio, modelo, esforço e padrões dos agentes. -->
             <TextView
                 style="@style/HomeSection"
-                android:text="@string/settings_typing" />
+                android:text="@string/settings_chat" />
 
             <Switch
                 android:id="@+id/settings_enter_sends"
                 style="@style/SettingsOption"
                 android:text="@string/settings_enter_sends" />
-
-            <TextView
-                style="@style/HomeSection"
-                android:text="@string/settings_chat" />
 
             <RadioGroup
                 android:id="@+id/settings_permissions"
@@ -127,6 +118,15 @@
                     android:text="@string/settings_permissions_auto" />
             </RadioGroup>
 
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_permissions_note"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
             <Switch
                 android:id="@+id/settings_remember_approve_all"
                 style="@style/SettingsOption"
@@ -141,28 +141,6 @@
                 android:textColor="@color/setup_muted_text"
                 android:textSize="13sp" />
 
-            <Button
-                android:id="@+id/settings_max_agents"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textAllCaps="false"
-                android:minHeight="48dp"
-                android:textColor="@color/accent_text" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:text="@string/settings_max_agents_desc"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="13sp" />
-
-            <TextView
-                style="@style/HomeSection"
-                android:text="@string/settings_chat_alerts" />
-
             <Switch
                 android:id="@+id/settings_haptic"
                 style="@style/SettingsOption"
@@ -176,6 +154,15 @@
                 android:text="@string/settings_haptic_hint"
                 android:textColor="@color/setup_muted_text"
                 android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/settings_chat_stall"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:minHeight="48dp"
+                android:textColor="@color/accent_text" />
 
             <TextView
                 style="@style/HomeSection"
@@ -247,6 +234,51 @@
                 android:textSize="13sp" />
 
             <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:text="@string/settings_other_agents"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
+            <Switch
+                android:id="@+id/settings_agent_tips"
+                style="@style/SettingsOption"
+                android:text="@string/settings_agent_tips" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_agent_tips_hint"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
+            <!-- Memória e desempenho: quantos agentes rodam, quando os parados dormem e a compactação da conversa. -->
+            <TextView
+                style="@style/HomeSection"
+                android:text="@string/settings_memory" />
+
+            <Button
+                android:id="@+id/settings_max_agents"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:minHeight="48dp"
+                android:textColor="@color/accent_text" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_max_agents_desc"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
+            <TextView
                 style="@style/HomeSection"
                 android:text="@string/settings_sleep_after" />
 
@@ -290,36 +322,7 @@
                 android:textColor="@color/setup_muted_text"
                 android:textSize="13sp" />
 
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="@string/settings_other_agents"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="13sp" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="@string/settings_permissions_note"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="13sp" />
-
-            <Switch
-                android:id="@+id/settings_agent_tips"
-                style="@style/SettingsOption"
-                android:text="@string/settings_agent_tips" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:text="@string/settings_agent_tips_hint"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="13sp" />
-
+            <!-- Avançado: CPU, tela, teclas extras e contas dos agentes. -->
             <TextView
                 style="@style/HomeSection"
                 android:text="@string/settings_advanced" />

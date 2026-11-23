@@ -5,7 +5,7 @@
     <string name="cannot_open_link">Nenhum app consegue abrir este link</string>
 
     <string name="setup_title">Vamos preparar seu Linux</string>
-    <string name="setup_intro">O Jangada roda os assistentes de IA dentro de um Linux Debian guardado no app. Isso acontece uma vez só: baixa cerca de 70 MB e ocupa uns 300 MB. Enquanto isso, você pode usar outros apps: o progresso aparece na notificação e o app avisa quando terminar.</string>
+    <string name="setup_intro">O Jangada roda os assistentes de IA dentro de um Linux Debian guardado no app. Isso acontece uma vez só: baixa cerca de 70 MB, precisa de cerca de 700 MB livres para instalar e ocupa cerca de 300 MB depois. Enquanto isso, você pode usar outros apps: o progresso aparece na notificação e o app avisa quando terminar.</string>
     <string name="setup_step_download">Baixar o Debian</string>
     <string name="setup_step_extract">Instalar o Debian</string>
     <string name="setup_step_packages">Instalar ferramentas básicas</string>
@@ -15,6 +15,9 @@
     <string name="setup_hide_log">Esconder detalhes técnicos</string>
     <string name="setup_copy_log">Copiar detalhes</string>
     <string name="setup_copied">Detalhes copiados</string>
+    <string name="setup_issues">Abrir issues no GitHub</string>
+    <string name="setup_leave_hint">Você pode sair do app: a instalação continua e o progresso aparece na notificação.</string>
+    <string name="setup_failed_leave_hint">Você pode fechar o app e tentar de novo depois.</string>
     <string name="setup_unsupported">Este aparelho ainda não é compatível: o Linux do Jangada precisa de um processador ARM ou x86 de 64 bits.</string>
     <string name="setup_error_space">Pouco espaço livre. O Linux precisa de cerca de 700 MB livres para instalar.</string>
     <string name="setup_error_rate_limit">O Docker Hub está limitando downloads da sua conexão. Espere alguns minutos e tente de novo.</string>
@@ -29,6 +32,11 @@
         <item quantity="other">%d sessões · toque para voltar</item>
     </plurals>
     <string name="service_exit">Encerrar tudo</string>
+    <string name="close_all_title">Encerrar tudo?</string>
+    <plurals name="close_all_message">
+        <item quantity="one">1 trabalho será encerrado, incluindo chats, terminais e instalações em andamento.</item>
+        <item quantity="other">%d trabalhos serão encerrados, incluindo chats, terminais e instalações em andamento.</item>
+    </plurals>
     <string name="channel_sessions">Sessões em andamento</string>
     <string name="channel_links">Links do terminal</string>
     <string name="link_notification_title">O terminal quer abrir um link</string>
@@ -75,6 +83,8 @@
     <string name="home_job_direct_desc">O agente mexe nos arquivos do repositório</string>
     <string name="home_job_worktree">Numa cópia isolada (worktree)</string>
     <string name="home_job_worktree_desc">Branch própria; o repositório fica como está até você juntar</string>
+    <string name="home_job_always_direct">Sempre direto nesta pasta</string>
+    <string name="home_job_always_direct_desc">Não pergunta mais; a cópia isolada continua no ⋮ do chat.</string>
     <string name="home_job_creating">Criando a cópia de trabalho…</string>
     <string name="home_job_description">%1$s, pasta %2$s, %3$s. Toque para abrir.</string>
     <string name="home_memory_usable">Dá para usar ≈ %1$s antes de o Android começar a fechar apps.</string>
@@ -122,6 +132,9 @@
     <string name="notifications_off_title">Notificações desligadas</string>
     <string name="notifications_off_body">Sem notificações, o app não avisa quando um agente pede permissão, precisa de login ou termina uma resposta.</string>
     <string name="notifications_off_open">Abrir ajustes de notificação</string>
+    <string name="notifications_ask_title">Permitir notificações?</string>
+    <string name="notifications_ask_body">Elas mostram o progresso da instalação e avisam quando um agente termina, erra ou precisa de você. Você pode mudar isso depois nos Ajustes do Android.</string>
+    <string name="notifications_ask_allow">Permitir</string>
     <string name="storage_new_sessions">Sessões já abertas só enxergam os arquivos do celular depois de reabertas.</string>
     <string name="storage_space">Celular: %1$s livres de %2$s.</string>
     <string name="storage_space_low">Celular: só %1$s livres de %2$s. Libere espaço para os agentes não falharem.</string>
@@ -191,11 +204,10 @@
     <string name="settings_mode">Modo</string>
     <string name="settings_mode_simple">Simples — os agentes abrem como chat quando possível, com a caixa de texto ligada</string>
     <string name="settings_mode_pro">Pro — os agentes abrem primeiro no terminal</string>
-    <string name="settings_typing">Digitação</string>
     <string name="settings_remember_approve_all">Lembrar o \"Aprovar tudo\" entre chats</string>
     <string name="settings_remember_approve_all_desc">Ligado, cada agente (Claude, agy, OpenCode e os outros) começa os chats novos com o \"Aprovar tudo\" como você o deixou. Ele deixa o agente rodar ações sem perguntar, então use com cuidado. Desligar esquece o que estava salvo.</string>
     <string name="settings_enter_sends">Enter do teclado envia a mensagem (em vez de pular linha)</string>
-    <string name="settings_chat">Permissões no chat do Claude Code</string>
+    <string name="settings_chat">Chat</string>
     <string name="settings_permissions_ask">Perguntar antes de cada ação (recomendado)</string>
     <string name="settings_permissions_auto">Automático: o agente decide o que é seguro</string>
     <string name="settings_permissions_note">Vale para as próximas conversas. O modo também se troca no chat, pelo chip 🛡.</string>
@@ -203,7 +215,7 @@
 
     <string name="chat_model_default">Padrão da conta</string>
     <string name="settings_model">Modelo do Claude no chat</string>
-    <string name="settings_chat_alerts">Avisos do chat</string>
+    <string name="settings_memory">Memória e desempenho</string>
     <string name="settings_haptic">Vibrar quando a resposta ficar pronta</string>
     <string name="settings_haptic_hint">Só com o chat aberto; segue o retorno tátil do sistema.</string>
     <string name="settings_agent_tips">Orientar os agentes sobre a memória</string>
@@ -904,7 +916,7 @@
     <string name="projects_back">‹  Voltar</string>
     <string name="projects_open">Gerenciar projetos</string>
     <string name="projects_open_work">Chat ou terminal aberto</string>
-    <string name="projects_empty">Nenhum projeto ainda. Crie um com Novo projeto… na tela inicial.</string>
+    <string name="projects_empty">Nenhum projeto ainda. Crie um com Novo projeto… acima.</string>
     <string name="projects_rename">Renomear…</string>
     <string name="projects_delete">Excluir…</string>
     <string name="projects_rename_worktree">Trabalho isolado não se renomeia: o nome e a branch seguem a convenção do app.</string>

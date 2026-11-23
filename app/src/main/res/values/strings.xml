@@ -7,7 +7,7 @@
     <string name="cannot_open_link">No app can open this link</string>
 
     <string name="setup_title">Let’s set up your Linux</string>
-    <string name="setup_intro">Jangada runs AI assistants inside a Debian Linux kept in the app. This happens only once: it downloads about 70 MB and takes about 300 MB of space. You can use other apps meanwhile: progress shows in the notification, and the app tells you when it’s done.</string>
+    <string name="setup_intro">Jangada runs AI assistants inside a Debian Linux kept in the app. This happens only once: it downloads about 70 MB, needs about 700 MB free to install and takes about 300 MB afterward. You can use other apps meanwhile: progress shows in the notification, and the app tells you when it’s done.</string>
     <string name="setup_step_download">Download Debian</string>
     <string name="setup_step_extract">Install Debian</string>
     <string name="setup_step_packages">Install basic tools</string>
@@ -17,6 +17,9 @@
     <string name="setup_hide_log">Hide technical details</string>
     <string name="setup_copy_log">Copy details</string>
     <string name="setup_copied">Details copied</string>
+    <string name="setup_issues">Open issues on GitHub</string>
+    <string name="setup_leave_hint">You can leave the app: the install keeps going and the progress shows in the notification.</string>
+    <string name="setup_failed_leave_hint">You can close the app and try again later.</string>
     <string name="setup_unsupported">This device isn’t supported yet: Jangada’s Linux needs a 64-bit ARM or x86 processor.</string>
     <string name="setup_error_space">Not enough free space. Linux needs about 700 MB free to install.</string>
     <string name="setup_error_rate_limit">Docker Hub is limiting downloads from your connection. Wait a few minutes and try again.</string>
@@ -31,6 +34,11 @@
         <item quantity="other">%d sessions · tap to go back</item>
     </plurals>
     <string name="service_exit">Close all</string>
+    <string name="close_all_title">Close all?</string>
+    <plurals name="close_all_message">
+        <item quantity="one">1 job will be closed, including chats, terminals and running installs.</item>
+        <item quantity="other">%d jobs will be closed, including chats, terminals and running installs.</item>
+    </plurals>
     <string name="channel_sessions">Running sessions</string>
     <string name="channel_links">Links from the terminal</string>
     <string name="link_notification_title">The terminal wants to open a link</string>
@@ -77,6 +85,8 @@
     <string name="home_job_direct_desc">The agent changes the repository’s files</string>
     <string name="home_job_worktree">In an isolated copy (worktree)</string>
     <string name="home_job_worktree_desc">Its own branch; the repository stays as it is until you merge</string>
+    <string name="home_job_always_direct">Always direct in this folder</string>
+    <string name="home_job_always_direct_desc">Stops asking; the isolated copy is still in the chat’s ⋮</string>
     <string name="home_job_creating">Creating the working copy…</string>
     <string name="home_job_description">%1$s, folder %2$s, %3$s. Tap to open.</string>
     <string name="home_memory_usable">About %1$s can be used before Android starts closing apps.</string>
@@ -124,6 +134,9 @@
     <string name="notifications_off_title">Notifications are off</string>
     <string name="notifications_off_body">Without notifications, the app can’t alert you when an agent asks for permission, needs login or finishes a reply.</string>
     <string name="notifications_off_open">Open notification settings</string>
+    <string name="notifications_ask_title">Allow notifications?</string>
+    <string name="notifications_ask_body">They show the install progress and let the app tell you when an agent finishes, fails or needs you. You can change this later in Android settings.</string>
+    <string name="notifications_ask_allow">Allow</string>
     <string name="storage_new_sessions">Open sessions see the phone files after you reopen them.</string>
     <string name="storage_space">Phone: %1$s free of %2$s.</string>
     <string name="storage_space_low">Phone: only %1$s free of %2$s. Free up space so agents don\'t fail.</string>
@@ -193,11 +206,10 @@
     <string name="settings_mode">Mode</string>
     <string name="settings_mode_simple">Simple — agents open as a chat when possible, with the text box on</string>
     <string name="settings_mode_pro">Pro — agents open in the terminal first</string>
-    <string name="settings_typing">Typing</string>
     <string name="settings_remember_approve_all">Remember \"Approve all\" between chats</string>
     <string name="settings_remember_approve_all_desc">When on, each agent (Claude, agy, OpenCode and the others) starts new chats with \"Approve all\" as you last left it. It lets the agent run actions without asking, so use with care. Turning this off forgets what was saved.</string>
     <string name="settings_enter_sends">Keyboard Enter sends the message (instead of a new line)</string>
-    <string name="settings_chat">Claude Code chat permissions</string>
+    <string name="settings_chat">Chat</string>
     <string name="settings_permissions_ask">Ask before each action (recommended)</string>
     <string name="settings_permissions_auto">Automatic: the agent decides what is safe</string>
     <string name="settings_permissions_note">Applies to new conversations. You can also change the mode in the chat with the 🛡 chip.</string>
@@ -205,7 +217,7 @@
 
     <string name="chat_model_default">Account default</string>
     <string name="settings_model">Claude chat model</string>
-    <string name="settings_chat_alerts">Chat alerts</string>
+    <string name="settings_memory">Memory and performance</string>
     <string name="settings_haptic">Vibrate when the answer is ready</string>
     <string name="settings_haptic_hint">Only while the chat is open; follows the system touch feedback setting.</string>
     <string name="settings_agent_tips">Guide agents about memory</string>
@@ -908,7 +920,7 @@
     <string name="projects_back">‹  Back</string>
     <string name="projects_open">Manage projects</string>
     <string name="projects_open_work">Chat or terminal open</string>
-    <string name="projects_empty">No projects yet. Create one with New project… on the home screen.</string>
+    <string name="projects_empty">No projects yet. Create one with New project… above.</string>
     <string name="projects_rename">Rename…</string>
     <string name="projects_delete">Delete…</string>
     <string name="projects_rename_worktree">An isolated job can’t be renamed: its name and branch follow the app’s convention.</string>

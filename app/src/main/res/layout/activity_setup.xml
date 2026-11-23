@@ -100,6 +100,30 @@
             android:textSize="17sp"
             android:textStyle="bold" />
 
+        <Button
+            android:id="@+id/issues"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="4dp"
+            android:minHeight="48dp"
+            android:text="@string/setup_issues"
+            android:textAllCaps="false"
+            android:textColor="@color/accent_text"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/leave_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:lineSpacingMultiplier="1.2"
+            android:text="@string/setup_leave_hint"
+            android:textColor="@color/setup_muted_text"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/toggle_log"
             android:layout_width="wrap_content"

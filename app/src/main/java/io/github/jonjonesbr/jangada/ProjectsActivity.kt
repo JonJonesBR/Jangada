@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada
 
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputFilter
@@ -11,6 +12,7 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -30,6 +32,8 @@ import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.ui.ServiceBind
 import io.github.jonjonesbr.jangada.ui.Sheet
+import io.github.jonjonesbr.jangada.ui.askCloneRepo
+import io.github.jonjonesbr.jangada.ui.askNewProject
 import io.github.jonjonesbr.jangada.ui.showCloneFailure
 import io.github.jonjonesbr.jangada.ui.resumeCloneProgress
 import io.github.jonjonesbr.jangada.ui.showCloneProgress
@@ -79,11 +83,42 @@ class ProjectsActivity : JangadaActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Atalhos do topo: criar um projeto e clonar um repositório sem passar pela tela inicial
+        // (é para cá que o estado vazio aponta).
+        val newProject = Button(this).apply {
+            text = "＋ ${getString(R.string.project_new)}"
+            isAllCaps = false
+            textSize = 14f
+            minHeight = dp(48)
+            backgroundTintList = ColorStateList.valueOf(getColor(R.color.key_active))
+            setTextColor(getColor(R.color.setup_on_accent))
+            setOnClickListener { createProject() }
+        }
+        val clone = Button(this, null, android.R.attr.borderlessButtonStyle).apply {
+            text = "⇣ ${getString(R.string.clone_new)}"
+            isAllCaps = false
+            textSize = 14f
+            minHeight = dp(48)
+            setTextColor(getColor(R.color.accent_text))
+            setOnClickListener { cloneRepository() }
+        }
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(
+                newProject,
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = dp(8) },
+            )
+            addView(clone, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        empty = label(getString(R.string.projects_empty), 15f, R.color.setup_muted_text, top = 8)
+        // Com os botões acima, o texto do estado vazio ganha folga em cima. Só aparece quando a
+        // primeira leitura de ~/projetos chegar vazia (render cuida disso).
+        empty = label(getString(R.string.projects_empty), 15f, R.color.setup_muted_text, top = 16)
+            .apply { visibility = View.GONE }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(24))
+            addView(header)
             addView(list)
             addView(empty)
         }
@@ -185,6 +220,42 @@ class ProjectsActivity : JangadaActivity() {
             render()
         },
     )
+
+    /**
+     * Novo projeto: cria a pasta (com git e host, se pedidos no diálogo) e só recarrega a lista;
+     * aqui não há chat para abrir. Git ou site que falharam: o mesmo aviso da tela inicial.
+     */
+    private fun createProject() {
+        askNewProject(linux) { _, gitOutput, hostOutput ->
+            if (hostOutput != null) toast(R.string.host_new_failed)
+            else if (gitOutput != null) toast(R.string.project_git_failed)
+            reload()
+        }
+    }
+
+    /**
+     * Clona um repositório para uma pasta nova de ~/projetos. Sem agente: o clone não abre chat aqui.
+     * A tela pode ter saído e voltado com o diálogo aberto: usa o serviço ligado agora.
+     */
+    private fun cloneRepository() {
+        if (service == null) return noService()
+        askCloneRepo(linux.rootfs) { url, folder ->
+            val svc = service ?: return@askCloneRepo
+            val task = svc.runClone("", url, folder)
+            if (task == null) {
+                toast(R.string.clone_busy)
+                return@askCloneRepo
+            }
+            showCloneProgress(svc, task) { done ->
+                // Recarrega nos dois casos: a pasta pode aparecer com a cópia parcial ou já completa.
+                if (done.state == TerminalService.CloneTask.State.OK) reload()
+                else {
+                    showCloneFailure(done)
+                    reload()
+                }
+            }
+        }
+    }
 
     /** Relê ~/projetos numa thread e redesenha a lista na principal. */
     private fun reload() {

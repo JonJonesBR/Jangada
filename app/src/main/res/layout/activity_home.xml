@@ -61,75 +61,6 @@
                 android:textSize="24sp" />
         </LinearLayout>
 
-        <Button
-            android:id="@+id/open_terminal"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="20dp"
-            android:background="@drawable/card_bg"
-            android:text="@string/home_open_terminal"
-            android:textAllCaps="false"
-            android:textColor="@color/setup_text"
-            android:textSize="16sp" />
-
-        <LinearLayout
-            android:id="@+id/storage_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_bg"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/storage_title"
-                android:textColor="@color/setup_text"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/storage_text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:lineSpacingMultiplier="1.15"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="14sp" />
-
-            <TextView
-                android:id="@+id/storage_space"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="14sp" />
-
-            <Button
-                android:id="@+id/storage_details"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:textAllCaps="false"
-                android:textColor="@color/accent_text"
-                android:text="@string/storage_details" />
-
-            <Button
-                android:id="@+id/storage_allow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:minHeight="48dp"
-                android:backgroundTint="@color/key_active"
-                android:text="@string/storage_allow"
-                android:textAllCaps="false"
-                android:textColor="@color/setup_on_accent"
-                android:textStyle="bold" />
-        </LinearLayout>
-
         <!-- Aviso quando as notificações do app estão desligadas no Android (ver HomeActivity.renderNotifications). -->
         <LinearLayout
             android:id="@+id/notifications_card"
@@ -171,18 +102,112 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- Projetos (~/projetos): entrada própria, fora do cartão de arquivos. Visível com o Linux pronto (ver HomeActivity.renderStorage). -->
+        <!-- Boas-vindas: some quando o usuário toca em "Entendi". Vem alto porque é o primeiro contato. -->
+        <LinearLayout
+            android:id="@+id/welcome_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/home_welcome_title"
+                android:textColor="@color/setup_text"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.15"
+                android:text="@string/home_welcome_body"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/welcome_dismiss"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:minHeight="48dp"
+                android:backgroundTint="@color/key_active"
+                android:text="@string/home_welcome_ok"
+                android:textAllCaps="false"
+                android:textColor="@color/setup_on_accent"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!--
+            Ação principal da tela: visível com o Linux pronto e um agente com chat instalado.
+            Fica logo abaixo das boas-vindas, antes da lista de agentes, para aparecer sem rolar.
+        -->
         <Button
-            android:id="@+id/projects_open"
-            style="?android:attr/borderlessButtonStyle"
+            android:id="@+id/home_new_job"
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:layout_marginTop="12dp"
-            android:background="@drawable/card_bg"
-            android:text="@string/projects_open"
+            android:layout_marginBottom="2dp"
+            android:backgroundTint="@color/key_active"
+            android:text="@string/home_new_job"
             android:textAllCaps="false"
-            android:textColor="@color/setup_text"
-            android:textSize="16sp" />
+            android:textColor="@color/setup_on_accent"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!--
+            Título da seção de agentes, com Atualizar todos à direita (aparece com 2 ou mais para atualizar).
+            Altura mínima de 48dp, a do botão: o título não muda de altura quando o botão aparece, e a
+            lista não desce. As margens compensam o espaço que o mínimo acrescenta.
+        -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="0dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                style="@style/HomeSection"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="0dp"
+                android:text="@string/home_agents" />
+
+            <Button
+                android:id="@+id/update_all"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                android:textAllCaps="false"
+                android:textColor="@color/accent_text"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/unsupported"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:text="@string/setup_unsupported"
+            android:textColor="@color/setup_error_text"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/agents"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
         <TextView
             android:id="@+id/running_title"
@@ -201,19 +226,27 @@
             android:textSize="14sp"
             android:visibility="gone" />
 
-        <!-- Botão grande, no topo da seção de trabalhos: visível com o Linux pronto e um agente com chat instalado. -->
-        <Button
-            android:id="@+id/home_new_job"
+        <!-- Filtros da lista de trabalhos (com 4 ou mais linhas): Todos, Esperando você e as pastas. -->
+        <HorizontalScrollView
+            android:id="@+id/job_filter"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginBottom="12dp"
-            android:backgroundTint="@color/key_active"
-            android:text="@string/home_new_job"
-            android:textAllCaps="false"
-            android:textColor="@color/setup_on_accent"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/job_filter_chips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:id="@+id/sessions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
         <!-- Memória: quanto os agentes usam, o resto dos apps e o livre (ver HomeActivity.renderMemory). -->
         <LinearLayout
@@ -309,33 +342,36 @@
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Filtros da lista de trabalhos (com 4 ou mais linhas): Todos, Esperando você e as pastas. -->
-        <HorizontalScrollView
-            android:id="@+id/job_filter"
+        <Button
+            android:id="@+id/open_terminal"
+            style="?android:attr/borderlessButtonStyle"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:scrollbars="none"
-            android:visibility="gone">
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_bg"
+            android:text="@string/home_open_terminal"
+            android:textAllCaps="false"
+            android:textColor="@color/setup_text"
+            android:textSize="16sp" />
 
-            <LinearLayout
-                android:id="@+id/job_filter_chips"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
+        <!-- Projetos (~/projetos): entrada própria, fora do cartão de arquivos. Visível com o Linux pronto (ver HomeActivity.renderStorage). -->
+        <Button
+            android:id="@+id/projects_open"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_bg"
+            android:text="@string/projects_open"
+            android:textAllCaps="false"
+            android:textColor="@color/setup_text"
+            android:textSize="16sp" />
 
         <LinearLayout
-            android:id="@+id/sessions"
+            android:id="@+id/storage_card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <LinearLayout
-            android:id="@+id/welcome_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="12dp"
             android:background="@drawable/card_bg"
             android:orientation="vertical"
             android:padding="16dp">
@@ -343,80 +379,49 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/home_welcome_title"
+                android:text="@string/storage_title"
                 android:textColor="@color/setup_text"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/storage_text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:lineSpacingMultiplier="1.15"
-                android:text="@string/home_welcome_body"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/storage_space"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:textColor="@color/setup_muted_text"
                 android:textSize="14sp" />
 
             <Button
-                android:id="@+id/welcome_dismiss"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:minHeight="48dp"
-                android:backgroundTint="@color/key_active"
-                android:text="@string/home_welcome_ok"
-                android:textAllCaps="false"
-                android:textColor="@color/setup_on_accent"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <!--
-            Título da seção de agentes, com Atualizar todos à direita (aparece com 2 ou mais para atualizar).
-            Altura mínima de 48dp, a do botão: o título não muda de altura quando o botão aparece, e a
-            lista não desce. As margens compensam o espaço que o mínimo acrescenta.
-        -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="0dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                style="@style/HomeSection"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginTop="0dp"
-                android:layout_marginBottom="0dp"
-                android:text="@string/home_agents" />
-
-            <Button
-                android:id="@+id/update_all"
+                android:id="@+id/storage_details"
                 style="?android:attr/borderlessButtonStyle"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:minHeight="48dp"
                 android:textAllCaps="false"
                 android:textColor="@color/accent_text"
-                android:visibility="gone" />
+                android:text="@string/storage_details" />
+
+            <Button
+                android:id="@+id/storage_allow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:minHeight="48dp"
+                android:backgroundTint="@color/key_active"
+                android:text="@string/storage_allow"
+                android:textAllCaps="false"
+                android:textColor="@color/setup_on_accent"
+                android:textStyle="bold" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/unsupported"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:text="@string/setup_unsupported"
-            android:textColor="@color/setup_error_text"
-            android:visibility="gone" />
-
-        <LinearLayout
-            android:id="@+id/agents"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
     </LinearLayout>
 </ScrollView>

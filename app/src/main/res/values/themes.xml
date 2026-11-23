@@ -72,6 +72,8 @@
         <item name="android:paddingEnd">14dp</item>
         <item name="android:gravity">center</item>
         <item name="android:background">@drawable/chip_bg</item>
+        <!-- Retorno ao toque (ripple) por cima do contorno do chip. -->
+        <item name="android:foreground">?android:attr/selectableItemBackground</item>
         <item name="android:textColor">@color/setup_text</item>
         <item name="android:textSize">14sp</item>
         <item name="android:maxLines">1</item>

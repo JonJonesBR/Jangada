@@ -209,6 +209,8 @@ class AppSettings(context: Context) {
         val editor = jobPrefs.edit()
         jobPrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { editor.remove(it) }
         editor.apply()
+        // A pasta não existe mais: a preferência de abrir direto nela também some.
+        setDirectFolder(folder, false)
         if (chatFolder == folder) chatFolder = ""
     }
 
@@ -221,8 +223,30 @@ class AppSettings(context: Context) {
             editor.remove(key)
         }
         editor.apply()
+        // A preferência de abrir direto acompanha o novo nome (sem cópia: putStringSet guarda o conjunto).
+        val folders = directFolders()
+        if (old != new && old in folders) {
+            prefs.edit().putStringSet(KEY_DIRECT_FOLDERS, DirectFolders.renamed(folders, old, new)).apply()
+        }
         if (chatFolder == old) chatFolder = new
     }
+
+    /**
+     * A pasta [folder] foi marcada com "Sempre direto": o chat abre sem perguntar como trabalhar.
+     * A cópia isolada continua acessível pelo menu ⋮ do chat.
+     */
+    fun directFolder(folder: String): Boolean =
+        folder.isNotEmpty() && folder in directFolders()
+
+    /** Liga ou desliga o "Sempre direto" da pasta [folder]. */
+    fun setDirectFolder(folder: String, on: Boolean) {
+        if (folder.isEmpty()) return
+        prefs.edit().putStringSet(KEY_DIRECT_FOLDERS, DirectFolders.with(directFolders(), folder, on)).apply()
+    }
+
+    /** As pastas com "Sempre direto". Só para leitura: alterar exige o conjunto novo (ver DirectFolders). */
+    private fun directFolders(): Set<String> =
+        prefs.getStringSet(KEY_DIRECT_FOLDERS, emptySet()) ?: emptySet()
 
     /** Limpeza automática dos caches (uma vez por dia, ver TerminalService.maybeAutoClean). */
     var autoClean: Boolean
@@ -292,5 +316,31 @@ class AppSettings(context: Context) {
         private const val KEY_AUTO_COMPACT = "auto_compact"
         private const val KEY_AUTO_CLEAN = "auto_clean"
         private const val KEY_LAST_AUTO_CLEAN = "last_auto_clean_at"
+        /** Pastas marcadas com "Sempre direto" no painel do novo trabalho (ver directFolder). */
+        private const val KEY_DIRECT_FOLDERS = "direct_folders"
+    }
+}
+
+/**
+ * Regras puras das pastas com "Sempre direto" (ver AppSettings.directFolder). Nunca alteram o conjunto
+ * recebido, que o SharedPreferences não permite mudar: quando mudam algo, devolvem uma cópia.
+ */
+internal object DirectFolders {
+
+    /** O conjunto com [folder] ligada ([on] true) ou desligada. Pasta vazia não entra. */
+    fun with(folders: Set<String>, folder: String, on: Boolean): Set<String> {
+        if (folder.isEmpty()) return folders
+        val out = folders.toMutableSet()
+        if (on) out += folder else out -= folder
+        return out
+    }
+
+    /** O conjunto com [old] trocada por [new]: o nome novo herda a preferência do antigo. */
+    fun renamed(folders: Set<String>, old: String, new: String): Set<String> {
+        if (old == new || old !in folders || new.isEmpty()) return folders
+        val out = folders.toMutableSet()
+        out -= old
+        out += new
+        return out
     }
 }

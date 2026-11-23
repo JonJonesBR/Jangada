@@ -457,6 +457,8 @@ class TerminalService : Service() {
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // O aviso não manda mais esta ação (abre a tela inicial e pede confirmação); fica aceita
+        // para quando um PendingIntent antigo, guardado pelo Android, ainda chegar.
         if (intent?.action == ACTION_EXIT) {
             exit()
             return START_NOT_STICKY
@@ -778,6 +780,21 @@ class TerminalService : Service() {
     /** true se uma tarefa de agente (instalar, atualizar, desinstalar) roda ou espera na fila. Só na thread principal. */
     fun agentTaskBusy(): Boolean = hasQueue() || tasks.values.any { it.state == AgentTask.State.RUNNING }
 
+    /**
+     * Quantos trabalhos estão abertos agora: chats, terminais com processo vivo e instalações ou
+     * cópias em andamento. Serve para a confirmação de "Fechar tudo" dizer o que será perdido.
+     * Chamado da thread principal, dona destes mapas.
+     */
+    fun openWorkCount(): Int =
+        liveSessions() + chats.size +
+            tasks.values.count { it.state == AgentTask.State.RUNNING } +
+            clones.values.count { it.state == CloneTask.State.RUNNING }
+
+    /** Encerra tudo agora, depois da confirmação (ver [exit]). Thread principal. */
+    fun exitNow() {
+        exit()
+    }
+
     /** true enquanto a limpeza dos caches roda (ou até a marca cair, logo antes do fim chegar à thread principal). */
     fun cleaningCaches(): Boolean = cacheCleanerRunning
 
@@ -1025,7 +1042,7 @@ class TerminalService : Service() {
             )
             return
         }
-        if (task.state == CloneTask.State.OK) {
+        if (task.state == CloneTask.State.OK && task.agentId.isNotEmpty()) {
             val open = Intent(this, ChatActivity::class.java)
                 .putExtra(ChatActivity.EXTRA_AGENT_ID, task.agentId)
                 .putExtra(ChatActivity.EXTRA_FOLDER, task.folder)
@@ -1036,9 +1053,22 @@ class TerminalService : Service() {
                 getString(R.string.clone_notify_done_text),
                 open, tag = task.folder,
             )
+        } else if (task.state == CloneTask.State.OK) {
+            // Clone sem agente (tela Projetos): não há chat a abrir, então o aviso leva à lista.
+            val open = Intent(this, ProjectsActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            attentionNotification(
+                requestCode, NOTIFICATION_CLONE,
+                getString(R.string.clone_notify_done, task.folder),
+                getString(R.string.clone_notify_done_text),
+                open, tag = task.folder,
+            )
         } else {
-            val open = Intent(this, HomeActivity::class.java)
-                .putExtra(EXTRA_CLONE_FAILED, task.folder)
+            // Falha: com agente, a Home mostra o log; sem agente (tela Projetos), a própria lista faz isso.
+            val open = Intent(
+                this,
+                if (task.agentId.isEmpty()) ProjectsActivity::class.java else HomeActivity::class.java,
+            ).putExtra(EXTRA_CLONE_FAILED, task.folder)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             val text = if (task.state == CloneTask.State.EXISTS) getString(R.string.project_exists) else task.lastLine
             attentionNotification(
@@ -1308,10 +1338,15 @@ class TerminalService : Service() {
             },
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val exit = PendingIntent.getService(
+        // A ação só abre a tela inicial com o pedido de fechar tudo: quem encerra é a confirmação
+        // dela (um toque errado no aviso não pode matar agentes e instalações).
+        val exit = PendingIntent.getActivity(
             this, 1,
-            Intent(this, TerminalService::class.java).setAction(ACTION_EXIT),
-            PendingIntent.FLAG_IMMUTABLE,
+            Intent(this, HomeActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                putExtra(HomeActivity.EXTRA_CLOSE_ALL, true)
+            },
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val count = liveSessions() + chats.size
         val running = tasks.values.firstOrNull { it.state == AgentTask.State.RUNNING }

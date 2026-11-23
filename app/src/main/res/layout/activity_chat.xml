@@ -264,17 +264,20 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <!-- Atalhos acima da caixa: pasta, modelo, visualização, contexto e mudanças (ver ChatActivity.updateQuickbar).
-         As views ficam aqui; o código só muda texto, descrição e visibilidade. -->
+    <!-- Atalhos acima da caixa: pasta, modo, mudanças, modelo, visualização, contexto e limites
+         (ver ChatActivity.updateQuickbar). As views ficam aqui; o código só muda texto, descrição
+         e visibilidade. -->
     <HorizontalScrollView
         android:id="@+id/chat_quickbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@color/bar_bg"
+        android:fadingEdge="horizontal"
         android:paddingStart="8dp"
         android:paddingTop="6dp"
         android:paddingEnd="8dp"
         android:paddingBottom="6dp"
+        android:requiresFadingEdge="horizontal"
         android:scrollbars="none"
         android:visibility="gone">
 
@@ -283,8 +286,22 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal">
 
+            <!-- Ordem: o que mais importa primeiro (pasta e modo ficam visíveis sem rolar). -->
+
             <TextView
                 android:id="@+id/chat_chip_folder"
+                style="@style/QuickChip"
+                android:layout_marginEnd="6dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/chat_chip_mode"
+                style="@style/QuickChip"
+                android:layout_marginEnd="6dp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/chat_chip_changes"
                 style="@style/QuickChip"
                 android:layout_marginEnd="6dp"
                 android:visibility="gone" />
@@ -309,18 +326,6 @@
 
             <TextView
                 android:id="@+id/chat_chip_limits"
-                style="@style/QuickChip"
-                android:layout_marginEnd="6dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/chat_chip_changes"
-                style="@style/QuickChip"
-                android:layout_marginEnd="6dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/chat_chip_mode"
                 style="@style/QuickChip"
                 android:layout_marginEnd="6dp"
                 android:visibility="gone" />

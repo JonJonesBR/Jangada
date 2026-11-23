@@ -122,6 +122,12 @@ class HomeActivity : JangadaActivity() {
     /** Pasta do clone ou cópia que falhou (extra do aviso), esperando o serviço para mostrar o log. */
     private var pendingCloneFailure: String? = null
 
+    /** Pedido de "Fechar tudo" vindo do aviso, esperando o serviço para perguntar antes de encerrar. */
+    private var pendingCloseAll = false
+
+    /** true com o painel de "Fechar tudo" na tela: um segundo toque no aviso não empilha outro. */
+    private var closeAllDialogShowing = false
+
     /** Cartão de cada agente (id -> view), para mexer só no que mudou. */
     private val cards = HashMap<String, View>()
     /** Estado de cada tarefa na última vez que os cartões foram desenhados. */
@@ -176,6 +182,8 @@ class HomeActivity : JangadaActivity() {
 
         // Aviso de clone que falhou: a tela abre com o log (ver showPendingCloneFailure).
         if (savedInstanceState == null) takeCloneFailure(intent)
+        // O pedido de fechar tudo vale também na tela restaurada: o extra só é consumido aqui.
+        takeCloseAll(intent)
         setContentView(R.layout.activity_home)
         agentsList = findViewById(R.id.agents)
         sessionsList = findViewById(R.id.sessions)
@@ -416,6 +424,7 @@ class HomeActivity : JangadaActivity() {
         if (service != null) {
             renderAgents()
             renderSessions()
+            showPendingCloseAll()
         }
     }
 
@@ -453,6 +462,37 @@ class HomeActivity : JangadaActivity() {
         setIntent(intent)
         takeCloneFailure(intent)
         showPendingCloneFailure()
+        takeCloseAll(intent)
+        showPendingCloseAll()
+    }
+
+    /** Guarda o pedido de fechar tudo e tira o extra do intent (para não repetir ao girar a tela). */
+    private fun takeCloseAll(intent: Intent?) {
+        val target = intent ?: return
+        if (!target.getBooleanExtra(EXTRA_CLOSE_ALL, false)) return
+        pendingCloseAll = true
+        target.removeExtra(EXTRA_CLOSE_ALL)
+    }
+
+    /**
+     * Com o serviço ligado, pergunta antes de fechar tudo: a ação do aviso não encerra mais na hora.
+     * Sem nenhum trabalho aberto não há o que fechar, então só fica na tela inicial.
+     */
+    private fun showPendingCloseAll() {
+        if (!pendingCloseAll) return
+        val svc = service ?: return
+        pendingCloseAll = false
+        if (closeAllDialogShowing) return
+        val count = svc.openWorkCount()
+        if (count <= 0) return
+        closeAllDialogShowing = true
+        AlertDialog.Builder(this)
+            .setTitle(R.string.close_all_title)
+            .setMessage(resources.getQuantityString(R.plurals.close_all_message, count, count))
+            .setPositiveButton(R.string.service_exit) { _, _ -> svc.exitNow() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .setOnDismissListener { closeAllDialogShowing = false }
+            .show()
     }
 
     /** Guarda a pasta do aviso de clone que falhou e tira o extra do intent (para não mostrar de novo). */
@@ -509,8 +549,10 @@ class HomeActivity : JangadaActivity() {
             renderSessions()
             renderAgents()
             showPendingCloneFailure()
+            showPendingCloseAll()
             // Clone que seguia com a tela fora: o progresso volta (terminando bem, abre o chat).
-            resumeCloneProgress(svc, { it.source == null }) { done ->
+            // Clone sem agente (iniciado na tela Projetos) não abre chat.
+            resumeCloneProgress(svc, { it.source == null && it.agentId.isNotEmpty() }) { done ->
                 if (done.state == TerminalService.CloneTask.State.OK) openChat(done.agentId, done.folder)
                 else showCloneFailure(done)
             }
@@ -1391,10 +1433,12 @@ class HomeActivity : JangadaActivity() {
 
     /**
      * A pasta escolhida. Repositório que pode ter trabalho isolado pergunta antes como trabalhar;
-     * as outras pastas (e a raiz) abrem o chat direto.
+     * as outras pastas (e a raiz) abrem o chat direto. Marcada com "Sempre direto", nem pergunta:
+     * a cópia isolada continua no menu ⋮ do chat.
      */
     private fun pickJobFolder(recipe: AgentRecipe, folder: String, item: Workspace.Folder?) {
-        if (item == null || !Worktrees.canStart(item)) {
+        val direct = AppSettings(this).directFolder(folder)
+        if (item == null || !Worktrees.canStart(item) || direct) {
             openChat(recipe.id, folder)
             return
         }
@@ -1410,6 +1454,14 @@ class HomeActivity : JangadaActivity() {
                         title = getString(R.string.home_job_worktree),
                         description = getString(R.string.home_job_worktree_desc),
                     ) { askJobWorktree(recipe, folder) },
+                    Sheet.Row(
+                        title = getString(R.string.home_job_always_direct),
+                        description = getString(R.string.home_job_always_direct_desc),
+                    ) {
+                        // Lembra a escolha: as próximas vezes abrem direto, sem esta folha.
+                        AppSettings(this).setDirectFolder(folder, true)
+                        openChat(recipe.id, folder)
+                    },
                 ),
             )
             .show()
@@ -1498,20 +1550,22 @@ class HomeActivity : JangadaActivity() {
     /** Estado de uma tarefa como foi desenhado no cartão. */
     private class TaskMark(val task: AgentTask, val state: AgentTask.State, val cancelled: Boolean)
 
-    private companion object {
-        const val TAG = "Jangada"
-        const val FOUND = "JANGADA_FOUND "
-        const val VERSION = "JANGADA_VERSION "
-        const val SIZE = "JANGADA_SIZE "
-        const val UPDATE_QUIET_MS = 7L * 24 * 60 * 60 * 1000
-        const val RENDER_GAP_MS = 300L
-        const val REQUEST_STORAGE = 42
+    companion object {
+        /** Extra do aviso: a tela inicial abre com o pedido de fechar tudo (ver showPendingCloseAll). */
+        const val EXTRA_CLOSE_ALL = "close_all"
+        private const val TAG = "Jangada"
+        private const val FOUND = "JANGADA_FOUND "
+        private const val VERSION = "JANGADA_VERSION "
+        private const val SIZE = "JANGADA_SIZE "
+        private const val UPDATE_QUIET_MS = 7L * 24 * 60 * 60 * 1000
+        private const val RENDER_GAP_MS = 300L
+        private const val REQUEST_STORAGE = 42
         /** Abaixo disso de espaço livre no celular, o cartão avisa em vermelho (1 GiB). */
-        const val LOW_SPACE_BYTES = 1_073_741_824L
+        private const val LOW_SPACE_BYTES = 1_073_741_824L
         /** Com esta quantidade de linhas (trabalhos + terminais), aparecem os filtros. */
-        const val FILTER_MIN_ROWS = 4
+        private const val FILTER_MIN_ROWS = 4
         /** Intervalo em que a lista de trabalhos se redesenha enquanto há chat aberto. */
-        const val JOBS_REFRESH_MS = 2_000L
+        private const val JOBS_REFRESH_MS = 2_000L
     }
 }
 
