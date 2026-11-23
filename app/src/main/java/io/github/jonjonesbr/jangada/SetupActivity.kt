@@ -138,7 +138,7 @@ class SetupActivity : JangadaActivity() {
             .show()
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         // Com a permissão concedida ou negada, a instalação começa.
         if (requestCode == REQUEST_NOTIFICATIONS) startSetup()
