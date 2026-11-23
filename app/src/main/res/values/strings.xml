@@ -36,7 +36,7 @@
     <string name="service_exit">Close all</string>
     <string name="close_all_title">Close all?</string>
     <plurals name="close_all_message">
-        <item quantity="one">1 job will be closed, including chats, terminals and running installs.</item>
+        <item quantity="one">%d job will be closed, including chats, terminals and running installs.</item>
         <item quantity="other">%d jobs will be closed, including chats, terminals and running installs.</item>
     </plurals>
     <string name="channel_sessions">Running sessions</string>

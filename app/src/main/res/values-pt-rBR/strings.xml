@@ -34,7 +34,7 @@
     <string name="service_exit">Encerrar tudo</string>
     <string name="close_all_title">Encerrar tudo?</string>
     <plurals name="close_all_message">
-        <item quantity="one">1 trabalho será encerrado, incluindo chats, terminais e instalações em andamento.</item>
+        <item quantity="one">%d trabalho será encerrado, incluindo chats, terminais e instalações em andamento.</item>
         <item quantity="other">%d trabalhos serão encerrados, incluindo chats, terminais e instalações em andamento.</item>
     </plurals>
     <string name="channel_sessions">Sessões em andamento</string>
