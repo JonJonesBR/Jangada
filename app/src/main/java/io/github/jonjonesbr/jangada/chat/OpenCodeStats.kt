@@ -93,7 +93,8 @@ object OpenCodeStats {
 
     /**
      * Consumo local para o chip: gasto do Zen (modelos pagos do provedor `opencode`, custo > 0) e tokens
-     * dos grátis (`opencode/*-free`) nos últimos [DAYS] dias. Go (`opencode-go/*`) e BYOK ficam de fora.
+     * dos grátis (modelos `opencode` terminados em `-free`) nos últimos [DAYS] dias. Os modelos do Go
+     * (provedor `opencode-go`) e de outros provedores ficam de fora.
      */
     fun localUsage(usage: Usage, nowMs: Long): LocalUsage {
         var zenCost = 0.0
