@@ -169,13 +169,25 @@ class HomeScreenTest {
         org.junit.Assert.fail("O bloco Sistema não apareceu.\nNa tela: ${ChatUi.screenTexts()}")
     }
 
+    /** Toca no texto do recurso [res] rolando a Home para baixo até ele aparecer (o bloco Sistema fica no fim). */
+    private fun tocarRolando(res: Int) {
+        val texto = context.getString(res)
+        val fim = System.currentTimeMillis() + 120_000
+        while (System.currentTimeMillis() < fim) {
+            device.findObject(By.text(texto))?.let { it.click(); return }
+            rolarParaBaixo()
+            Thread.sleep(500)
+        }
+        org.junit.Assert.fail("\"$texto\" não apareceu.\nNa tela: ${ChatUi.screenTexts()}")
+    }
+
     /** O painel mostra a barra do espaço (Total e a legenda "Linux e agentes"); voltar fecha. */
     @Test
     fun painelDeEspacoMostraAsPartes() {
         ActivityScenario.launch(HomeActivity::class.java).use {
             // O bloco Sistema começa recolhido: expande antes de tocar nos detalhes do espaço.
             expandirSistema()
-            ChatUi.tap(R.string.storage_details, FAKE, timeoutMs = 120_000)
+            tocarRolando(R.string.storage_details)
             ChatUi.waitText(context.getString(R.string.storage_details_title), FAKE, timeoutMs = 120_000)
             // "Total: %1$s" sem o valor: o trecho que sempre aparece quando a medição termina.
             val total = context.getString(R.string.storage_total, "").trim()
@@ -199,7 +211,7 @@ class HomeScreenTest {
         ActivityScenario.launch(HomeActivity::class.java).use {
             // O bloco Sistema começa recolhido: expande antes de tocar nos detalhes do espaço.
             expandirSistema()
-            ChatUi.tap(R.string.storage_details, FAKE, timeoutMs = 120_000)
+            tocarRolando(R.string.storage_details)
             val linha = device.wait(Until.findObject(By.text(context.getString(R.string.storage_clean_caches))), 120_000)
             assertNotNull("a linha Liberar espaço não apareceu.\nNa tela: ${ChatUi.screenTexts()}", linha)
             val nothing = context.getString(R.string.storage_clean_nothing)
