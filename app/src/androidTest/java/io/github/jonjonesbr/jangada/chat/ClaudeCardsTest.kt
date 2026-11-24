@@ -38,7 +38,17 @@ class ClaudeCardsTest {
         ChatUi.open(TerminalService.CLAUDE).use {
             send("me faça uma pergunta")
             waitText(ChatUi.context.getString(R.string.chat_question_wants, "Claude").take(6), FAKE)
-            waitText("Azul", FAKE).click()
+            // A tela ainda é redesenhada logo depois de a pergunta aparecer: se o elemento trocou, acha de novo.
+            var tries = 0
+            while (true) {
+                try {
+                    waitText("Azul", FAKE).click()
+                    break
+                } catch (e: androidx.test.uiautomator.StaleObjectException) {
+                    if (++tries >= 3) throw e
+                    Thread.sleep(1000)
+                }
+            }
             tap(R.string.chat_question_answer, FAKE)
             val log = waitLog(FAKE, "ANSWERED AskUserQuestion")
             assertTrue("as answers não chegaram ao Claude. Log:\n$log", log.contains("\"answers\":{\"Qual cor?\":\"Azul\"}"))
