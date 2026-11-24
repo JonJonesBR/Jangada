@@ -38,6 +38,8 @@ class AgentEnvTest {
             "GIT_SEQUENCE_EDITOR=true",
             "GIT_ASKPASS=/bin/false",
             "DEBIAN_FRONTEND=noninteractive",
+            "CONTEXT_MODE_MAX_READ_BYTES=4096",
+            "CONTEXT_MODE_MAX_LINE_RANGE=120",
         )) {
             assertTrue("falta $esperada", esperada in guardas)
         }

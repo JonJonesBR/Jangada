@@ -28,6 +28,7 @@ object AgentInstructions {
         - Close the browser as soon as each test ends (browser.close()), and stop any server or background process you started once you no longer need it.
         - Prefer headless browsers with a single page, and avoid running heavy builds or test suites in parallel subagents.
         - If a command dies with "Killed" or exit code 137, memory ran out: run it again alone, with less parallelism.
+        - Save context and quota: avoid reading whole files over 120 lines at once (use search tools like `ctx_search` or read line ranges), ignore heavy folders (`node_modules/`, `.git/`, `dist/`, `build/`, `.log`), and keep responses concise without repeating unchanged code.
     """.trimIndent()
 
     /** Arquivo maior que isso não é lido nem alterado pelo app. */

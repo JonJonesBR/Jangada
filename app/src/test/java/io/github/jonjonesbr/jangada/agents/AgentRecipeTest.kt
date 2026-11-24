@@ -43,6 +43,9 @@ class AgentRecipeTest {
         // O servidor ACP vem embutido no CLI (agy acp, desde a 1.5.0): sem instalação extra.
         assertEquals("agy acp", agy.acp?.command)
         assertNull(agy.acp?.install)
+        assertTrue(agy.install.contains("antigravity-plugin-context-mode"))
+        assertTrue(agy.install.contains("agy-context"))
+        assertTrue(agy.install.contains("antigravity-usage"))
     }
 
     @Test

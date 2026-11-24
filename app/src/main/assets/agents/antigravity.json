@@ -4,7 +4,8 @@
   "name": "Antigravity CLI (agy)",
   "vendor": "Google",
   "command": "agy",
-  "install": "curl -fsSL --connect-timeout 20 --retry 3 --speed-limit 1000 --speed-time 60 https://antigravity.google/cli/install.sh | bash",
+  "requires": ["ca-certificates", "curl", "git", "gnupg", "sqlite3"],
+  "install": "curl -fsSL --connect-timeout 20 --retry 3 --speed-limit 1000 --speed-time 60 https://antigravity.google/cli/install.sh | bash && if ! command -v node >/dev/null 2>&1 || [ \"$(node -v | cut -d. -f1 | tr -d v)\" -lt 22 ]; then curl -fsSL --connect-timeout 20 --retry 3 --speed-limit 1000 --speed-time 60 https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y --no-install-recommends nodejs; fi && PATH=\"$HOME/.local/bin:$PATH\" agy plugin install https://github.com/Domush/antigravity-plugin-context-mode && PATH=\"$HOME/.local/bin:$PATH\" agy plugin install https://github.com/ahmetdotsh/agy-context && npm i -g antigravity-usage",
   "homepage": "https://antigravity.google/docs/cli/overview",
   "instructions": {
     "files": ["~/.gemini/AGENTS.md"],
@@ -21,5 +22,5 @@
     "pt": "Entre com a conta Google; na primeira vez, o chat abre o terminal para colar o código.",
     "en": "Sign in with your Google account; the first time, the chat opens the terminal for you to paste the code."
   },
-  "uninstall": "rm -rf ~/.local/share/agy-acp ~/.cache/antigravity"
+  "uninstall": "rm -rf ~/.local/share/agy-acp ~/.cache/antigravity; npm uninstall -g antigravity-usage || true"
 }
