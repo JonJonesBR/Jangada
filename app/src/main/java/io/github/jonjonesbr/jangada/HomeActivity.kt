@@ -993,7 +993,7 @@ class HomeActivity : JangadaActivity() {
         }
 
         // Tarefa que falhou: explica e oferece as saídas. Cancelada pelo usuário não mostra erro.
-        if (mostraErro(task, isInstalled, queued)) {
+        if (task != null && mostraErro(task, isInstalled, queued)) {
             taskError.visibility = View.VISIBLE
             taskError.setText(
                 when {
