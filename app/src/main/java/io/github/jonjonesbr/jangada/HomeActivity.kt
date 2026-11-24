@@ -170,6 +170,13 @@ class HomeActivity : JangadaActivity() {
     private var askedStorage = false
     private var allFilesOpened = false
     private var paused = true
+    /** Views do bloco Sistema (ver renderSystem). */
+    private lateinit var systemTitle: TextView
+    private lateinit var systemAlert: TextView
+    private lateinit var systemBody: View
+    /** Alertas do bloco Sistema recolhido: pouca memória (renderFit) e pouco espaço ou sem acesso (renderStorage). */
+    private var memoryShort = false
+    private var storageShort = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -203,6 +210,12 @@ class HomeActivity : JangadaActivity() {
         legendAgents = findViewById(R.id.home_memory_legend_agents)
         legendOther = findViewById(R.id.home_memory_legend_other)
         legendFree = findViewById(R.id.home_memory_legend_free)
+        systemTitle = findViewById(R.id.system_title)
+        systemAlert = findViewById(R.id.system_alert)
+        systemBody = findViewById(R.id.system_body)
+        systemTitle.setOnClickListener { toggleSystem() }
+        systemAlert.setOnClickListener { toggleSystem() }
+        renderSystem()
         newJobButton.setOnClickListener { startNewJob() }
         recipes = AgentCatalog.load(this)
 
@@ -279,6 +292,43 @@ class HomeActivity : JangadaActivity() {
         renderStorage()
     }
 
+    // ---- Sistema (bloco recolhível no fim da Home) ----
+
+    /** Expandido ou recolhido: o estado fica nas prefs dos agentes (começa recolhido). */
+    private fun systemOpen(): Boolean = prefs.getBoolean(SYSTEM_EXPANDED_KEY, false)
+
+    private fun toggleSystem() {
+        prefs.edit().putBoolean(SYSTEM_EXPANDED_KEY, !systemOpen()).apply()
+        renderSystem()
+    }
+
+    /**
+     * Cabeçalho ▾/▴ e corpo do bloco Sistema (o corpo só aparece expandido). Recolhido, a linha de alerta
+     * mostra pouca memória ([memoryShort]) e armazenamento ([storageShort]); tocar nela expande.
+     */
+    private fun renderSystem() {
+        val open = systemOpen()
+        val title = getString(if (open) R.string.home_system_open else R.string.home_system_closed)
+        if (systemTitle.text.toString() != title) systemTitle.text = title
+        val description = getString(if (open) R.string.home_system_open_description else R.string.home_system_closed_description)
+        if (systemTitle.contentDescription?.toString() != description) systemTitle.contentDescription = description
+        systemBody.visibility = if (open) View.VISIBLE else View.GONE
+        val alerts = buildList {
+            if (memoryShort) add(getString(R.string.home_system_alert_memory))
+            if (storageShort) add(getString(R.string.home_system_alert_storage))
+        }
+        val alert = if (open) "" else alerts.joinToString("\n")
+        if (systemAlert.text.toString() != alert) systemAlert.text = alert
+        systemAlert.visibility = if (alert.isEmpty()) View.GONE else View.VISIBLE
+    }
+
+    /** Esconde o bloco de memória e tira o alerta de pouca memória do bloco Sistema. */
+    private fun hideMemory() {
+        memoryBlock.visibility = View.GONE
+        memoryShort = false
+        renderSystem()
+    }
+
     // ---- Arquivos do celular ----
 
     private fun renderStorage() {
@@ -289,6 +339,10 @@ class HomeActivity : JangadaActivity() {
         findViewById<View>(R.id.storage_details).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         findViewById<View>(R.id.projects_open).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         renderSpace()
+        // Alerta do Sistema recolhido: sem acesso aos arquivos, ou pouco espaço (a mesma regra de renderSpace).
+        val lowSpace = phoneStat()?.let { spaceLine(it).second } == true
+        storageShort = linux.isReady && (!granted || lowSpace)
+        renderSystem()
     }
 
     /** Espaço livre do celular (o Linux fica na memória interna). Abaixo de 1 GiB, aviso em vermelho. */
@@ -771,11 +825,6 @@ class HomeActivity : JangadaActivity() {
     private fun buildCard(inflater: LayoutInflater, recipe: AgentRecipe): View {
         val card = inflater.inflate(R.layout.item_agent, agentsList, false)
         card.findViewById<TextView>(R.id.name).text = recipe.name
-        card.findViewById<TextView>(R.id.vendor).text = recipe.vendor
-        card.findViewById<TextView>(R.id.description).text = recipe.description()
-        recipe.note()?.let {
-            card.findViewById<TextView>(R.id.note).apply { text = it; visibility = View.VISIBLE }
-        }
 
         val status = card.findViewById<TextView>(R.id.status)
         val primary = card.findViewById<Button>(R.id.primary)
@@ -849,12 +898,11 @@ class HomeActivity : JangadaActivity() {
             // Na fila: só dá para tirar da fila (sem confirmação, nada começou).
             primary.visibility = View.GONE
             update.visibility = View.GONE
-            card.findViewById<Button>(R.id.alternative).visibility = View.GONE
             taskCancel.visibility = View.VISIBLE
             taskCancel.setOnClickListener { service?.unqueue(recipe.id) }
         } else {
             // Agentes com chat: no Modo Simples o botão principal é "Conversar" (chat)
-            // e o terminal fica como alternativa; no Modo Pro, o contrário.
+            // e o terminal fica no ⋯ como alternativa; no Modo Pro, o contrário.
             val chatFirst = recipe.hasChat && simpleMode
             primary.setText(
                 when {
@@ -872,13 +920,6 @@ class HomeActivity : JangadaActivity() {
                     else -> openAgent(recipe)
                 }
             }
-            val alternative = card.findViewById<Button>(R.id.alternative)
-            if (isInstalled && recipe.hasChat) {
-                alternative.visibility = View.VISIBLE
-                alternative.setText(if (chatFirst) R.string.agent_terminal else R.string.agent_chat)
-                alternative.setOnClickListener { if (chatFirst) openAgent(recipe) else openChat(recipe.id) }
-            }
-
             val updateLabel = updateLabel(recipe, isInstalled, version, latest)
             if (updateLabel != null && enabled) {
                 update.visibility = View.VISIBLE
@@ -907,8 +948,12 @@ class HomeActivity : JangadaActivity() {
             card.findViewById<Button>(R.id.task_details).setOnClickListener { showLog(recipe, task) }
         }
 
-        // ⋯ : site, reinstalar e desinstalar.
-        card.findViewById<TextView>(R.id.site).setOnClickListener { showAgentMenu(recipe, isInstalled && !queued) }
+        // ⋯ : fornecedor, descrição, nota, site, Nova conversa, o chat ou terminal alternativo, reinstalar e desinstalar.
+        // A situação é lida no toque, para o menu refletir a tarefa atual.
+        card.findViewById<TextView>(R.id.more).setOnClickListener {
+            val busy = service?.tasks?.get(recipe.id)?.state == AgentTask.State.RUNNING
+            showAgentMenu(recipe, installed = isInstalled && !queued, chatReady = isInstalled && !queued && !busy)
+        }
         return card
     }
 
@@ -927,15 +972,30 @@ class HomeActivity : JangadaActivity() {
         return if (System.currentTimeMillis() - updatedAt > UPDATE_QUIET_MS) getString(R.string.agent_update) else null
     }
 
-    private fun showAgentMenu(recipe: AgentRecipe, isInstalled: Boolean) {
+    /**
+     * Menu ⋯ do cartão, sempre aberto: fornecedor, descrição e nota no topo, depois as ações raras.
+     * [chatReady] (instalado, sem fila e sem tarefa rodando) libera Nova conversa e o chat ou terminal
+     * alternativo; [installed] libera reinstalar e desinstalar.
+     */
+    private fun showAgentMenu(recipe: AgentRecipe, installed: Boolean, chatReady: Boolean) {
         val rows = mutableListOf<Sheet.Row>()
+        if (chatReady && recipe.hasChat) {
+            rows += Sheet.Row(title = getString(R.string.chat_new)) { openChat(recipe.id, fresh = true) }
+            // No Modo Simples o principal é Conversar, e o alternativo é o terminal; no Modo Pro, o contrário.
+            val chatFirst = simpleMode
+            rows += Sheet.Row(title = getString(if (chatFirst) R.string.agent_terminal else R.string.agent_chat)) {
+                if (chatFirst) openAgent(recipe) else openChat(recipe.id)
+            }
+        }
         recipe.homepage?.let { url -> rows += Sheet.Row(title = getString(R.string.agent_site)) { openUrl(url) } }
-        if (isInstalled) {
+        if (installed) {
             rows += Sheet.Row(title = getString(R.string.agent_reinstall)) { startTask(recipe, updating = false) }
             rows += Sheet.Row(title = getString(R.string.agent_uninstall), destructive = true) { confirmUninstall(recipe) }
         }
-        if (rows.isEmpty()) return
-        Sheet(this).title(recipe.name).rows(rows).show()
+        val details = listOfNotNull(recipe.vendor, recipe.description(), recipe.note()).filter { it.isNotBlank() }
+        Sheet(this).title(recipe.name).apply {
+            if (details.isNotEmpty()) message(details.joinToString("\n\n"))
+        }.rows(rows).show()
     }
 
     private fun confirmUninstall(recipe: AgentRecipe) {
@@ -1075,7 +1135,7 @@ class HomeActivity : JangadaActivity() {
         val svc = service
         if (svc == null || svc.chats.isEmpty() || !linux.isReady) {
             memoryGen++
-            memoryBlock.visibility = View.GONE
+            hideMemory()
             return
         }
         val gen = ++memoryGen
@@ -1083,7 +1143,7 @@ class HomeActivity : JangadaActivity() {
             if (gen != memoryGen || paused || isDestroyed || isFinishing) return@readUsageByKey
             val current = service ?: return@readUsageByKey
             if (current.chats.isEmpty() || !linux.isReady) {
-                memoryBlock.visibility = View.GONE
+                hideMemory()
                 return@readUsageByKey
             }
             applyMemory(current, usage)
@@ -1096,7 +1156,7 @@ class HomeActivity : JangadaActivity() {
         renderJobDetails(svc, usage)
         val ov = MemoryReport.overview(info.totalMem, info.availMem, info.threshold, usage.values)
         if (ov.agentsBytes + ov.otherBytes + ov.availBytes <= 0L) {
-            memoryBlock.visibility = View.GONE
+            hideMemory()
             return
         }
         setBarWeight(memoryAgents, ov.agentsBytes)
@@ -1139,6 +1199,12 @@ class HomeActivity : JangadaActivity() {
      * (setup_error_text) só quando não cabe. Só troca texto, cor e visibilidade quando mudam.
      */
     private fun renderFit(fit: Pair<String, Boolean>?) {
+        // O aviso em vermelho (não cabe) também aparece no alerta do bloco Sistema recolhido.
+        val short = fit?.second == true
+        if (short != memoryShort) {
+            memoryShort = short
+            renderSystem()
+        }
         if (fit == null) {
             if (memoryFit.visibility != View.GONE) memoryFit.visibility = View.GONE
             return
@@ -1327,9 +1393,11 @@ class HomeActivity : JangadaActivity() {
     }
 
     /** Abre a tela de chat de um agente; com [folder], a do trabalho dessa pasta (sem ela, a última usada). */
-    private fun openChat(agentId: String, folder: String? = null) {
+    private fun openChat(agentId: String, folder: String? = null, fresh: Boolean = false) {
         val intent = Intent(this, ChatActivity::class.java).putExtra(ChatActivity.EXTRA_AGENT_ID, agentId)
         if (folder != null) intent.putExtra(ChatActivity.EXTRA_FOLDER, folder)
+        // Nova conversa: o chat abre uma conversa nova em vez de continuar a última (ver ChatActivity.EXTRA_NEW).
+        if (fresh) intent.putExtra(ChatActivity.EXTRA_NEW, true)
         startActivity(intent)
     }
 
@@ -1564,6 +1632,8 @@ class HomeActivity : JangadaActivity() {
         private const val LOW_SPACE_BYTES = 1_073_741_824L
         /** Com esta quantidade de linhas (trabalhos + terminais), aparecem os filtros. */
         private const val FILTER_MIN_ROWS = 4
+        /** Chave em prefs: o bloco Sistema da Home está expandido (começa recolhido). */
+        private const val SYSTEM_EXPANDED_KEY = "home_system_expanded"
         /** Intervalo em que a lista de trabalhos se redesenha enquanto há chat aberto. */
         private const val JOBS_REFRESH_MS = 2_000L
     }
