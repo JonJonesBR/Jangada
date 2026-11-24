@@ -1114,7 +1114,7 @@ class ChatActivity : JangadaActivity() {
 
     /**
      * Aplica o modo compacto (teclado aberto ou tela baixa): faixas de status e de permissão em uma
-     * linha, atalhos reduzidos ao modo de permissão, caixa de texto de até 3 linhas e sem o nome do
+     * linha, atalhos reduzidos ao modo de permissão e aos limites, caixa de texto de até 3 linhas e sem o nome do
      * agente no título (fica o subtítulo com a pasta). Fora dele, tudo volta ao normal.
      */
     private fun applyCompact() {
@@ -1296,9 +1296,9 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Atalhos acima da caixa: pasta, modo, mudanças, modelo, visualização, contexto e limites. As
+     * Atalhos acima da caixa: pasta, limites, modo, mudanças, modelo, visualização e contexto. As
      * views são criadas no layout; aqui só mudam texto, descrição e visibilidade (sem recriar nada
-     * a cada redesenho). No compacto (teclado aberto) só o modo de permissão fica na barra.
+     * a cada redesenho). No compacto (teclado aberto) só o modo de permissão e os limites ficam na barra.
      */
     private fun updateQuickbar() {
         val chat = engine ?: return
@@ -1389,17 +1389,17 @@ class ChatActivity : JangadaActivity() {
             chipChanges.contentDescription = resources.getQuantityString(R.plurals.chat_quick_changes_description, changes, changes)
         }
 
-        // Compacto (teclado aberto): a barra fica só com o modo de permissão, que é o mais sensível
-        // e precisa continuar à mão. Com a tela normal voltam todos os chips calculados acima.
+        // Compacto (teclado aberto): a barra fica só com o modo de permissão (o mais sensível) e os
+        // limites do plano, que precisam continuar à vista. Com a tela normal voltam todos os chips.
         if (compactLayout) {
             chipFolder.visibility = View.GONE
             chipModel.visibility = View.GONE
             chipView.visibility = View.GONE
             chipContext.visibility = View.GONE
-            chipLimits.visibility = View.GONE
             chipChanges.visibility = View.GONE
-            // Sem o chip de modo (ainda sem pedido de permissão) a barra vazia não aparece.
-            quickbar.visibility = if (chipMode.visibility == View.VISIBLE) View.VISIBLE else View.GONE
+            // Sem o chip de modo (ainda sem pedido de permissão) nem o de limites a barra vazia não aparece.
+            val any = chipMode.visibility == View.VISIBLE || chipLimits.visibility == View.VISIBLE
+            quickbar.visibility = if (any) View.VISIBLE else View.GONE
         } else {
             quickbar.visibility = View.VISIBLE
         }
