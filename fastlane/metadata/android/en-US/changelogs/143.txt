@@ -1,0 +1,1 @@
+OpenCode chat: the limits chip shows the OpenCode Go allowance read directly with the opencode key (5 hours, week and month), without needing the Console sign-in, and Console budgets as Zen. When no quota is published (Zen without Console or free models), the chip and the panel show local usage from the last 7 days (spend in US$ and free tokens).

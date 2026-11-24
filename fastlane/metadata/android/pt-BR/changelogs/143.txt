@@ -1,0 +1,1 @@
+Chat do OpenCode: o chip de limites mostra a cota do OpenCode Go lida direto pela chave do próprio opencode (5 horas, semana e mês), sem depender do login no Console, e os budgets do Console como Zen. Sem cota publicada (Zen sem Console ou modelos grátis), o chip e o painel mostram o consumo local dos últimos 7 dias (gasto em US$ e tokens grátis).

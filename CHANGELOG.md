@@ -1,5 +1,10 @@
 # Novidades
 
+## 1.33.0
+
+- Chat do OpenCode: o chip de limites mostra a cota do OpenCode Go lida direto pela chave do próprio opencode (5 horas, semana e mês), sem depender do login no Console; a janela mensal também entra no chip, com aviso a 90%.
+- Chat do OpenCode: os budgets do Console aparecem como "Zen" e, quando não há cota publicada (Zen sem Console ou modelos grátis), o chip e o painel mostram o consumo local dos últimos 7 dias (gasto em US$ e tokens grátis).
+
 ## 1.32.0
 
 - Antigravity (agy): a instalação traz os plugins nativos de economia de contexto (`antigravity-plugin-context-mode` com busca SQLite FTS5 e `agy-context`), o monitor `antigravity-usage` e o Node.js 22 LTS necessário para eles.
