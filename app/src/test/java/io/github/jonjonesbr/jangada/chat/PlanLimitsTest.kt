@@ -43,15 +43,71 @@ class PlanLimitsTest {
                 LimitWindow(LimitWindow.Kind.FIVE_HOUR, 42, 1700003600000L),
                 LimitWindow(LimitWindow.Kind.WEEKLY, 80, 1700500000000L),
                 // Limitado conta como cheio.
-                LimitWindow(LimitWindow.Kind.OTHER, 100, 1702000000000L, "30 d"),
+                LimitWindow(LimitWindow.Kind.MONTHLY, 100, 1702000000000L),
             ),
             limits.windows,
         )
         assertEquals(now, limits.updatedAtMs)
         assertNull(PlanLimitsParser.fromOpenCodeUsage("""{"location":{"directory":"/tmp"},"data":null}""", now))
         assertNull(PlanLimitsParser.fromOpenCodeUsage("""{"location":{},"data":{"workspace":{"id":"w"},"budgets":[]}}""", now))
+        assertNull(PlanLimitsParser.fromOpenCodeUsage("{}", now))
         assertNull(PlanLimitsParser.fromOpenCodeUsage("erro", now))
         assertNull(PlanLimitsParser.fromOpenCodeUsage("{quebrado", now))
+    }
+
+    /**
+     * Resposta da API do Go (`GET https://opencode.ai/zen/go/v1/usage`, com a chave Go do opencode):
+     * `percent`, `status` e `resetsAt` em ISO.
+     */
+    @Test
+    fun openCodeGoDireto() {
+        val texto = """curl: (0) ""
+{"usage":{"rolling":{"status":"ok","percent":9,"resetsAt":"2026-11-24T14:00:00Z"},
+"weekly":{"status":"ok","percent":9,"resetsAt":"2026-11-30T00:00:00Z"},
+"monthly":{"status":"rate-limited","percent":80,"resetsAt":"2026-12-01T00:00:00Z"}}}"""
+        val limits = PlanLimitsParser.fromOpenCodeGoUsage(texto, agora)!!
+        assertEquals(agora, limits.updatedAtMs)
+        assertEquals(
+            listOf(
+                LimitWindow(LimitWindow.Kind.FIVE_HOUR, 9, Instant.parse("2026-11-24T14:00:00Z").toEpochMilli()),
+                LimitWindow(LimitWindow.Kind.WEEKLY, 9, Instant.parse("2026-11-30T00:00:00Z").toEpochMilli()),
+                // "rate-limited" conta como cheio, mesmo com percent menor.
+                LimitWindow(LimitWindow.Kind.MONTHLY, 100, Instant.parse("2026-12-01T00:00:00Z").toEpochMilli()),
+            ),
+            limits.windows,
+        )
+        // Lixo antes do JSON (curl/bash) é aceito; sem `usage` ou JSON quebrado: null.
+        assertEquals(3, PlanLimitsParser.fromOpenCodeGoUsage("bash: no job control\n$texto", agora)!!.windows.size)
+        assertNull(PlanLimitsParser.fromOpenCodeGoUsage("", agora))
+        assertNull(PlanLimitsParser.fromOpenCodeGoUsage("erro de rede", agora))
+        assertNull(PlanLimitsParser.fromOpenCodeGoUsage("""{"usage":null}""", agora))
+        assertNull(PlanLimitsParser.fromOpenCodeGoUsage("""{"usage":{}}""", agora))
+    }
+
+    /** Sem `resetsAt` (campo ausente), a janela vale sem horário de renovação. */
+    @Test
+    fun openCodeGoSemHorarioDeRenovacao() {
+        val limits = PlanLimitsParser.fromOpenCodeGoUsage("""{"usage":{"rolling":{"status":"ok","percent":5}}}""", agora)!!
+        assertEquals(LimitWindow(LimitWindow.Kind.FIVE_HOUR, 5, null), limits.windows.single())
+    }
+
+    /** Budget do console (gasto mensal do Zen): vira a janela mensal "Zen", com o maior percentual gasto. */
+    @Test
+    fun openCodeBudgetDoConsole() {
+        val json = """{"location":{},"data":{"budgets":[
+            {"limit":10,"spent":8.5,"resetsAt":1702000000000},
+            {"limit":0,"spent":5,"resetsAt":1702000000000},
+            {"limit":20,"spent":2,"resetsAt":1703000000000}]}}"""
+        val limits = PlanLimitsParser.fromOpenCodeUsage(json, agora)!!
+        assertEquals(listOf(LimitWindow(LimitWindow.Kind.MONTHLY, 85, 1702000000000L, "Zen")), limits.windows)
+        // Budget sem limite válido não gera janela.
+        assertNull(
+            PlanLimitsParser.fromOpenCodeUsage(
+                """{"data":{"budgets":[{"limit":0,"spent":5,"resetsAt":1702000000000}]}}""",
+                agora,
+            ),
+        )
+        assertNull(PlanLimitsParser.fromOpenCodeUsage("""{"data":{"budgets":[{"spent":5}]}}""", agora))
     }
 
     @Test
@@ -253,6 +309,35 @@ class PlanLimitsTest {
             agora,
         )
         assertEquals(limits, PlanLimitsParser.fromJson(PlanLimitsParser.toJson(limits)))
+    }
+
+    @Test
+    fun jsonIdaEVoltaComConsumoLocal() {
+        val usage = LocalUsage(zenCost = 1.5, freeTokens = 123_456, days = 7, updatedAtMs = agora - 1000)
+        val limits = PlanLimits(listOf(LimitWindow(LimitWindow.Kind.MONTHLY, 85, null, "Zen")), agora, usage)
+        assertEquals(limits, PlanLimitsParser.fromJson(PlanLimitsParser.toJson(limits)))
+        // Só o consumo local (sem janelas) também volta: é o que o chip mostra sem cota publicada.
+        val soUso = PlanLimits(emptyList(), agora, usage)
+        assertEquals(soUso, PlanLimitsParser.fromJson(PlanLimitsParser.toJson(soUso)))
+        // Sem janelas e sem consumo não há o que mostrar.
+        assertNull(PlanLimitsParser.fromJson("""{"updatedAtMs":1,"windows":[]}"""))
+        assertNull(PlanLimitsParser.fromJson("""{"updatedAtMs":1,"windows":[],"usage":{"updatedAtMs":0}}"""))
+        // JSON antigo/corrompido sem "days" usa o padrão de 7 dias.
+        val semDias = PlanLimitsParser.fromJson(
+            """{"updatedAtMs":1,"windows":[],"usage":{"zenCost":1.0,"freeTokens":0,"updatedAtMs":5}}""",
+        )!!
+        assertEquals(OpenCodeStats.DAYS, semDias.usage!!.days)
+    }
+
+    @Test
+    fun mergeMantemConsumoQuandoONovoNaoTraz() {
+        val usage = LocalUsage(zenCost = 0.5, freeTokens = 10, days = 7, updatedAtMs = agora)
+        val velho = PlanLimits(emptyList(), agora - 1000, usage)
+        val novo = PlanLimits(listOf(LimitWindow(LimitWindow.Kind.WEEKLY, 10, null)), agora)
+        assertEquals(usage, PlanLimitsParser.merge(velho, novo).usage)
+        // Com consumo novo, vale o novo.
+        val outro = usage.copy(zenCost = 2.0)
+        assertEquals(outro, PlanLimitsParser.merge(velho, novo.copy(usage = outro)).usage)
     }
 
     @Test

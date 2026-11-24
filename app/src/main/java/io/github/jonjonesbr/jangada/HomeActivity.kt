@@ -908,7 +908,10 @@ class HomeActivity : JangadaActivity() {
                 card.findViewById<TextView>(R.id.agent_limits).apply {
                     text = summary.text
                     setTextColor(getColor(if (summary.high) R.color.setup_error_text else R.color.setup_muted_text))
-                    contentDescription = getString(R.string.agent_limits_description, summary.names)
+                    contentDescription = getString(
+                        if (summary.usage) R.string.agent_usage_description else R.string.agent_limits_description,
+                        summary.names,
+                    )
                     visibility = View.VISIBLE
                 }
             }

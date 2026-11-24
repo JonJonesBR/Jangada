@@ -408,7 +408,7 @@ class AcpChat(
      * outros agentes. Roda na thread principal.
      */
     private fun refreshLimits(delayMs: Long = 0L) {
-        if (agentId == OPENCODE_ID) return refreshScriptLimits(OPENCODE_LIMITS_SCRIPT, PlanLimitsParser::fromOpenCodeUsage)
+        if (agentId == OPENCODE_ID) return refreshOpenCodeLimits(delayMs)
         if (agentId == AGY_ID) return refreshScriptLimits(AGY_LIMITS_SCRIPT, PlanLimitsParser::fromAgyUsage)
         if (agentId != CODEX_ID) return
         if (limitsReading) {
@@ -457,10 +457,10 @@ class AcpChat(
     private var scriptLimitsNoLogin = false
 
     /**
-     * Limites lidos por um comando do próprio agente (OpenCode Go e agy). [script] roda num bash do Debian e
+     * Limites lidos por um comando do próprio agente (agy). [script] roda num bash do Debian e
      * [parse] lê a saída. Abre outro agente, então no máximo uma vez a cada [LIMITS_EVERY_MS], e sem
      * login (resposta sem limites, exit 0) só de novo na próxima conversa. Falha ou formato inesperado: não
-     * mostra nada. No agy, as janelas "outras" (Claude/GPT) não avisam (ver [windowsToWarn]). Thread principal.
+     * mostra nada. As janelas "outras" (Claude/GPT) não avisam (ver [windowsToWarn]). Thread principal.
      */
     private fun refreshScriptLimits(script: String, parse: (String, Long) -> PlanLimits?) {
         val now = System.currentTimeMillis()
@@ -492,6 +492,107 @@ class AcpChat(
                             val at = System.currentTimeMillis()
                             warnLimits(windowsToWarn(old, found, at, dropOther = agentId == AGY_ID))
                             changed()
+                        }
+                    }
+                }
+            }
+        }
+        if (started.isFailure) limitsReading = false
+    }
+
+    /** Última leitura do consumo local do OpenCode (ms; só a thread principal mexe). */
+    private var openCodeUsageAt = 0L
+
+    /**
+     * OpenCode: limites do Go pela API do opencode (console) e, direto na API do Go, com a chave do
+     * próprio opencode (funciona sem login no console); e o consumo local dos últimos dias (ver
+     * [OpenCodeStats]), que o chip usa quando não há cota publicada. O Go direto continua mesmo sem
+     * console; a API do console, quando responde sem login, só é tentada de novo na próxima conversa.
+     * Thread principal.
+     */
+    private fun refreshOpenCodeLimits(delayMs: Long = 0L) {
+        val now = System.currentTimeMillis()
+        val first = scriptLimitsAt == 0L
+        if (limitsReading || (!first && now - scriptLimitsAt < LIMITS_EVERY_MS)) return
+        limitsReading = true
+        scriptLimitsAt = now
+        // Sem login no console (resposta vazia), não insiste a cada leitura: economiza um opencode.
+        val skipApi = scriptLimitsNoLogin
+        // O stats abre outro opencode: não roda a cada leitura, só a cada [OPENCODE_USAGE_EVERY_MS].
+        val usageDue = openCodeUsageAt == 0L || now - openCodeUsageAt >= OPENCODE_USAGE_EVERY_MS
+        val started = runCatching {
+            thread(name = "jangada-limites-$agentId") {
+                var limits: PlanLimits? = null
+                var usageRead = false
+                var apiNoLogin = skipApi
+                try {
+                    if (delayMs > 0) Thread.sleep(delayMs)
+                    val api = if (skipApi) {
+                        null
+                    } else {
+                        val apiOut = StringBuilder()
+                        val apiOk = linux.runBash(OPENCODE_LIMITS_SCRIPT) { apiOut.append(it).append('\n') } == 0
+                        val parsed = if (apiOk) {
+                            PlanLimitsParser.fromOpenCodeUsage(apiOut.toString(), System.currentTimeMillis())
+                        } else {
+                            null
+                        }
+                        // Resposta sem login (exit 0 e nada de limites): só de novo na próxima conversa.
+                        apiNoLogin = apiOk && parsed == null
+                        parsed
+                    }
+                    val goOut = StringBuilder()
+                    linux.runBash(OPENCODE_GO_LIMITS_SCRIPT) { goOut.append(it).append('\n') }
+                    val go = PlanLimitsParser.fromOpenCodeGoUsage(goOut.toString(), System.currentTimeMillis())
+                    limits = when {
+                        api != null && go != null -> PlanLimitsParser.merge(api, go)
+                        else -> go ?: api
+                    }
+                    if (usageDue) {
+                        val statsOut = StringBuilder()
+                        val statsOk = linux.runBash(OpenCodeStats.SCRIPT) { statsOut.append(it).append('\n') } == 0
+                        val usage = if (statsOk) {
+                            OpenCodeStats.parse(statsOut.toString())?.let { OpenCodeStats.localUsage(it, System.currentTimeMillis()) }
+                        } else {
+                            null
+                        }
+                        // A leitura só conta como feita quando o parse deu certo; senão tenta de novo.
+                        usageRead = usage != null
+                        if (usage != null) {
+                            // Sem janelas, o consumo sozinho já alimenta o chip.
+                            limits = limits?.copy(usage = usage)
+                                ?: if (usage.zenCost > 0 || usage.freeTokens > 0) {
+                                    PlanLimits(emptyList(), System.currentTimeMillis(), usage)
+                                } else {
+                                    null
+                                }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // IOException também cai aqui: fechar o chat no meio da leitura é normal.
+                    Log.w(TAG, "limites de $agentId", e)
+                } finally {
+                    val found = limits
+                    val readUsage = usageRead
+                    val noLogin = apiNoLogin
+                    main.post {
+                        limitsReading = false
+                        scriptLimitsNoLogin = noLogin
+                        if (readUsage) openCodeUsageAt = System.currentTimeMillis()
+                        if (found != null) {
+                            val old = limitsStore.load(agentId)
+                            // Sem uma leitura nova do consumo (o stats não roda a cada vez), vale o último.
+                            val previous = old?.usage
+                            val saved = if (found.usage == null && previous != null) found.copy(usage = previous) else found
+                            limitsStore.save(agentId, saved)
+                            val at = System.currentTimeMillis()
+                            warnLimits(windowsToWarn(old, saved, at, dropOther = false))
+                            changed()
+                        }
+                        // Outro fim de turno chegou durante a leitura: lê de novo (só se o chat segue aberto).
+                        if (limitsAgain) {
+                            limitsAgain = false
+                            if (running) refreshLimits()
                         }
                     }
                 }
@@ -1586,10 +1687,30 @@ class AcpChat(
         val SUBAGENT_TOOLS = setOf("subagent", "task")
         /** Folga depois do despertar agendado pelo agente, antes de o chat poder dormir. */
         const val SCHEDULE_MARGIN_MS = 120_000L
-        /** Intervalo mínimo entre leituras dos limites por script (OpenCode Go e agy; cada uma abre outro agente). */
+        /** Intervalo mínimo entre leituras dos limites por script (agy; cada uma abre outro agente). */
         const val LIMITS_EVERY_MS = 10 * 60_000L
+        /** Intervalo entre leituras do consumo local do OpenCode (o stats abre outro opencode). */
+        const val OPENCODE_USAGE_EVERY_MS = 30 * 60_000L
         /** Pergunta os limites ao opencode, com servidor próprio (sai no fim) e tempo limite. */
         const val OPENCODE_LIMITS_SCRIPT = "timeout 40 opencode api experimental.usage.limits --standalone </dev/null 2>/dev/null"
+        /**
+         * Lê a cobrança do OpenCode Go direto na API, com a chave Go ativa do próprio opencode. A chave sai
+         * do `auth export` e vai ao curl pela entrada padrão (`-H @-`): não entra na linha de comando, na
+         * saída do script, em log nem no app. Sem `auth export` (versão antiga) ou sem conta Go, não imprime nada.
+         */
+        val OPENCODE_GO_LIMITS_SCRIPT = """
+            set +x
+            GO_KEY=${'$'}(timeout 40 opencode auth export opencode-go --standalone </dev/null 2>/dev/null | awk '
+              /"id":/ { active=0 }
+              /"active": *true/ { active=1 }
+              /"key":/ { line=${'$'}0; sub(/.*"key": *"/, "", line); sub(/".*/, "", line); if (active) { print line; exit } if (first == "") first=line }
+              END { if (first != "") print first }
+            ' | head -1)
+            if [ -n "${'$'}GO_KEY" ]; then
+              printf 'Authorization: Bearer %s\n' "${'$'}GO_KEY" | curl -s -m 20 -H @- -H 'Accept: application/json' https://opencode.ai/zen/go/v1/usage
+            fi
+            unset GO_KEY
+        """.trimIndent()
         /** Pergunta os limites ao agy pelo `/usage` do modo de impressão (sai sozinho, sem turno; testado em 24/11/2026). */
         const val AGY_LIMITS_SCRIPT = "timeout 40 agy -p /usage --print-timeout 30s </dev/null 2>/dev/null"
         /** Comando do agente que compacta a conversa (o mesmo do "Compactar agora") e o texto que o manda. */

@@ -8,12 +8,16 @@ import java.util.Locale
  * Consumo do OpenCode por modelo, lido de `opencode stats --models --cost --days N --json`
  * (formato de packages/schema/src/session-stats.ts; conferido com dados reais na 2.2.7). Tokens e
  * custo em dólares (`cost`, número com casas); não há percentual, porque o stats não sabe o limite
- * do plano (o do OpenCode Go vem de [PlanLimitsParser.fromOpenCodeUsage]).
+ * do plano (o do OpenCode Go vem de [PlanLimitsParser.fromOpenCodeUsage] e [PlanLimitsParser.fromOpenCodeGoUsage]).
  */
 object OpenCodeStats {
 
     /** Dias olhados para trás. */
     const val DAYS = 7
+
+    /** Provedor dos modelos do Zen e sufixo dos modelos gratuitos (ver [localUsage]). */
+    private const val ZEN_PROVIDER = "opencode"
+    private const val FREE_SUFFIX = "-free"
 
     /**
      * Comando que lê o consumo. `--standalone`: sem ele, o opencode sobe um servidor em segundo plano
@@ -85,6 +89,24 @@ object OpenCodeStats {
         }
     } catch (e: JSONException) {
         null
+    }
+
+    /**
+     * Consumo local para o chip: gasto do Zen (modelos pagos do provedor `opencode`, custo > 0) e tokens
+     * dos grátis (`opencode/*-free`) nos últimos [DAYS] dias. Go (`opencode-go/*`) e BYOK ficam de fora.
+     */
+    fun localUsage(usage: Usage, nowMs: Long): LocalUsage {
+        var zenCost = 0.0
+        var freeTokens = 0L
+        for (model in usage.models) {
+            if (model.model.substringBefore('/', "") != ZEN_PROVIDER) continue
+            if (model.model.substringAfter('/', "").endsWith(FREE_SUFFIX)) {
+                freeTokens += model.tokens
+            } else if (model.cost > 0) {
+                zenCost += model.cost
+            }
+        }
+        return LocalUsage(zenCost, freeTokens, DAYS, nowMs)
     }
 
     /** Quantidade curta de tokens: 950, 12,3 mil, 77,2 mi (com o separador do idioma). */

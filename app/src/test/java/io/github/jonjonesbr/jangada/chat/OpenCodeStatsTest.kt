@@ -49,6 +49,29 @@ class OpenCodeStatsTest {
     }
 
     @Test
+    fun consumoLocalParaOChip() {
+        val usage = OpenCodeStats.Usage(
+            sessions = 2,
+            cost = 5.0,
+            models = listOf(
+                OpenCodeStats.ModelUsage("opencode/some-paid", 1, 100, 0, 0, 0, 1.25),
+                // Grátis: conta os tokens (sem cache), com ou sem custo.
+                OpenCodeStats.ModelUsage("opencode/deepseek-v4.1-flash-free", 1, 1000, 0, 0, 500, 0.5),
+                // Go e BYOK ficam de fora.
+                OpenCodeStats.ModelUsage("opencode-go/deepseek-v4.1-flash", 1, 9000, 0, 0, 0, 3.0),
+                OpenCodeStats.ModelUsage("anthropic/claude-x", 1, 7000, 0, 0, 0, 2.0),
+            ),
+        )
+        val local = OpenCodeStats.localUsage(usage, 1_700_000_000_000L)
+        assertEquals(1.25, local.zenCost, 1e-9)
+        assertEquals(1000L, local.freeTokens)
+        assertEquals(OpenCodeStats.DAYS, local.days)
+        assertEquals(1_700_000_000_000L, local.updatedAtMs)
+        // Só o que foi usado de fato: o exemplo real é todo de modelos grátis.
+        assertEquals(0.0, OpenCodeStats.localUsage(OpenCodeStats.parse(sample)!!, 0L).zenCost, 1e-9)
+    }
+
+    @Test
     fun formatos() {
         val pt = Locale.forLanguageTag("pt-BR")
         assertEquals("950", OpenCodeStats.shortCount(950, "mil", "mi", pt))

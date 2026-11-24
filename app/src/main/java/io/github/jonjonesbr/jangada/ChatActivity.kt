@@ -50,6 +50,7 @@ import io.github.jonjonesbr.jangada.chat.PlanLimits
 import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
 import io.github.jonjonesbr.jangada.chat.formatLimitReset
+import io.github.jonjonesbr.jangada.chat.freeAmount
 import io.github.jonjonesbr.jangada.chat.limitName
 import io.github.jonjonesbr.jangada.chat.limitsSummary
 import io.github.jonjonesbr.jangada.chat.AuthOption
@@ -1476,8 +1477,9 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
-     * Chip de limites: uso da janela de 5 horas e da semanal (as que existirem). Com 80% ou mais, em
-     * destaque. Sem essas janelas, o chip some (janelas "outras" só aparecem no painel).
+     * Chip de limites: uso das janelas de 5 horas, semanal e mensal (as que existirem); sem nenhuma,
+     * o consumo local (quando houver). Com 80% ou mais, em destaque. Sem nada para mostrar, o chip
+     * some (janelas "outras" só aparecem no painel).
      */
     private fun updateLimitsChip(limits: PlanLimits?) {
         val summary = limitsSummary(this, limits)
@@ -1488,10 +1490,16 @@ class ChatActivity : JangadaActivity() {
         chipLimits.visibility = View.VISIBLE
         chipLimits.text = summary.text
         chipLimits.setTextColor(getColor(if (summary.high) R.color.setup_error_text else R.color.setup_text))
-        chipLimits.contentDescription = getString(R.string.chat_chip_limits_description, summary.names)
+        chipLimits.contentDescription = getString(
+            if (summary.usage) R.string.chat_chip_usage_description else R.string.chat_chip_limits_description,
+            summary.names,
+        )
     }
 
-    /** Toque no chip de limites: uma linha por janela, com quando renova, e quando foi atualizado. */
+    /**
+     * Toque no chip de limites: uma linha por janela, com quando renova; o consumo local quando houver;
+     * e quando foi atualizado.
+     */
     private fun showLimitsSheet() {
         val now = System.currentTimeMillis()
         val limits = limitsStore.load(agentId)?.let { PlanLimitsParser.current(it, now) } ?: return
@@ -1499,10 +1507,22 @@ class ChatActivity : JangadaActivity() {
             listOfNotNull(limitName(this, w), w.resetsAtMs?.let { getString(R.string.chat_limit_resets, formatLimitReset(this, it)) })
                 .joinToString(" · ")
         }
+        val locale = Locale.getDefault()
+        val usage = limits.usage
+        val usageLines = listOfNotNull(
+            usage?.takeIf { it.zenCost > 0 }?.let { getString(R.string.chat_usage_zen, OpenCodeStats.dollars(it.zenCost, locale), it.days) },
+            usage?.takeIf { it.freeTokens > 0 }?.let { getString(R.string.chat_usage_free, freeAmount(this, it.freeTokens, locale), it.days) },
+        ).joinToString("\n")
         // O texto relativo vem com maiúscula ("Há 2 minutos"); no meio da frase fica com minúscula.
         val updated = DateUtils.getRelativeTimeSpanString(limits.updatedAtMs, now, DateUtils.SECOND_IN_MILLIS)
             .toString().let { it.take(1).lowercase(Locale.getDefault()) + it.drop(1) }
-        val text = "$lines\n\n${getString(R.string.chat_limits_updated, updated)}\n\n${getString(R.string.chat_limits_explain)}"
+        val text = listOfNotNull(
+            lines.takeIf { it.isNotEmpty() },
+            usageLines.takeIf { it.isNotEmpty() },
+            getString(R.string.chat_limits_usage_note).takeIf { usageLines.isNotEmpty() },
+            getString(R.string.chat_limits_updated, updated),
+            getString(R.string.chat_limits_explain),
+        ).joinToString("\n\n")
         Sheet(this).title(getString(R.string.chat_limits_title)).message(text).show()
     }
 

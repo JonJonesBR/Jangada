@@ -14,11 +14,14 @@ import java.time.Instant
 
 /** Uma janela de limite do plano: quanto já foi usado (0..100) e quando renova (ms epoch, ou null). */
 data class LimitWindow(val kind: Kind, val usedPercent: Int, val resetsAtMs: Long?, val label: String? = null) {
-    enum class Kind { FIVE_HOUR, WEEKLY, OTHER }
+    enum class Kind { FIVE_HOUR, WEEKLY, MONTHLY, OTHER }
 }
 
-/** Limites do plano de um agente, lidos em [updatedAtMs]. */
-data class PlanLimits(val windows: List<LimitWindow>, val updatedAtMs: Long)
+/** Consumo local dos últimos [days] dias, lido de `opencode stats` (ver [OpenCodeStats]). */
+data class LocalUsage(val zenCost: Double, val freeTokens: Long, val days: Int, val updatedAtMs: Long)
+
+/** Limites do plano de um agente, lidos em [updatedAtMs]. [usage] é o consumo local, quando houver. */
+data class PlanLimits(val windows: List<LimitWindow>, val updatedAtMs: Long, val usage: LocalUsage? = null)
 
 /**
  * Janelas de [new] que passaram de [threshold]% agora: a janela do mesmo tipo e nome em [old] estava
@@ -75,25 +78,77 @@ object PlanLimitsParser {
 
     /**
      * Resposta de `opencode api experimental.usage.limits` (packages/schema/src/usage-limits.ts do
-     * opencode): `{"location":…,"data":{"go":{"rolling"|"weekly"|"monthly":{"percent","limited","resetsAt"}}}}`.
-     * `percent` vai de 0 a 100 e `resetsAt` é epoch em ms. A janela "rolling" do Go é a de 5 horas e a
-     * mensal entra como outra ("30 d"). Sem login no console (`data` null) ou sem Go: null.
+     * opencode): `{"location":…,"data":{"go":{"rolling"|"weekly"|"monthly":{"percent","limited","resetsAt"}},"budgets":[…]}}`.
+     * `percent` vai de 0 a 100 e `resetsAt` é epoch em ms. A janela "rolling" do Go é a de 5 horas, a
+     * semanal e a mensal entram como tais. `data` e `go` podem faltar: aí só os budgets do console
+     * (gasto mensal do Zen) geram janela. Sem nada válido (`data` null, sem login): null.
      */
     fun fromOpenCodeUsage(text: String, nowMs: Long): PlanLimits? = runCatching {
         val start = text.indexOf('{')
         if (start < 0) return null
-        val go = JSONObject(text.substring(start)).optJSONObject("data")?.optJSONObject("go") ?: return null
+        val data = JSONObject(text.substring(start)).optJSONObject("data") ?: return null
+        val go = data.optJSONObject("go")
         val windows = listOf(
             "rolling" to LimitWindow.Kind.FIVE_HOUR,
             "weekly" to LimitWindow.Kind.WEEKLY,
-            "monthly" to LimitWindow.Kind.OTHER,
+            "monthly" to LimitWindow.Kind.MONTHLY,
         ).mapNotNull { (key, kind) ->
-            val meter = go.optJSONObject(key) ?: return@mapNotNull null
+            val meter = go?.optJSONObject(key) ?: return@mapNotNull null
             val raw = meter.optDouble("percent", Double.NaN)
             // Limitado (o Go recusa até renovar) conta como cheio, mesmo que o percentual venha menor.
             val percent = (if (meter.optBoolean("limited")) 100 else percentOf(raw, 1.0)) ?: return@mapNotNull null
             val resetsAt = meter.optDouble("resetsAt", Double.NaN).takeIf { !it.isNaN() && it > 0 }?.toLong()
-            LimitWindow(kind, percent, resetsAt, "30 d".takeIf { kind == LimitWindow.Kind.OTHER })
+            LimitWindow(kind, percent, resetsAt)
+        } + listOfNotNull(zenBudget(data.optJSONArray("budgets")))
+        build(windows, nowMs)
+    }.getOrNull()
+
+    /**
+     * Budget do console (`budgets` da resposta acima: gasto mensal do Zen) com o maior percentual
+     * gasto, como janela mensal. `resetsAt` já vem em ms. Budget sem limite (> 0) ou com números
+     * ausentes não gera janela. "Zen" é nome de produto: fica igual nos dois idiomas.
+     */
+    private fun zenBudget(budgets: JSONArray?): LimitWindow? {
+        var best: LimitWindow? = null
+        var bestPercent = -1
+        val count = budgets?.length() ?: 0
+        for (i in 0 until count) {
+            val budget = budgets?.optJSONObject(i) ?: continue
+            val limit = budget.optDouble("limit", Double.NaN)
+            val spent = budget.optDouble("spent", Double.NaN)
+            if (limit.isNaN() || spent.isNaN() || limit <= 0) continue
+            val percent = Math.round((spent / limit * 100).coerceIn(0.0, 100.0)).toInt()
+            if (percent <= bestPercent) continue
+            val resetsAt = budget.optDouble("resetsAt", Double.NaN).takeIf { !it.isNaN() && it > 0 }?.toLong()
+            best = LimitWindow(LimitWindow.Kind.MONTHLY, percent, resetsAt, "Zen")
+            bestPercent = percent
+        }
+        return best
+    }
+
+    /**
+     * Resposta de `GET https://opencode.ai/zen/go/v1/usage` com a chave do OpenCode Go (conferido em
+     * 24/11/2026; é a mesma rota que packages/core/src/usage-limits.ts do opencode lê):
+     * `{"usage":{"rolling"|"weekly"|"monthly":{"status":"ok"|"rate-limited","percent","resetsAt":"ISO-8601"}}}`.
+     * `resetsAt` vem como data ISO (ao contrário da API do Console, que usa ms). Sem `usage` válido: null.
+     */
+    fun fromOpenCodeGoUsage(text: String, nowMs: Long): PlanLimits? = runCatching {
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        val usage = JSONObject(text.substring(start)).optJSONObject("usage") ?: return null
+        val windows = listOf(
+            "rolling" to LimitWindow.Kind.FIVE_HOUR,
+            "weekly" to LimitWindow.Kind.WEEKLY,
+            "monthly" to LimitWindow.Kind.MONTHLY,
+        ).mapNotNull { (key, kind) ->
+            val meter = usage.optJSONObject(key) ?: return@mapNotNull null
+            // Limitado (o Go recusa até renovar) conta como cheio, mesmo que o percentual venha menor.
+            val percent = if (meter.optString("status") == "rate-limited") {
+                100
+            } else {
+                percentOf(meter.optDouble("percent", Double.NaN), 1.0) ?: return@mapNotNull null
+            }
+            LimitWindow(kind, percent, parseTimestamp(meter.optString("resetsAt")))
         }
         build(windows, nowMs)
     }.getOrNull()
@@ -170,7 +225,11 @@ object PlanLimitsParser {
     /** [newer] por cima de [older]: janelas de [older] que [newer] não traz (mesmo tipo e nome) ficam. */
     fun merge(older: PlanLimits, newer: PlanLimits): PlanLimits {
         val kept = older.windows.filter { old -> newer.windows.none { it.kind == old.kind && it.label == old.label } }
-        return newer.copy(windows = (newer.windows + kept).sortedBy { it.kind.ordinal })
+        // O consumo local só é lido de vez em quando: sem um novo, vale o último.
+        return newer.copy(
+            windows = (newer.windows + kept).sortedBy { it.kind.ordinal },
+            usage = newer.usage ?: older.usage,
+        )
     }
 
     fun toJson(limits: PlanLimits): String {
@@ -181,7 +240,18 @@ object PlanLimitsParser {
             w.label?.let { json.put("label", it) }
             windows.put(json)
         }
-        return JSONObject().put("updatedAtMs", limits.updatedAtMs).put("windows", windows).toString()
+        val json = JSONObject().put("updatedAtMs", limits.updatedAtMs).put("windows", windows)
+        limits.usage?.let { usage ->
+            json.put(
+                "usage",
+                JSONObject()
+                    .put("zenCost", usage.zenCost)
+                    .put("freeTokens", usage.freeTokens)
+                    .put("days", usage.days)
+                    .put("updatedAtMs", usage.updatedAtMs),
+            )
+        }
+        return json.toString()
     }
 
     fun fromJson(text: String?): PlanLimits? {
@@ -189,9 +259,9 @@ object PlanLimitsParser {
         return try {
             val json = JSONObject(text)
             if (!json.has("updatedAtMs")) return null
-            val array = json.optJSONArray("windows") ?: return null
-            val windows = (0 until array.length()).mapNotNull { i ->
-                val o = array.optJSONObject(i) ?: return@mapNotNull null
+            val array = json.optJSONArray("windows")
+            val windows = (0 until (array?.length() ?: 0)).mapNotNull { i ->
+                val o = array?.optJSONObject(i) ?: return@mapNotNull null
                 val kind = runCatching { LimitWindow.Kind.valueOf(o.optString("kind")) }.getOrNull()
                     ?: return@mapNotNull null
                 if (!o.has("usedPercent")) return@mapNotNull null
@@ -202,13 +272,28 @@ object PlanLimitsParser {
                     label = if (o.has("label")) o.optString("label") else null,
                 )
             }
-            if (windows.isEmpty()) null else PlanLimits(windows, json.optLong("updatedAtMs"))
+            val usage = json.optJSONObject("usage")?.let { o ->
+                val updatedAt = o.optLong("updatedAtMs")
+                if (updatedAt <= 0) return@let null
+                LocalUsage(
+                    zenCost = o.optDouble("zenCost", 0.0).takeIf { !it.isNaN() } ?: 0.0,
+                    freeTokens = o.optLong("freeTokens"),
+                    days = o.optInt("days").takeIf { it > 0 } ?: OpenCodeStats.DAYS,
+                    updatedAtMs = updatedAt,
+                )
+            }
+            // Só o consumo local já dá o que mostrar no chip, mesmo sem nenhuma janela.
+            when {
+                windows.isNotEmpty() -> PlanLimits(windows, json.optLong("updatedAtMs"), usage)
+                usage != null -> PlanLimits(emptyList(), json.optLong("updatedAtMs"), usage)
+                else -> null
+            }
         } catch (e: Exception) {
             null
         }
     }
 
-    /** Janelas na ordem 5 horas, semanal, outras (a ordem de entrada se mantém dentro de cada tipo). */
+    /** Janelas na ordem 5 horas, semanal, mensal, outras (a ordem de entrada se mantém dentro de cada tipo). */
     private fun build(windows: List<LimitWindow>, nowMs: Long): PlanLimits? {
         if (windows.isEmpty()) return null
         return PlanLimits(windows.sortedBy { it.kind.ordinal }, nowMs)

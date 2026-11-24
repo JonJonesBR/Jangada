@@ -17,8 +17,29 @@ class LimitsTextTest {
             ),
             updatedAtMs = 0L,
         )
+        // O chip mostra da mais apertada para a menos; as "outras" só aparecem no painel.
         assertEquals(
-            listOf(LimitWindow.Kind.FIVE_HOUR, LimitWindow.Kind.WEEKLY),
+            listOf(LimitWindow.Kind.WEEKLY, LimitWindow.Kind.FIVE_HOUR),
+            shownLimitWindows(limits).map { it.kind },
+        )
+    }
+
+    @Test
+    fun mensalApareceNoChip() {
+        val limits = PlanLimits(
+            windows = listOf(
+                LimitWindow(LimitWindow.Kind.MONTHLY, 85, null, label = "Zen"),
+                LimitWindow(LimitWindow.Kind.FIVE_HOUR, 40, null),
+                LimitWindow(LimitWindow.Kind.WEEKLY, 12, null),
+            ),
+            updatedAtMs = 0L,
+        )
+        assertEquals(
+            listOf(
+                LimitWindow.Kind.MONTHLY,
+                LimitWindow.Kind.FIVE_HOUR,
+                LimitWindow.Kind.WEEKLY,
+            ),
             shownLimitWindows(limits).map { it.kind },
         )
     }
@@ -27,6 +48,9 @@ class LimitsTextTest {
     fun semLimitesNaoHaJanelas() {
         assertTrue(shownLimitWindows(null).isEmpty())
         assertTrue(shownLimitWindows(PlanLimits(emptyList(), 0L)).isEmpty())
+        // Só o consumo local não é janela: fica para o texto do consumo.
+        val soUso = PlanLimits(emptyList(), 0L, LocalUsage(zenCost = 1.0, freeTokens = 0, days = 7, updatedAtMs = 0L))
+        assertTrue(shownLimitWindows(soUso).isEmpty())
     }
 
     @Test
