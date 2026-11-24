@@ -75,6 +75,8 @@ class HomeActivity : JangadaActivity() {
     private lateinit var linux: LinuxEnv
     private lateinit var recipes: List<AgentRecipe>
     private lateinit var agentsList: LinearLayout
+    /** Linha "Mais agentes (N)" no fim da lista: abre o painel com os não instalados que não aparecem nela. */
+    private lateinit var moreAgentsRow: TextView
     private lateinit var sessionsList: LinearLayout
     private lateinit var runningTitle: TextView
     /** Fileira de filtros da lista de trabalhos (aparece com 4 ou mais linhas). */
@@ -193,6 +195,7 @@ class HomeActivity : JangadaActivity() {
         takeCloseAll(intent)
         setContentView(R.layout.activity_home)
         agentsList = findViewById(R.id.agents)
+        moreAgentsRow = findViewById(R.id.more_agents)
         sessionsList = findViewById(R.id.sessions)
         runningTitle = findViewById(R.id.running_title)
         filterRow = findViewById(R.id.job_filter)
@@ -777,18 +780,79 @@ class HomeActivity : JangadaActivity() {
         }
         drawnQueue = service?.queuedIds().orEmpty()
         val inflater = LayoutInflater.from(this)
+        val listed = listedAgents()
         // Instalados primeiro; dentro de cada grupo, a ordem do catálogo (sortedBy é estável). Antes da
         // primeira detecção, vale a lista gravada, para os cartões não trocarem de lugar ao abrir a tela.
         val known = installed ?: AgentPrefs.installedCommands(this)
-        val ordered = if (known == null) recipes else recipes.sortedBy { if (it.command in known) 0 else 1 }
+        val ordered = if (known == null) listed else listed.sortedBy { if (it.command in known) 0 else 1 }
         for (recipe in ordered) {
             val card = buildCard(inflater, recipe)
             cards[recipe.id] = card
             agentsList.addView(card)
         }
+        renderMoreAgents(recipes.size - listed.size)
         renderUpdateAll()
         // O botão Novo trabalho depende do que está instalado, que muda junto com os cartões.
         renderJobsSection()
+    }
+
+    /**
+     * Agentes da lista principal: os instalados e os que têm tarefa ativa ou recente. Sem detecção
+     * (nem lista gravada) ou com nenhum instalado, mostra todos (a boas-vindas manda instalar "abaixo").
+     */
+    private fun listedAgents(): List<AgentRecipe> {
+        val known = installed ?: AgentPrefs.installedCommands(this)
+        if (known == null || known.isEmpty()) return recipes
+        return recipes.filter { it.command in known || pedeCartao(it) }
+    }
+
+    /** Tarefa que pede o cartão na lista não instalado: rodando, na fila, ou falhada com o erro ainda na tela. */
+    private fun pedeCartao(recipe: AgentRecipe): Boolean {
+        val task = service?.tasks?.get(recipe.id)
+        if (task?.state == AgentTask.State.RUNNING) return true
+        val queued = service?.queued(recipe.id) != null
+        return queued || mostraErro(task, isInstalled = false, queued = queued)
+    }
+
+    /**
+     * Mostra o erro da tarefa no cartão: falhou, não foi cancelada pelo usuário, não está na fila e é
+     * instalação, atualização ou desinstalação.
+     */
+    private fun mostraErro(task: AgentTask?, isInstalled: Boolean, queued: Boolean): Boolean =
+        task?.state == AgentTask.State.FAILED && !task.cancelled && !queued && (task.uninstalling || task.updating || !isInstalled)
+
+    /**
+     * Linha "＋ Mais agentes (N)" no fim da lista. Some com N == 0 (o que não está na lista).
+     */
+    private fun renderMoreAgents(count: Int) {
+        if (count <= 0) {
+            moreAgentsRow.visibility = View.GONE
+            return
+        }
+        moreAgentsRow.text = getString(R.string.home_more_agents, count)
+        moreAgentsRow.contentDescription = getString(R.string.home_more_agents_description, count)
+        moreAgentsRow.setOnClickListener { showMoreAgents() }
+        moreAgentsRow.visibility = View.VISIBLE
+    }
+
+    /**
+     * Painel "Mais agentes": uma linha por agente fora da lista, com a descrição curta. Tocar instala
+     * (sem confirmação) e o agente passa para a lista, porque a tarefa vira ativa. Sem Linux suportado
+     * as linhas ficam desligadas e o painel explica por quê.
+     */
+    private fun showMoreAgents() {
+        val listed = listedAgents().toSet()
+        val hidden = recipes.filter { it !in listed }
+        if (hidden.isEmpty()) return
+        // Mesma regra do botão Instalar do cartão: precisa da detecção pronta e de aparelho suportado.
+        val enabled = installed != null && linux.isDeviceSupported
+        val painel = Sheet(this).title(getString(R.string.home_more_agents_title))
+        if (!linux.isDeviceSupported) painel.message(getString(R.string.setup_unsupported))
+        painel.rows(hidden.map { recipe ->
+            Sheet.Row(title = recipe.name, description = recipe.description(), enabled = enabled) {
+                startTask(recipe, updating = false)
+            }
+        }).show()
     }
 
     /** "Atualizar todos (N)": aparece com 2 ou mais agentes que pedem atualização e ainda não estão na fila. */
@@ -929,7 +993,7 @@ class HomeActivity : JangadaActivity() {
         }
 
         // Tarefa que falhou: explica e oferece as saídas. Cancelada pelo usuário não mostra erro.
-        if (task?.state == AgentTask.State.FAILED && !task.cancelled && !queued && (task.uninstalling || task.updating || !isInstalled)) {
+        if (mostraErro(task, isInstalled, queued)) {
             taskError.visibility = View.VISIBLE
             taskError.setText(
                 when {

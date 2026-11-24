@@ -67,6 +67,9 @@
     <string name="agent_install">Install</string>
     <string name="agent_open">Open</string>
     <string name="agent_update">Update</string>
+    <string name="home_more_agents">＋ More agents (%1$d)</string>
+    <string name="home_more_agents_title">More agents</string>
+    <string name="home_more_agents_description">More agents: %1$d not installed</string>
     <string name="agent_update_all">Update all (%d)</string>
     <string name="agent_queued">Waiting to update</string>
     <string name="agent_queued_install">Waiting to install</string>

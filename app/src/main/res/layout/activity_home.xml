@@ -254,6 +254,26 @@
             android:orientation="vertical" />
 
         <!--
+            Linha final da lista de agentes: "Mais agentes (N)", com os não instalados sem tarefa ativa.
+            Some quando não há nenhum (HomeActivity.renderMoreAgents). Tocar abre o painel (showMoreAgents).
+        -->
+        <TextView
+            android:id="@+id/more_agents"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="?android:attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center_vertical"
+            android:minHeight="48dp"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:textColor="@color/accent_text"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <!--
             Sistema: memória, terminal, projetos e armazenamento. Recolhido por padrão (o estado fica em prefs,
             ver HomeActivity.renderSystem). Recolhido, a linha de alerta aparece se houver pouca memória ou
             pouco espaço/sem acesso aos arquivos; tocar nela (ou no cabeçalho) expande.

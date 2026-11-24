@@ -17,8 +17,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Tela inicial com o Linux instalado e os agentes falsos (Claude Code e OpenCode instalados): a ordem dos
- * cartões, o painel "Espaço no Linux" e a limpeza de caches ("Liberar espaço").
+ * Tela inicial com o Linux instalado e os agentes falsos (Claude Code e OpenCode instalados): a lista só com
+ * os instalados, a linha "Mais agentes" com o painel dos não instalados, o painel "Espaço no Linux" e a
+ * limpeza de caches ("Liberar espaço").
  */
 @RunWith(AndroidJUnit4::class)
 class HomeScreenTest {
@@ -27,6 +28,8 @@ class HomeScreenTest {
         private const val MAX_TELAS = 12
         private const val CLAUDE = "Claude Code"
         private const val OPENCODE = "OpenCode"
+        /** Agente do catálogo que o emulador não tem (só os falsos claude, opencode e agy estão instalados). */
+        private const val NAO_INSTALADO_NO_EMULADOR = "Codex"
 
         @JvmStatic
         @BeforeClass
@@ -86,26 +89,61 @@ class HomeScreenTest {
         return cartoes
     }
 
-    /** Claude Code e OpenCode instalados, e os dois acima de qualquer cartão "Não instalado". */
-    private fun instaladosPrimeiro(cartoes: Map<String, Boolean>): Boolean {
-        if (cartoes[CLAUDE] != false || cartoes[OPENCODE] != false) return false
-        val chaves = cartoes.keys.toList()
-        val primeiroNao = chaves.indexOfFirst { cartoes[it] == true }
-        if (primeiroNao == -1) return true
-        return chaves.indexOf(CLAUDE) < primeiroNao && chaves.indexOf(OPENCODE) < primeiroNao
-    }
+    /** Só os instalados na lista: Claude Code e OpenCode aparecem, e nenhum cartão "Não instalado". */
+    private fun soInstaladosNaLista(cartoes: Map<String, Boolean>): Boolean =
+        cartoes[CLAUDE] == false && cartoes[OPENCODE] == false && cartoes.values.none { it }
 
-    /** Instalados primeiro: a detecção dos agentes roda em segundo plano, então a leitura repete até 60 s. */
+    /**
+     * A detecção dos agentes roda em segundo plano, então a leitura repete até 60 s. Os não instalados não
+     * têm cartão na lista (ficam em "Mais agentes").
+     */
     @Test
-    fun instaladosAparecemAntesDosNaoInstalados() {
+    fun listaMostraSoOsInstalados() {
         ActivityScenario.launch(HomeActivity::class.java).use {
             val fim = System.currentTimeMillis() + 60_000
             var cartoes = lerCartoes()
-            while (!instaladosPrimeiro(cartoes) && System.currentTimeMillis() < fim) {
+            while (!soInstaladosNaLista(cartoes) && System.currentTimeMillis() < fim) {
                 Thread.sleep(2_000)
                 cartoes = lerCartoes()
             }
-            assertTrue("a ordem dos cartões está errada: $cartoes\nNa tela: ${ChatUi.screenTexts()}", instaladosPrimeiro(cartoes))
+            assertTrue("a lista traz agentes que não estão instalados: $cartoes\nNa tela: ${ChatUi.screenTexts()}", soInstaladosNaLista(cartoes))
+        }
+    }
+
+    /** Procura a linha "Mais agentes (N)" descendo a lista; devolve o nó, ou null se não aparecer. */
+    private fun acharLinhaMais(): UiObject2? {
+        val prefixo = context.getString(R.string.home_more_agents, 0).substringBefore("(").trim()
+        // Antes da detecção dos agentes a lista mostra todos e a linha fica escondida: tenta por até 60 s.
+        val fim = System.currentTimeMillis() + 60_000
+        while (System.currentTimeMillis() < fim) {
+            repeat(MAX_TELAS) {
+                device.findObject(By.textStartsWith(prefixo))?.let { return it }
+                rolarParaBaixo()
+            }
+            Thread.sleep(2_000)
+        }
+        return null
+    }
+
+    /**
+     * A linha "Mais agentes (N)" aparece no fim da lista com N >= 1 (há agentes fora da lista); tocar abre o
+     * painel com os não instalados (ex.: Codex, que o emulador não tem) e não com os instalados. Não toca
+     * em nenhuma linha do painel: instalar precisa de internet.
+     */
+    @Test
+    fun maisAgentesAbrePainelComOsNaoInstalados() {
+        ActivityScenario.launch(HomeActivity::class.java).use {
+            val linha = acharLinhaMais()
+            assertNotNull("a linha Mais agentes não apareceu.\nNa tela: ${ChatUi.screenTexts()}", linha)
+            val n = Regex("\\((\\d+)\\)").find(linha!!.text)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+            assertTrue("a contagem da linha Mais agentes está errada: ${linha.text}", n >= 1)
+            linha.click()
+            val titulo = context.getString(R.string.home_more_agents_title)
+            ChatUi.waitText(titulo, FAKE)
+            // O painel mostra o que não está instalado (o Claude Code, instalado, segue na lista da Home atrás do painel).
+            ChatUi.waitText(NAO_INSTALADO_NO_EMULADOR, FAKE)
+            device.pressBack()
+            assertTrue("o painel não fechou com o voltar.\nNa tela: ${ChatUi.screenTexts()}", device.wait(Until.gone(By.text(titulo)), 10_000))
         }
     }
 
