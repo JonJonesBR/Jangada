@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Ordem da Home, de cima para baixo: cabeçalho e avisos; "Novo trabalho"; "Em andamento" (trabalhos
+    abertos, perto do botão); "Agentes" (uma linha compacta por agente); e "Sistema" no fim, recolhível.
+-->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -144,7 +148,7 @@
 
         <!--
             Ação principal da tela: visível com o Linux pronto e um agente com chat instalado.
-            Fica logo abaixo das boas-vindas, antes da lista de agentes, para aparecer sem rolar.
+            Fica logo abaixo das boas-vindas, antes dos trabalhos e dos agentes, para aparecer sem rolar.
         -->
         <Button
             android:id="@+id/home_new_job"
@@ -159,6 +163,46 @@
             android:textSize="16sp"
             android:textStyle="bold"
             android:visibility="gone" />
+
+        <!-- "Em andamento": trabalhos abertos, logo abaixo de "Novo trabalho" (ver HomeActivity.renderJobsSection). -->
+        <TextView
+            android:id="@+id/running_title"
+            style="@style/HomeSection"
+            android:text="@string/home_running"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/home_jobs_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:lineSpacingMultiplier="1.15"
+            android:text="@string/home_jobs_empty"
+            android:textColor="@color/setup_muted_text"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <!-- Filtros da lista de trabalhos (com 4 ou mais linhas): Todos, Esperando você e as pastas. -->
+        <HorizontalScrollView
+            android:id="@+id/job_filter"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/job_filter_chips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:id="@+id/sessions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
         <!--
             Título da seção de agentes, com Atualizar todos à direita (aparece com 2 ou mais para atualizar).
@@ -209,219 +253,229 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
-        <TextView
-            android:id="@+id/running_title"
-            style="@style/HomeSection"
-            android:text="@string/home_running"
-            android:visibility="gone" />
-
-        <TextView
-            android:id="@+id/home_jobs_empty"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:lineSpacingMultiplier="1.15"
-            android:text="@string/home_jobs_empty"
-            android:textColor="@color/setup_muted_text"
-            android:textSize="14sp"
-            android:visibility="gone" />
-
-        <!-- Filtros da lista de trabalhos (com 4 ou mais linhas): Todos, Esperando você e as pastas. -->
-        <HorizontalScrollView
-            android:id="@+id/job_filter"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:scrollbars="none"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:id="@+id/job_filter_chips"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal" />
-        </HorizontalScrollView>
-
+        <!--
+            Sistema: memória, terminal, projetos e armazenamento. Recolhido por padrão (o estado fica em prefs,
+            ver HomeActivity.renderSystem). Recolhido, a linha de alerta aparece se houver pouca memória ou
+            pouco espaço/sem acesso aos arquivos; tocar nela (ou no cabeçalho) expande.
+        -->
         <LinearLayout
-            android:id="@+id/sessions"
+            android:id="@+id/system_block"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <!-- Memória: quanto os agentes usam, o resto dos apps e o livre (ver HomeActivity.renderMemory). -->
-        <LinearLayout
-            android:id="@+id/home_memory"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:orientation="vertical"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:id="@+id/home_memory_bar"
-                android:layout_width="match_parent"
-                android:layout_height="8dp"
-                android:background="@color/bar_bg"
-                android:importantForAccessibility="no"
-                android:orientation="horizontal">
-
-                <View
-                    android:id="@+id/home_memory_agents"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/accent_text" />
-
-                <View
-                    android:id="@+id/home_memory_other"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/setup_muted" />
-
-                <View
-                    android:id="@+id/home_memory_free"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/setup_done" />
-            </LinearLayout>
-
-            <!-- Legenda da barra: cada cor com o nome da parte e o valor (ver HomeActivity.renderMemory). -->
-            <LinearLayout
-                android:id="@+id/home_memory_legend"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/home_memory_legend_agents"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:importantForAccessibility="no"
-                    android:textColor="@color/setup_text"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/home_memory_legend_other"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="center_horizontal"
-                    android:importantForAccessibility="no"
-                    android:textColor="@color/setup_text"
-                    android:textSize="13sp" />
-
-                <TextView
-                    android:id="@+id/home_memory_legend_free"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:gravity="end"
-                    android:importantForAccessibility="no"
-                    android:textColor="@color/setup_text"
-                    android:textSize="13sp" />
-            </LinearLayout>
-
-            <!-- Quanto dá para usar agora (ver HomeActivity.renderMemory). -->
-            <TextView
-                android:id="@+id/home_memory_text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="13sp" />
-
-            <!-- Previsão para mais um agente (ver HomeActivity.fitMessage); some sem histórico. -->
-            <TextView
-                android:id="@+id/home_memory_fit"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="13sp"
-                android:visibility="gone" />
-        </LinearLayout>
-
-        <Button
-            android:id="@+id/open_terminal"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_bg"
-            android:text="@string/home_open_terminal"
-            android:textAllCaps="false"
-            android:textColor="@color/setup_text"
-            android:textSize="16sp" />
-
-        <!-- Projetos (~/projetos): entrada própria, fora do cartão de arquivos. Visível com o Linux pronto (ver HomeActivity.renderStorage). -->
-        <Button
-            android:id="@+id/projects_open"
-            style="?android:attr/borderlessButtonStyle"
-            android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_bg"
-            android:text="@string/projects_open"
-            android:textAllCaps="false"
-            android:textColor="@color/setup_text"
-            android:textSize="16sp" />
-
-        <LinearLayout
-            android:id="@+id/storage_card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/card_bg"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:orientation="vertical">
 
             <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/storage_title"
-                android:textColor="@color/setup_text"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/storage_text"
+                android:id="@+id/system_title"
+                style="@style/HomeSection"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="24dp"
+                android:layout_marginBottom="0dp"
+                android:background="?android:attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
+                android:minHeight="48dp"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/system_alert"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?android:attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center_vertical"
                 android:lineSpacingMultiplier="1.15"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="14sp" />
+                android:minHeight="48dp"
+                android:textColor="@color/setup_error_text"
+                android:textSize="14sp"
+                android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/storage_space"
+            <LinearLayout
+                android:id="@+id/system_body"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:textColor="@color/setup_muted_text"
-                android:textSize="14sp" />
+                android:orientation="vertical"
+                android:visibility="gone">
 
-            <Button
-                android:id="@+id/storage_details"
-                style="?android:attr/borderlessButtonStyle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:minHeight="48dp"
-                android:textAllCaps="false"
-                android:textColor="@color/accent_text"
-                android:text="@string/storage_details" />
+                <!-- Memória: quanto os agentes usam, o resto dos apps e o livre (ver HomeActivity.renderMemory). -->
+                <LinearLayout
+                    android:id="@+id/home_memory"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="8dp"
+                    android:orientation="vertical"
+                    android:visibility="gone">
 
-            <Button
-                android:id="@+id/storage_allow"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:minHeight="48dp"
-                android:backgroundTint="@color/key_active"
-                android:text="@string/storage_allow"
-                android:textAllCaps="false"
-                android:textColor="@color/setup_on_accent"
-                android:textStyle="bold" />
+                    <LinearLayout
+                        android:id="@+id/home_memory_bar"
+                        android:layout_width="match_parent"
+                        android:layout_height="8dp"
+                        android:background="@color/bar_bg"
+                        android:importantForAccessibility="no"
+                        android:orientation="horizontal">
+
+                        <View
+                            android:id="@+id/home_memory_agents"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/accent_text" />
+
+                        <View
+                            android:id="@+id/home_memory_other"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/setup_muted" />
+
+                        <View
+                            android:id="@+id/home_memory_free"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:background="@color/setup_done" />
+                    </LinearLayout>
+
+                    <!-- Legenda da barra: cada cor com o nome da parte e o valor (ver HomeActivity.renderMemory). -->
+                    <LinearLayout
+                        android:id="@+id/home_memory_legend"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/home_memory_legend_agents"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:importantForAccessibility="no"
+                            android:textColor="@color/setup_text"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/home_memory_legend_other"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="center_horizontal"
+                            android:importantForAccessibility="no"
+                            android:textColor="@color/setup_text"
+                            android:textSize="13sp" />
+
+                        <TextView
+                            android:id="@+id/home_memory_legend_free"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:gravity="end"
+                            android:importantForAccessibility="no"
+                            android:textColor="@color/setup_text"
+                            android:textSize="13sp" />
+                    </LinearLayout>
+
+                    <!-- Quanto dá para usar agora (ver HomeActivity.renderMemory). -->
+                    <TextView
+                        android:id="@+id/home_memory_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:textColor="@color/setup_muted_text"
+                        android:textSize="13sp" />
+
+                    <!-- Previsão para mais um agente (ver HomeActivity.fitMessage); some sem histórico. -->
+                    <TextView
+                        android:id="@+id/home_memory_fit"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/setup_muted_text"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <Button
+                    android:id="@+id/open_terminal"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/card_bg"
+                    android:text="@string/home_open_terminal"
+                    android:textAllCaps="false"
+                    android:textColor="@color/setup_text"
+                    android:textSize="16sp" />
+
+                <!-- Projetos (~/projetos): entrada própria, fora do cartão de arquivos. Visível com o Linux pronto (ver HomeActivity.renderStorage). -->
+                <Button
+                    android:id="@+id/projects_open"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/card_bg"
+                    android:text="@string/projects_open"
+                    android:textAllCaps="false"
+                    android:textColor="@color/setup_text"
+                    android:textSize="16sp" />
+
+                <LinearLayout
+                    android:id="@+id/storage_card"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/card_bg"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/storage_title"
+                        android:textColor="@color/setup_text"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/storage_text"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:lineSpacingMultiplier="1.15"
+                        android:textColor="@color/setup_muted_text"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:id="@+id/storage_space"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@color/setup_muted_text"
+                        android:textSize="14sp" />
+
+                    <Button
+                        android:id="@+id/storage_details"
+                        style="?android:attr/borderlessButtonStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:textAllCaps="false"
+                        android:textColor="@color/accent_text"
+                        android:text="@string/storage_details" />
+
+                    <Button
+                        android:id="@+id/storage_allow"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:minHeight="48dp"
+                        android:backgroundTint="@color/key_active"
+                        android:text="@string/storage_allow"
+                        android:textAllCaps="false"
+                        android:textColor="@color/setup_on_accent"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

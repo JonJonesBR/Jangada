@@ -109,10 +109,26 @@ class HomeScreenTest {
         }
     }
 
+    /**
+     * Expande o bloco Sistema se estiver recolhido. O estado fica nas preferências e passa de um teste
+     * para o outro: se já estiver expandido, não toca (tocar de novo recolheria).
+     */
+    private fun expandirSistema() {
+        val fim = System.currentTimeMillis() + 120_000
+        while (System.currentTimeMillis() < fim) {
+            if (device.findObject(By.text(context.getString(R.string.home_system_open))) != null) return
+            device.findObject(By.text(context.getString(R.string.home_system_closed)))?.let { it.click(); return }
+            Thread.sleep(500)
+        }
+        org.junit.Assert.fail("O bloco Sistema não apareceu.\nNa tela: ${ChatUi.screenTexts()}")
+    }
+
     /** O painel mostra a barra do espaço (Total e a legenda "Linux e agentes"); voltar fecha. */
     @Test
     fun painelDeEspacoMostraAsPartes() {
         ActivityScenario.launch(HomeActivity::class.java).use {
+            // O bloco Sistema começa recolhido: expande antes de tocar nos detalhes do espaço.
+            expandirSistema()
             ChatUi.tap(R.string.storage_details, FAKE, timeoutMs = 120_000)
             ChatUi.waitText(context.getString(R.string.storage_details_title), FAKE, timeoutMs = 120_000)
             // "Total: %1$s" sem o valor: o trecho que sempre aparece quando a medição termina.
@@ -135,6 +151,8 @@ class HomeScreenTest {
         cache.parentFile!!.mkdirs()
         cache.writeBytes(ByteArray(2_000_000))
         ActivityScenario.launch(HomeActivity::class.java).use {
+            // O bloco Sistema começa recolhido: expande antes de tocar nos detalhes do espaço.
+            expandirSistema()
             ChatUi.tap(R.string.storage_details, FAKE, timeoutMs = 120_000)
             val linha = device.wait(Until.findObject(By.text(context.getString(R.string.storage_clean_caches))), 120_000)
             assertNotNull("a linha Liberar espaço não apareceu.\nNa tela: ${ChatUi.screenTexts()}", linha)

@@ -55,6 +55,12 @@
     <string name="chat_state_stopped">Stopped</string>
     <string name="chat_state_asleep">Asleep</string>
     <string name="home_agents">Agents</string>
+    <string name="home_system_closed">System ▾</string>
+    <string name="home_system_open">System ▴</string>
+    <string name="home_system_closed_description">System, collapsed. Tap to expand.</string>
+    <string name="home_system_open_description">System, expanded. Tap to collapse.</string>
+    <string name="home_system_alert_memory">Low memory: Android may close agents.</string>
+    <string name="home_system_alert_storage">Little space on the phone or no access to phone files.</string>
     <string name="home_welcome_title">Welcome to Jangada</string>
     <string name="home_welcome_body">Install an agent below. Each one uses its own account or API key. In Simple mode the agent opens in the chat; in Pro mode, in the terminal (change it in Settings).</string>
     <string name="home_welcome_ok">Got it</string>
