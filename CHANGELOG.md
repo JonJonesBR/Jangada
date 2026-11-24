@@ -1,5 +1,10 @@
 # Novidades
 
+## 1.32.0
+
+- Antigravity (agy): a instalação traz os plugins nativos de economia de contexto (`antigravity-plugin-context-mode` com busca SQLite FTS5 e `agy-context`), o monitor `antigravity-usage` e o Node.js 22 LTS necessário para eles.
+- Economia de contexto e cota: limites de corte de leitura (`CONTEXT_MODE_MAX_READ_BYTES=4096` e `CONTEXT_MODE_MAX_LINE_RANGE=120`) ativos no ambiente do Linux e dos agentes, além de orientação global em `AGENTS.md` para evitar leituras inteiras de arquivos grandes e pastas pesadas.
+
 ## 1.31.0
 
 - Tela inicial: os trabalhos em andamento ficam logo abaixo de "Novo trabalho"; cada agente instalado é uma linha compacta (status, limites, Conversar e Atualizar), com descrição, site, terminal, Nova conversa, reinstalar e desinstalar no menu ⋯.

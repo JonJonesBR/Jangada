@@ -1,0 +1,1 @@
+Antigravity (agy) agora instala os plugins nativos de economia de contexto (antigravity-plugin-context-mode com busca SQLite FTS5 e agy-context), o monitor antigravity-usage e o Node.js 22 LTS. O ambiente do Linux e dos agentes define limites de leitura de 4 KB e 120 linhas por vez e acrescenta orientações globais de economia de contexto e cota nas instruções dos agentes.

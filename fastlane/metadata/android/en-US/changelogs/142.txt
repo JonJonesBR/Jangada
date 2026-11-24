@@ -1,0 +1,1 @@
+Antigravity (agy) now installs native context-saving plugins (antigravity-plugin-context-mode with SQLite FTS5 search and agy-context), the antigravity-usage monitor and Node.js 22 LTS. The Linux and agent environments set 4 KB and 120-line read cutoffs and add global context and quota saving guidelines to agent instructions.
