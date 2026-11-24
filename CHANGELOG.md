@@ -1,5 +1,16 @@
 # Novidades
 
+## 1.31.0
+
+- Tela inicial: os trabalhos em andamento ficam logo abaixo de "Novo trabalho"; cada agente instalado é uma linha compacta (status, limites, Conversar e Atualizar), com descrição, site, terminal, Nova conversa, reinstalar e desinstalar no menu ⋯.
+- Tela inicial: os agentes não instalados saem da lista e ficam no painel "＋ Mais agentes"; tocar num deles já inicia a instalação. Um agente instalando, na fila ou com erro continua na lista. Sem nenhum agente instalado, a lista completa aparece.
+- Tela inicial: memória, armazenamento, projetos e terminal ficam num bloco "Sistema" recolhível (começa recolhido e lembra o estado), com um aviso visível quando falta memória ou espaço.
+- Antigravity (agy): os limites de uso (5 horas e semanal do grupo Gemini; o grupo Claude/GPT no painel de detalhes) aparecem no chat e na linha do agente, lidos pelo `/usage` do próprio agy no máximo a cada 10 minutos.
+- Chat: o chip de limites fica logo depois da pasta e continua visível com o teclado aberto.
+- Confirmação ao "Encerrar tudo", instalação inicial (Setup) mais clara, Ajustes reorganizados e aviso de notificações.
+- Chat do agy: com "Aprovar tudo" os membros do /swarm não travam na permissão; esperar os membros não conta como travamento. Chat ACP: sem erro de ajuste de modelo quando o agente dorme ou para.
+- Testes de emulador estabilizados (Home, chip de limites e perguntas do Claude).
+
 ## 1.30.1
 
 - Chat: corrige a largura das bolhas das mensagens enviadas quando exibem horário (antes o texto podia ficar espremido na largura do carimbo de hora).

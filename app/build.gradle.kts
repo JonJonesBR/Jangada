@@ -17,8 +17,8 @@ android {
         // 28 de propósito, a mesma escolha do Termux: permite executar os programas
         // do ambiente Linux (Etapa 2) a partir da pasta do app. Ver README.
         targetSdk = 28
-        versionCode = 140
-        versionName = "1.30.1"
+        versionCode = 141
+        versionName = "1.31.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testProguardFiles("proguard-testapk.pro")
         ndk {
