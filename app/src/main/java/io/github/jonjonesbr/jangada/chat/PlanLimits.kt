@@ -33,6 +33,16 @@ fun crossedWindows(old: PlanLimits?, new: PlanLimits, threshold: Int = 90): List
     }
 
 /**
+ * Janelas de [found] que merecem aviso agora: as de [crossedWindows] que ainda não renovaram em [nowMs]
+ * e, com [dropOther], sem as "outras" (o agy mostra o grupo Claude/GPT, que pode estar cheio sem o
+ * usuário usá-lo).
+ */
+fun windowsToWarn(old: PlanLimits?, found: PlanLimits, nowMs: Long, dropOther: Boolean): List<LimitWindow> =
+    crossedWindows(old, found).filter { w ->
+        (w.resetsAtMs == null || w.resetsAtMs > nowMs) && !(dropOther && w.kind == LimitWindow.Kind.OTHER)
+    }
+
+/**
  * Até esta diferença, o horário de renovação é o do mesmo período: o Codex calcula o horário a cada
  * linha (resets_in_seconds somado ao horário da linha) e ele varia alguns segundos. Uma renovação de
  * verdade empurra o horário por uma janela inteira (horas ou dias).
@@ -53,6 +63,8 @@ object PlanLimitsParser {
     /** Janelas entre 9000 e 11000 minutos (uma semana) contam como semanais. */
     private const val WEEKLY_MIN_MINUTES = 9000.0
     private const val WEEKLY_MAX_MINUTES = 11000.0
+    /** Nome de um grupo do agy (fora Claude/GPT) abreviado no rótulo da janela. */
+    private const val AGY_GROUP_NAME_MAX = 12
 
     /** [info] é o "rate_limit_info" do evento rate_limit_event do Claude Code. */
     fun fromClaude(info: JSONObject, nowMs: Long): PlanLimits? {
@@ -85,6 +97,47 @@ object PlanLimitsParser {
         }
         build(windows, nowMs)
     }.getOrNull()
+
+    /**
+     * Saída de `agy -p /usage`, tabulada: `grupo<TAB>Weekly Limit Remaining|Five Hour Limit Remaining<TAB>NN%|disabled<TAB>horário ISO (opcional)`.
+     * O primeiro grupo com "Gemini" no nome é o principal: as linhas dele viram a janela de 5 horas e a
+     * semanal. Os outros grupos (ex.: "Claude and GPT models") viram janelas OTHER com nome próprio. "NN%"
+     * é o restante (usado = 100 − NN); "disabled" não gera janela. Sem linhas válidas (sem login, vazio,
+     * formato novo): null.
+     */
+    fun fromAgyUsage(text: String, nowMs: Long): PlanLimits? = runCatching {
+        val rows = text.lines().mapNotNull { agyRow(it) }
+        val mainGroup = rows.firstOrNull { it.group.contains("gemini", ignoreCase = true) }?.group
+        val windows = rows.mapNotNull { row ->
+            val usedPercent = 100 - (percentOf(row.remaining, 1.0) ?: return@mapNotNull null)
+            if (row.group == mainGroup) {
+                LimitWindow(if (row.fiveHour) LimitWindow.Kind.FIVE_HOUR else LimitWindow.Kind.WEEKLY, usedPercent, row.resetsAtMs)
+            } else {
+                val period = if (row.fiveHour) "5h" else "7d"
+                val claude = row.group.contains("claude", ignoreCase = true) || row.group.contains("gpt", ignoreCase = true)
+                val name = if (claude) "Claude/GPT" else row.group.take(AGY_GROUP_NAME_MAX)
+                LimitWindow(LimitWindow.Kind.OTHER, usedPercent, row.resetsAtMs, "$name $period")
+            }
+        }
+        build(windows, nowMs)
+    }.getOrNull()
+
+    /** Uma linha do /usage do agy; null se não for linha de limite (cabeçalho, "disabled", texto solto). */
+    private fun agyRow(line: String): AgyRow? {
+        // Tabs separam as colunas; dois espaços seguidos também, por tolerância. Nomes de grupo têm espaço simples.
+        val cells = line.split(Regex("\\t|\\s{2,}")).map { it.trim() }.filter { it.isNotEmpty() }
+        if (cells.size < 3) return null
+        val fiveHour = when {
+            cells[1].contains("five hour", ignoreCase = true) -> true
+            cells[1].contains("weekly", ignoreCase = true) -> false
+            else -> return null
+        }
+        val remaining = cells[2].removeSuffix("%").trim().toDoubleOrNull()?.takeIf { !it.isNaN() } ?: return null
+        return AgyRow(cells[0], fiveHour, remaining, cells.getOrNull(3)?.let { parseTimestamp(it) })
+    }
+
+    /** Uma linha de limite do agy: grupo, se é a de 5 horas (senão semanal), restante em % e renovação (ms). */
+    private data class AgyRow(val group: String, val fiveHour: Boolean, val remaining: Double, val resetsAtMs: Long?)
 
     /** Uma linha de sessão do Codex (rollout). Null quando a linha não traz "rate_limits" válidos. */
     fun fromCodexLine(line: String, nowMs: Long): PlanLimits? {

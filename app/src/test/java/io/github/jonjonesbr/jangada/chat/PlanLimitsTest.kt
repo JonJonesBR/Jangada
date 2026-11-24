@@ -337,6 +337,101 @@ class PlanLimitsTest {
         assertEquals(listOf(90), crossedWindows(null, limite(90)).map { it.usedPercent })
     }
 
+    /** Saída real do `agy -p /usage` (24/11/2026), com TAB entre as colunas. */
+    private val saidaAgy = "Gemini Models\tWeekly Limit Remaining\t76%\t2026-12-01T00:19:22Z\n" +
+        "Gemini Models\tFive Hour Limit Remaining\t51%\t2026-11-24T14:17:03Z\n" +
+        "Claude and GPT models\tWeekly Limit Remaining\t0%\t2026-11-29T16:29:40Z\n" +
+        "Claude and GPT models\tFive Hour Limit Remaining\tdisabled\n"
+
+    private fun ms(iso: String): Long = Instant.parse(iso).toEpochMilli()
+
+    @Test
+    fun agyLeSaidaRealSemDuplicarOChip() {
+        val limits = PlanLimitsParser.fromAgyUsage(saidaAgy, agora)!!
+        assertEquals(agora, limits.updatedAtMs)
+        assertEquals(
+            listOf(
+                LimitWindow(LimitWindow.Kind.FIVE_HOUR, 49, ms("2026-11-24T14:17:03Z")),
+                LimitWindow(LimitWindow.Kind.WEEKLY, 24, ms("2026-12-01T00:19:22Z")),
+                LimitWindow(LimitWindow.Kind.OTHER, 100, ms("2026-11-29T16:29:40Z"), "Claude/GPT 7d"),
+            ),
+            limits.windows,
+        )
+        // Só o grupo Gemini vira chip (o Claude/GPT fica só no painel).
+        assertEquals(2, shownLimitWindows(limits).size)
+    }
+
+    @Test
+    fun agyDisabledNaoGeraJanela() {
+        val limits = PlanLimitsParser.fromAgyUsage("Claude and GPT models\tFive Hour Limit Remaining\tdisabled\n", agora)
+        assertNull(limits)
+    }
+
+    @Test
+    fun agyTextoVazioSemTabOuSemLoginViraNull() {
+        assertNull(PlanLimitsParser.fromAgyUsage("", agora))
+        assertNull(PlanLimitsParser.fromAgyUsage("Gemini Models Weekly Limit Remaining 76%", agora))
+        assertNull(PlanLimitsParser.fromAgyUsage("Please log in to Antigravity first.", agora))
+        assertNull(PlanLimitsParser.fromAgyUsage("Gemini Models\tWeekly Limit Remaining\tabc%\n", agora))
+    }
+
+    @Test
+    fun agyAceitaRetornoDeCarroEEspacosExtras() {
+        val texto = "  Gemini Models \t Five Hour Limit Remaining  \t 51% \t 2026-11-24T14:17:03Z \r\n" +
+            "Gemini Models\tWeekly Limit Remaining\t76%\t2026-12-01T00:19:22Z\r\n"
+        val limits = PlanLimitsParser.fromAgyUsage(texto, agora)!!
+        assertEquals(listOf(49, 24), limits.windows.map { it.usedPercent })
+        assertEquals(ms("2026-11-24T14:17:03Z"), limits.windows[0].resetsAtMs)
+    }
+
+    @Test
+    fun agyLinhaSemHorarioFicaSemRenovacao() {
+        val limits = PlanLimitsParser.fromAgyUsage("Gemini Models\tFive Hour Limit Remaining\t30%\n", agora)!!
+        assertEquals(LimitWindow(LimitWindow.Kind.FIVE_HOUR, 70, null), limits.windows.single())
+    }
+
+    @Test
+    fun agyPercentualForaDe0A100Clampa() {
+        // Restante acima de 100 = nada usado; restante negativo = tudo usado.
+        val limits = PlanLimitsParser.fromAgyUsage(
+            "Gemini Models\tFive Hour Limit Remaining\t150%\nGemini Models\tWeekly Limit Remaining\t-20%\n",
+            agora,
+        )!!
+        assertEquals(listOf(0, 100), limits.windows.map { it.usedPercent })
+    }
+
+    @Test
+    fun agyZeroRestanteEhCemUsado() {
+        val limits = PlanLimitsParser.fromAgyUsage("Claude and GPT models\tWeekly Limit Remaining\t0%\n", agora)!!
+        assertEquals(100, limits.windows.single().usedPercent)
+        assertEquals("Claude/GPT 7d", limits.windows.single().label)
+    }
+
+    @Test
+    fun agyOutroGrupoSemClaudeUsaNomeAbreviado() {
+        val limits = PlanLimitsParser.fromAgyUsage("Imagen\tFive Hour Limit Remaining\t80%\n", agora)!!
+        assertEquals("Imagen 5h", limits.windows.single().label)
+        assertEquals(LimitWindow.Kind.OTHER, limits.windows.single().kind)
+    }
+
+    @Test
+    fun agyAvisoIgnoraJanelaOtherSoNoAgy() {
+        val antes = PlanLimits(listOf(LimitWindow(LimitWindow.Kind.OTHER, 50, null, "Claude/GPT 7d")), agora)
+        val depois = PlanLimitsParser.fromAgyUsage("Claude and GPT models\tWeekly Limit Remaining\t0%\n", agora)!!
+        assertEquals(1, windowsToWarn(antes, depois, agora, dropOther = false).size)
+        assertEquals(emptyList<LimitWindow>(), windowsToWarn(antes, depois, agora, dropOther = true))
+    }
+
+    @Test
+    fun agyAvisoMantemJanelaGeminiMesmoComOtherFora() {
+        // Gemini de 5 horas a 95% e Claude/GPT a 100%: só o Gemini avisa no agy.
+        val texto = "Gemini Models\tFive Hour Limit Remaining\t5%\t2026-11-24T14:17:03Z\n" +
+            "Claude and GPT models\tWeekly Limit Remaining\t0%\t2026-11-29T16:29:40Z\n"
+        val depois = PlanLimitsParser.fromAgyUsage(texto, agora)!!
+        val avisos = windowsToWarn(null, depois, agora, dropOther = true)
+        assertEquals(listOf(LimitWindow.Kind.FIVE_HOUR), avisos.map { it.kind })
+    }
+
     /** Linha de token_count do Codex com todos os campos (ver o comentário acima dos testes "codexFormatoReal"). */
     private fun linhaCodexReal(primary: String, secondary: String, reached: String = "null"): String =
         """{"timestamp":"2026-11-04T21:10:00.000Z","type":"event_msg","payload":{"type":"token_count",""" +

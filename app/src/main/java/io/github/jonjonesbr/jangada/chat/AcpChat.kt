@@ -408,7 +408,8 @@ class AcpChat(
      * outros agentes. Roda na thread principal.
      */
     private fun refreshLimits(delayMs: Long = 0L) {
-        if (agentId == OPENCODE_ID) return refreshOpenCodeLimits()
+        if (agentId == OPENCODE_ID) return refreshScriptLimits(OPENCODE_LIMITS_SCRIPT, PlanLimitsParser::fromOpenCodeUsage)
+        if (agentId == AGY_ID) return refreshScriptLimits(AGY_LIMITS_SCRIPT, PlanLimitsParser::fromAgyUsage)
         if (agentId != CODEX_ID) return
         if (limitsReading) {
             limitsAgain = true
@@ -450,45 +451,46 @@ class AcpChat(
         if (started.isFailure) limitsReading = false
     }
 
-    /** Última leitura dos limites do OpenCode Go (ms; só a thread principal mexe). */
-    private var openCodeLimitsAt = 0L
-    /** A última leitura disse que não há login no console do OpenCode: só tenta de novo ao abrir a conversa. */
-    private var openCodeNoGo = false
+    /** Última leitura dos limites por script (OpenCode e agy; ms; só a thread principal mexe). */
+    private var scriptLimitsAt = 0L
+    /** A última leitura disse que não há login no console do agente: só tenta de novo ao abrir a conversa. */
+    private var scriptLimitsNoLogin = false
 
     /**
-     * OpenCode Go: pergunta ao próprio opencode (`opencode api experimental.usage.limits`, com servidor
-     * privado que sai no fim) os limites do console em que ele está logado. Abre outro opencode, então
-     * no máximo uma vez a cada [OPENCODE_LIMITS_EVERY_MS], e sem login no console (data null) só de novo
-     * na próxima conversa. Falha ou formato inesperado: não mostra nada. Thread principal.
+     * Limites lidos por um comando do próprio agente (OpenCode Go e agy). [script] roda num bash do Debian e
+     * [parse] lê a saída. Abre outro agente, então no máximo uma vez a cada [LIMITS_EVERY_MS], e sem
+     * login (resposta sem limites, exit 0) só de novo na próxima conversa. Falha ou formato inesperado: não
+     * mostra nada. No agy, as janelas "outras" (Claude/GPT) não avisam (ver [windowsToWarn]). Thread principal.
      */
-    private fun refreshOpenCodeLimits() {
+    private fun refreshScriptLimits(script: String, parse: (String, Long) -> PlanLimits?) {
         val now = System.currentTimeMillis()
-        val first = openCodeLimitsAt == 0L
-        if (limitsReading || (!first && (openCodeNoGo || now - openCodeLimitsAt < OPENCODE_LIMITS_EVERY_MS))) return
+        val first = scriptLimitsAt == 0L
+        if (limitsReading || (!first && (scriptLimitsNoLogin || now - scriptLimitsAt < LIMITS_EVERY_MS))) return
         limitsReading = true
-        openCodeLimitsAt = now
+        scriptLimitsAt = now
         val started = runCatching {
-            thread(name = "jangada-limites-opencode") {
+            thread(name = "jangada-limites-$agentId") {
                 var limits: PlanLimits? = null
                 var answered = false
                 try {
                     val out = StringBuilder()
-                    val code = linux.runBash(OPENCODE_LIMITS_SCRIPT) { out.append(it).append('\n') }
+                    val code = linux.runBash(script) { out.append(it).append('\n') }
                     answered = code == 0
-                    if (answered) limits = PlanLimitsParser.fromOpenCodeUsage(out.toString(), System.currentTimeMillis())
+                    if (answered) limits = parse(out.toString(), System.currentTimeMillis())
                 } catch (e: Exception) {
-                    Log.w(TAG, "limites do OpenCode", e)
+                    // IOException também cai aqui: fechar o chat no meio da leitura é normal.
+                    Log.w(TAG, "limites de $agentId", e)
                 } finally {
                     val found = limits
-                    val noGo = answered && found == null
+                    val noLogin = answered && found == null
                     main.post {
                         limitsReading = false
-                        openCodeNoGo = noGo
+                        scriptLimitsNoLogin = noLogin
                         if (found != null) {
                             val old = limitsStore.load(agentId)
                             limitsStore.save(agentId, found)
                             val at = System.currentTimeMillis()
-                            warnLimits(crossedWindows(old, found).filter { it.resetsAtMs == null || it.resetsAtMs > at })
+                            warnLimits(windowsToWarn(old, found, at, dropOther = agentId == AGY_ID))
                             changed()
                         }
                     }
@@ -1584,10 +1586,12 @@ class AcpChat(
         val SUBAGENT_TOOLS = setOf("subagent", "task")
         /** Folga depois do despertar agendado pelo agente, antes de o chat poder dormir. */
         const val SCHEDULE_MARGIN_MS = 120_000L
-        /** Intervalo mínimo entre leituras dos limites do OpenCode Go (cada uma abre outro opencode). */
-        const val OPENCODE_LIMITS_EVERY_MS = 10 * 60_000L
+        /** Intervalo mínimo entre leituras dos limites por script (OpenCode Go e agy; cada uma abre outro agente). */
+        const val LIMITS_EVERY_MS = 10 * 60_000L
         /** Pergunta os limites ao opencode, com servidor próprio (sai no fim) e tempo limite. */
         const val OPENCODE_LIMITS_SCRIPT = "timeout 40 opencode api experimental.usage.limits --standalone </dev/null 2>/dev/null"
+        /** Pergunta os limites ao agy pelo `/usage` do modo de impressão (sai sozinho, sem turno; testado em 24/11/2026). */
+        const val AGY_LIMITS_SCRIPT = "timeout 40 agy -p /usage --print-timeout 30s </dev/null 2>/dev/null"
         /** Comando do agente que compacta a conversa (o mesmo do "Compactar agora") e o texto que o manda. */
         const val COMPACT_NAME = "compact"
         const val COMPACT_TEXT = "/compact"
