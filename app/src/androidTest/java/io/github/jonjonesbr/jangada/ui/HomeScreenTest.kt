@@ -155,7 +155,15 @@ class HomeScreenTest {
         val fim = System.currentTimeMillis() + 120_000
         while (System.currentTimeMillis() < fim) {
             if (device.findObject(By.text(context.getString(R.string.home_system_open))) != null) return
-            device.findObject(By.text(context.getString(R.string.home_system_closed)))?.let { it.click(); return }
+            device.findObject(By.text(context.getString(R.string.home_system_closed)))?.let {
+                it.click()
+                // O conteúdo que acabou de abrir também pode ficar abaixo da dobra.
+                Thread.sleep(500)
+                rolarParaBaixo()
+                return
+            }
+            // O bloco fica no fim da Home, abaixo da dobra: rola até ele aparecer.
+            rolarParaBaixo()
             Thread.sleep(500)
         }
         org.junit.Assert.fail("O bloco Sistema não apareceu.\nNa tela: ${ChatUi.screenTexts()}")
