@@ -48,7 +48,12 @@ class ClaudeLimitsChipTest {
             var texto = ""
             while (!texto.contains("42") && System.currentTimeMillis() < fim) {
                 texto = device.findObject(By.res(ChatUi.PKG, "chat_chip_limits"))?.text.orEmpty()
-                if (!texto.contains("42")) Thread.sleep(500)
+                if (!texto.contains("42")) {
+                    // O chip de limites é o último da barra de atalhos, que rola na horizontal: leva a barra
+                    // para a direita até ele entrar na tela.
+                    device.findObject(By.res(ChatUi.PKG, "chat_quickbar"))?.scroll(androidx.test.uiautomator.Direction.RIGHT, 1.0f)
+                    Thread.sleep(500)
+                }
             }
             assertTrue("o chip de limites não mostra 42%: \"$texto\".\nNa tela: ${ChatUi.screenTexts()}", texto.contains("42"))
         }
