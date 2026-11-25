@@ -318,6 +318,8 @@ class TerminalService : Service() {
                 onModeChosen = { settings.claudeMode = it },
                 savedWindow = { settings.claudeWindow(it) },
                 onWindowLearned = { model, size -> settings.setClaudeWindow(model, size) },
+                // O Code Mode (experimental) do trabalho; a conversa retomada decide sozinha (ver ChatEngine).
+                codeMode = settings.codeModeFor(key),
             )
         } else {
             // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).

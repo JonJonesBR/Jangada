@@ -41,6 +41,7 @@ import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.agents.Versions
 import io.github.jonjonesbr.jangada.chat.AgentChat
+import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.ChatState
 import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
@@ -1456,7 +1457,18 @@ class HomeActivity : JangadaActivity() {
             svc.sessions.lastOrNull { it.mSessionName == recipe.name && svc.sessionFolder[it.mHandle].orEmpty() == folder }
         }
         if (existing != null) showSession(existing.mHandle)
-        else openTerminal(recipe.name, recipe.launchScript(Workspace.path(folder)), agent = recipe.id, folder = folder)
+        else openTerminal(recipe.name, agentScript(recipe, folder), agent = recipe.id, folder = folder)
+    }
+
+    /**
+     * Comando que abre o agente no terminal. Só o Claude recebe o Code Mode do trabalho (a variável vale
+     * durante o Claude; o shell segue aberto, então ela sai no fim, ver CodeMode.terminalSuffix).
+     */
+    private fun agentScript(recipe: AgentRecipe, folder: String): String {
+        val script = recipe.launchScript(Workspace.path(folder))
+        if (recipe.id != TerminalService.CLAUDE) return script
+        val on = AppSettings(this).codeModeFor(TerminalService.chatKey(recipe.id, folder))
+        return CodeMode.terminalPrefix(on) + script + CodeMode.terminalSuffix(on)
     }
 
     /** Abre a tela de chat de um agente; com [folder], a do trabalho dessa pasta (sem ela, a última usada). */

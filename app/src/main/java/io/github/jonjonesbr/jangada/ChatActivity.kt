@@ -44,6 +44,8 @@ import io.github.jonjonesbr.jangada.chat.ModeText
 import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.chat.CodeMode
+import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.autoCompactShort
 import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.PlanLimits
@@ -127,6 +129,7 @@ class ChatActivity : JangadaActivity() {
     private lateinit var chipFolder: TextView
     private lateinit var chipModel: TextView
     private lateinit var chipMode: TextView
+    private lateinit var chipCodeMode: TextView
     private lateinit var chipView: TextView
     private lateinit var chipContext: TextView
     private lateinit var chipLimits: TextView
@@ -312,6 +315,7 @@ class ChatActivity : JangadaActivity() {
         chipFolder = findViewById(R.id.chat_chip_folder)
         chipModel = findViewById(R.id.chat_chip_model)
         chipMode = findViewById(R.id.chat_chip_mode)
+        chipCodeMode = findViewById(R.id.chat_chip_code_mode)
         chipView = findViewById(R.id.chat_chip_view)
         chipContext = findViewById(R.id.chat_chip_context)
         chipLimits = findViewById(R.id.chat_chip_limits)
@@ -380,6 +384,7 @@ class ChatActivity : JangadaActivity() {
         chipFolder.setOnClickListener { showJobs() }
         chipModel.setOnClickListener { showModelSheet() }
         chipMode.setOnClickListener { showModeSheet() }
+        chipCodeMode.setOnClickListener { chooseCodeMode() }
         chipView.setOnClickListener { chooseView() }
         chipContext.setOnClickListener { engine?.let { showContextSheet(it) } }
         chipLimits.setOnClickListener { showLimitsSheet() }
@@ -1014,7 +1019,7 @@ class ChatActivity : JangadaActivity() {
     private fun applyTextScale() {
         val scale = settings.chatTextScale
         input.textSize = INPUT_TEXT_SP * scale
-        for (chip in listOf(chipFolder, chipModel, chipMode, chipView, chipContext, chipLimits, chipChanges)) chip.textSize = CHIP_TEXT_SP * scale
+        for (chip in listOf(chipFolder, chipModel, chipMode, chipCodeMode, chipView, chipContext, chipLimits, chipChanges)) chip.textSize = CHIP_TEXT_SP * scale
         if (adapter.chatScale != scale) {
             adapter.chatScale = scale
             adapter.notifyDataSetChanged()
@@ -1360,6 +1365,19 @@ class ChatActivity : JangadaActivity() {
             chipMode.contentDescription = getString(R.string.chat_chip_mode_description, name)
         }
 
+        // Code Mode (só no Claude): aparece quando a conversa usa o modo. "Code Mode ✓" depois que o Claude
+        // chamou uma ferramenta do modo. Atualizado no mesmo ponto dos outros chips (a cada changed() do engine).
+        val codeModeChat = if (isClaude) engine as? ChatEngine else null
+        val codeModeOn = codeModeChat?.codeModeActive == true
+        val codeModeUsed = codeModeOn && codeModeChat?.codeModeConfirmed == true
+        chipCodeMode.visibility = if (codeModeOn) View.VISIBLE else View.GONE
+        if (codeModeOn) {
+            chipCodeMode.text = getString(if (codeModeUsed) R.string.code_mode_chip_confirmed else R.string.code_mode_chip)
+            chipCodeMode.contentDescription = getString(
+                if (codeModeUsed) R.string.code_mode_chip_confirmed_description else R.string.code_mode_chip_description,
+            )
+        }
+
         // Visualização: o modo atual, como nos ajustes.
         val viewLabel = getString(viewLabelRes(settings.chatView))
         chipView.text = "👁 $viewLabel"
@@ -1395,6 +1413,7 @@ class ChatActivity : JangadaActivity() {
         if (compactLayout) {
             chipFolder.visibility = View.GONE
             chipModel.visibility = View.GONE
+            chipCodeMode.visibility = View.GONE
             chipView.visibility = View.GONE
             chipContext.visibility = View.GONE
             chipChanges.visibility = View.GONE
@@ -1469,6 +1488,7 @@ class ChatActivity : JangadaActivity() {
         val rows = mutableListOf<Sheet.Row>()
         if (canCompact) rows += Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") }
         rows += autoCompactRow()
+        if (isClaude) rows += codeModeRow()
         Sheet(this)
             .title(getString(R.string.chat_context_title))
             .message(getString(R.string.chat_context_explain, percent))
@@ -1961,6 +1981,7 @@ class ChatActivity : JangadaActivity() {
             icon = "⏏",
         ) { loadFolders { folders -> worktrees.showWorktreeFinish(folders) } }
         rows += autoCompactRow()
+        if (isClaude) rows += codeModeRow()
         rows += Sheet.Row(
             title = getString(R.string.chat_export),
             description = getString(R.string.chat_export_desc),
@@ -2366,6 +2387,81 @@ class ChatActivity : JangadaActivity() {
         reopenChat(svc) { svc.openChat(agentId, folder = folder, resume = id, restart = true) }
     }
 
+    /**
+     * Linha do Code Mode deste trabalho (só no Claude; painel do chip de contexto e menu ⋮). O valor é o
+     * efetivo; quando vem do ajuste geral, a descrição diz isso.
+     */
+    private fun codeModeRow(): Sheet.Row {
+        val job = settings.codeModeOfJob(chatKey)
+        val fromGeneral = job == CodeMode.GLOBAL
+        return Sheet.Row(
+            title = getString(R.string.code_mode_title),
+            description = if (fromGeneral) getString(R.string.code_mode_from_general) else null,
+            value = codeModeText(this, if (fromGeneral) settings.codeMode else job),
+            icon = "⌘",
+        ) { chooseCodeMode() }
+    }
+
+    /** Escolha do Code Mode deste trabalho: o ajuste geral, ligado ou desligado, com o aviso de segurança. */
+    private fun chooseCodeMode() {
+        val job = settings.codeModeOfJob(chatKey)
+        val rows = mutableListOf(
+            Sheet.Row(
+                title = getString(R.string.code_mode_global, codeModeText(this, settings.codeMode)),
+                checked = job == CodeMode.GLOBAL,
+            ) { saveCodeMode(CodeMode.GLOBAL) },
+        )
+        rows += CodeMode.GENERAL.map { value ->
+            Sheet.Row(title = codeModeText(this, value), checked = job == value) { saveCodeMode(value) }
+        }
+        Sheet(this)
+            .title(getString(R.string.code_mode_title))
+            .message(getString(R.string.code_mode_note))
+            .rows(rows)
+            .show()
+    }
+
+    /**
+     * Guarda o Code Mode do trabalho. O modo é lido ao iniciar a conversa e fica fixo nela: se o que vale
+     * muda, a conversa nova (sem mensagens) reabre no modo novo; a que já tem mensagens continua como
+     * começou, e o painel oferece uma conversa nova.
+     */
+    private fun saveCodeMode(value: String) {
+        if (value == settings.codeModeOfJob(chatKey)) return
+        val before = settings.codeModeFor(chatKey)
+        val after = CodeMode.effective(settings.codeMode, value)
+        if (after == before) {
+            settings.setCodeModeOfJob(chatKey, value)
+            return
+        }
+        // Mesmo critério da compactação: com turno ou tarefa em andamento, não salva nem reinicia.
+        if (busyBlocks()) return
+        settings.setCodeModeOfJob(chatKey, value)
+        val svc = service ?: return
+        if (engine?.sessionId == null) {
+            // Conversa nova (sem mensagens): reabre já no modo novo, sem retomar nada.
+            reopenChat(svc) { svc.openChat(agentId, folder = folder, resume = null, restart = true) }
+        } else {
+            showCodeModeFixed()
+        }
+    }
+
+    /** Conversa com mensagens: o Code Mode é fixo nela. Oferece uma conversa nova (como o ＋ do menu ⋮). */
+    private fun showCodeModeFixed() {
+        Sheet(this)
+            .title(getString(R.string.code_mode_title))
+            .message(getString(R.string.code_mode_fixed_message))
+            .rows(
+                listOf(
+                    Sheet.Row(title = getString(R.string.chat_new), icon = "＋") {
+                        if (!busyBlocks(R.string.chat_new_wait)) newConversation()
+                    },
+                    Sheet.Row(title = getString(R.string.code_mode_later)) {},
+                ),
+            )
+            .show()
+    }
+
     private fun modelLabel(alias: String) = when (alias) {
         "" -> getString(R.string.chat_model_default)
         else -> alias.replaceFirstChar { it.uppercase() }
@@ -2411,12 +2507,23 @@ class ChatActivity : JangadaActivity() {
         openTerminal(svc, script, conversation = if (isClaude) id else null)
     }
 
-    /** Comando que abre o Claude Code na pasta de trabalho do chat; [args] vai depois do comando. */
-    private fun claudeLaunchScript(args: String): String {
+    /**
+     * Comando que abre o Claude Code na pasta de trabalho do chat; [args] vai depois do comando.
+     * Sem [withCodeMode] (login), o Claude abre sem o Code Mode: a confirmação dele não fica na frente do login.
+     */
+    private fun claudeLaunchScript(args: String, withCodeMode: Boolean = true): String {
         // Compactação automática do trabalho: vale só para este Claude (o shell da aba segue aberto depois).
         val autoCompact = settings.autoCompactFor(chatKey)
-        return AutoCompact.claudeEnvPrefix(autoCompact) + AgentRecipe.claudeIn(Workspace.path(folder), exec = false) + args +
-            AutoCompact.claudeEnvSuffix(autoCompact)
+        // Code Mode: a conversa com sessão decide (é fixo nela); sem sessão, vale o ajuste do trabalho.
+        val chat = engine as? ChatEngine
+        val codeMode = when {
+            !withCodeMode -> false
+            chat != null && chat.sessionId != null && chat.codeModeKnown -> chat.codeModeActive
+            else -> settings.codeModeFor(chatKey)
+        }
+        return CodeMode.terminalPrefix(codeMode) + AutoCompact.claudeEnvPrefix(autoCompact) +
+            AgentRecipe.claudeIn(Workspace.path(folder), exec = false) + args +
+            AutoCompact.claudeEnvSuffix(autoCompact) + CodeMode.terminalSuffix(codeMode)
     }
 
     /**
@@ -2453,7 +2560,7 @@ class ChatActivity : JangadaActivity() {
         val svc = service ?: return
         val script = when {
             option.kind == AuthOption.Kind.TERMINAL -> (engine as? AcpChat)?.terminalLoginScript(option)
-            isClaude -> claudeLaunchScript("")
+            isClaude -> claudeLaunchScript("", withCodeMode = false)
             else -> recipe?.launchScript(Workspace.path(folder))
         } ?: return
         Toast.makeText(this, getString(R.string.login_come_back), Toast.LENGTH_LONG).show()

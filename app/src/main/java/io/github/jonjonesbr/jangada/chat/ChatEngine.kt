@@ -37,6 +37,8 @@ class ChatEngine(
     private val savedWindow: (String) -> Long = { 0L },
     /** Chamado quando o Claude informa a janela de um modelo, para o app guardá-la (ver [savedWindow]). */
     private val onWindowLearned: ((String, Long) -> Unit)? = null,
+    /** Ajuste do Code Mode que vale para este trabalho (ver CodeMode); só conversas novas seguem o ajuste. */
+    private val codeMode: Boolean = false,
 ) : ProcessChat(linux, TAG) {
 
     @Volatile override var sessionId: String? = null
@@ -90,6 +92,21 @@ class ChatEngine(
     private val limitsStore by lazy { PlanLimitsStore(context) }
 
     /**
+     * Esta execução pede o Code Mode (flag no `claude`). Vem do ajuste, ou da própria conversa retomada
+     * (ver CodeMode.forSession). Só a thread de início escreve.
+     */
+    @Volatile var codeModeActive: Boolean = false
+        private set
+    /** O Claude já usou o Code Mode nesta conversa (chamada com id do Code Mode, ou linha repl-mode no .jsonl). */
+    @Volatile var codeModeConfirmed: Boolean = false
+        private set
+    /** [codeModeActive] já foi decidido nesta partida (antes disso, quem pergunta usa o ajuste). */
+    @Volatile var codeModeKnown: Boolean = false
+        private set
+    /** O Claude recusou retomar sem a flag (ver [onExited]): a próxima partida liga o Code Mode. */
+    @Volatile private var codeModeForced = false
+
+    /**
      * Inicia o Claude. [resume] continua uma conversa específica;
      * [continueLast], a mais recente da pasta de projetos. Com [history],
      * mostra o que já foi conversado: os itens de [previous] (se for a mesma
@@ -121,6 +138,15 @@ class ChatEngine(
                 sessionId = null
             }
             if (id != null) sessionId = id
+            // Retomada: a conversa decide o Code Mode (gravado ao criar). Conversa nova: segue o ajuste.
+            val transcriptCodeMode = id?.let { ChatHistory.file(linux, cwd, it) }?.let { file ->
+                runCatching { file.useLines { CodeMode.transcriptIsCodeMode(it) } }.getOrNull()
+            }
+            codeModeActive = codeModeForced || CodeMode.forSession(codeMode, transcriptCodeMode)
+            // A linha repl-mode só é gravada quando o Claude aceitou o Code Mode: a conversa já o usou.
+            if (transcriptCodeMode == true) codeModeConfirmed = true
+            codeModeKnown = true
+            main.post { changed() }
             if (history && id != null) {
                 if (id == previousId && previousItems.isNotEmpty()) {
                     main.post { showHistory(previousItems, markInterrupted = false) }
@@ -145,8 +171,20 @@ class ChatEngine(
         args.append(" --permission-prompt-tool stdio --permission-mode ").append(permissionMode)
         if (modelAlias.isNotEmpty()) args.append(" --model ").append(AgentRecipe.q(modelAlias))
         if (effort.isNotEmpty()) args.append(" --effort ").append(AgentRecipe.q(effort))
+        args.append(CodeMode.chatArg(codeModeActive))
         if (resume != null) args.append(" --resume=").append(AgentRecipe.q(resume))
         return args.toString()
+    }
+
+    /**
+     * Saída do Claude. Retomar uma conversa do Code Mode sem a flag faz o Claude sair com a recusa
+     * (ver CodeMode.isResumeRefusal), o que só acontece se o .jsonl não pôde ser lido. Não relança aqui
+     * (um relançamento atrasado poderia ressuscitar um chat já fechado ou substituído): o erro segue o
+     * caminho normal e a próxima partida deste chat (a próxima mensagem) já vai com a flag.
+     */
+    override fun onExited(code: Int, stderr: String, midTurn: Boolean) {
+        if (code != 0 && !codeModeActive && CodeMode.isResumeRefusal(stderr)) codeModeForced = true
+        super.onExited(code, stderr, midTurn)
     }
 
     /** Põe o que já foi conversado antes das mensagens novas (thread principal). */
@@ -520,6 +558,8 @@ class ChatEngine(
                     }
                 }
                 is AssistantBlock.ToolUse -> {
+                    // Chamada feita pelo código do Code Mode: a conversa confirma que o modo está ligado.
+                    if (!codeModeConfirmed && CodeMode.isCodeModeToolId(block.id)) codeModeConfirmed = true
                     if (block.name == TODO_TOOL) {
                         // A lista de tarefas de um subagente não substitui a da conversa.
                         if (!fromSubagent) updatePlan(todoEntries(block.input))

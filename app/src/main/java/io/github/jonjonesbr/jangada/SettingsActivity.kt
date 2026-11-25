@@ -11,7 +11,9 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.autoCompactText
+import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
@@ -166,6 +168,29 @@ class SettingsActivity : JangadaActivity() {
                         Sheet.Row(title = autoCompactText(this, value), checked = value == settings.autoCompact) {
                             settings.autoCompact = value
                             showAutoCompact()
+                        }
+                    },
+                )
+                .show()
+        }
+
+        // Code Mode do Claude (experimental): ajuste geral; vale para conversas novas (cada conversa guarda o seu).
+        // Só vale quando o Claude inicia de novo: não reinicia nada aqui.
+        val codeButton = findViewById<Button>(R.id.settings_code_mode)
+        fun showCodeMode() {
+            val value = codeModeText(this, settings.codeMode)
+            codeButton.text = value
+            codeButton.contentDescription = getString(R.string.code_mode_settings_label, value)
+        }
+        showCodeMode()
+        codeButton.setOnClickListener {
+            Sheet(this)
+                .title(getString(R.string.code_mode_title))
+                .rows(
+                    CodeMode.GENERAL.map { value ->
+                        Sheet.Row(title = codeModeText(this, value), checked = value == settings.codeMode) {
+                            settings.codeMode = value
+                            showCodeMode()
                         }
                     },
                 )

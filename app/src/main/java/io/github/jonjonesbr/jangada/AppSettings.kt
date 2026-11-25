@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada
 import android.content.Context
 import android.content.SharedPreferences
 import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.linux.ProjectOps
 
 /** Preferências do usuário (tela de configurações). */
@@ -10,6 +11,8 @@ class AppSettings(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
     /** Compactação automática por trabalho: chave = TerminalService.chatKey; ausente = segue o geral. */
     private val jobPrefs = context.applicationContext.getSharedPreferences("auto_compact", Context.MODE_PRIVATE)
+    /** Code Mode por trabalho (arquivo próprio, para não misturar com a compactação): chave = TerminalService.chatKey. */
+    private val codeModePrefs = context.applicationContext.getSharedPreferences("code_mode", Context.MODE_PRIVATE)
 
     /** Modo Simples: chat e caixa de texto por padrão. Modo Pro: terminal primeiro. */
     var simpleMode: Boolean
@@ -188,6 +191,23 @@ class AppSettings(context: Context) {
         get() = AutoCompact.normalizeGeneral(prefs.getString(KEY_AUTO_COMPACT, AutoCompact.DEFAULT))
         set(value) = prefs.edit().putString(KEY_AUTO_COMPACT, value).apply()
 
+    /** Code Mode do Claude (experimental), ajuste geral: "on" ou "off" (ver CodeMode). Vale para conversas novas. */
+    var codeMode: String
+        get() = CodeMode.normalizeGeneral(prefs.getString(KEY_CODE_MODE, CodeMode.OFF))
+        set(value) = prefs.edit().putString(KEY_CODE_MODE, CodeMode.normalizeGeneral(value)).apply()
+
+    /** Code Mode de um trabalho ([key] = TerminalService.chatKey): um de CodeMode.JOB; "global" segue o geral. */
+    fun codeModeOfJob(key: String): String = CodeMode.normalizeJob(codeModePrefs.getString(key, null))
+
+    /** Guarda o Code Mode de um trabalho; "global" tira a chave (o trabalho volta a seguir o geral). */
+    fun setCodeModeOfJob(key: String, value: String) {
+        if (value == CodeMode.GLOBAL) codeModePrefs.edit().remove(key).apply()
+        else codeModePrefs.edit().putString(key, CodeMode.normalizeJob(value)).apply()
+    }
+
+    /** Se o Code Mode vale para o trabalho [key]: o dele, ou o geral (ver CodeMode.effective). */
+    fun codeModeFor(key: String): Boolean = CodeMode.effective(codeMode, codeModePrefs.getString(key, null))
+
     /** Compactação automática de um trabalho ([key] = TerminalService.chatKey): um de AutoCompact.JOB; "global" segue o geral. */
     fun autoCompactOfJob(key: String): String = AutoCompact.normalizeJob(jobPrefs.getString(key, null))
 
@@ -209,6 +229,9 @@ class AppSettings(context: Context) {
         val editor = jobPrefs.edit()
         jobPrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { editor.remove(it) }
         editor.apply()
+        val codeEditor = codeModePrefs.edit()
+        codeModePrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { codeEditor.remove(it) }
+        codeEditor.apply()
         // A pasta não existe mais: a preferência de abrir direto nela também some.
         setDirectFolder(folder, false)
         if (chatFolder == folder) chatFolder = ""
@@ -223,6 +246,13 @@ class AppSettings(context: Context) {
             editor.remove(key)
         }
         editor.apply()
+        val codeEditor = codeModePrefs.edit()
+        for ((key, value) in codeModePrefs.all) {
+            val moved = ProjectOps.movedKey(key, old, new) ?: continue
+            if (value is String) codeEditor.putString(moved, value)
+            codeEditor.remove(key)
+        }
+        codeEditor.apply()
         // A preferência de abrir direto acompanha o novo nome (sem cópia: putStringSet guarda o conjunto).
         val folders = directFolders()
         if (old != new && old in folders) {
@@ -314,6 +344,7 @@ class AppSettings(context: Context) {
         private const val KEY_MAX_AGENTS = "max_agents"
         private const val KEY_SLEEP_AFTER = "sleep_after_minutes"
         private const val KEY_AUTO_COMPACT = "auto_compact"
+        private const val KEY_CODE_MODE = "code_mode"
         private const val KEY_AUTO_CLEAN = "auto_clean"
         private const val KEY_LAST_AUTO_CLEAN = "last_auto_clean_at"
         /** Pastas marcadas com "Sempre direto" no painel do novo trabalho (ver directFolder). */

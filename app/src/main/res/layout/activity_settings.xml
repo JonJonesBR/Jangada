@@ -322,6 +322,29 @@
                 android:textColor="@color/setup_muted_text"
                 android:textSize="13sp" />
 
+            <!-- Code Mode do Claude (experimental): vale para conversas novas; cada trabalho pode ter o seu. -->
+            <TextView
+                style="@style/HomeSection"
+                android:text="@string/code_mode_title" />
+
+            <Button
+                android:id="@+id/settings_code_mode"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:minHeight="48dp"
+                android:textColor="@color/accent_text" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/code_mode_settings_desc"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
             <!-- Avançado: CPU, tela, teclas extras e contas dos agentes. -->
             <TextView
                 style="@style/HomeSection"
