@@ -333,6 +333,7 @@ class AcpChat(
     private fun openSession(resume: String?) {
         armSessionTimeout()
         restored.clear()
+        restoringModel = false
         choicesBeforeStop = if (resume != null) configOptions.associate { it.category to it.current } else emptyMap()
         val params = JSONObject().put("cwd", cwd).put("mcpServers", JSONArray())
         if (resume != null && canLoad) {
@@ -793,10 +794,14 @@ class AcpChat(
      */
     private var restoring = 0
 
+    /** Reaplicação do modelo ainda aguardando resposta: raciocínio e modo esperam por ela. */
+    private var restoringModel = false
+
     /** Prazo das reaplicações: agente que não responde ao ajuste não pode prender a fila para sempre. */
     private val restoreTimeout = Runnable {
         if (restoring == 0) return@Runnable
         restoring = 0
+        restoringModel = false
         if (ready && !loadingHistory && !catchUpActive && queue.isNotEmpty()) sendNext()
     }
 
@@ -817,11 +822,10 @@ class AcpChat(
      * nova ou a cada vez que o agente acordava de um sono.
      */
     private fun restoreChoices() {
-        for (option in configOptions) {
-            if (!remembered(option) || !restored.add(option.category)) continue
-            val saved = choicesBeforeStop[option.category] ?: appSettings.acpDefault(agentId, option.category)?.first ?: continue
-            if (saved != option.current && option.choices.any { it.first == saved }) setOption(option, saved, remember = false, restoring = true)
+        val batch = nextRestores(configOptions, restored, agentId, restoringModel) { category ->
+            choicesBeforeStop[category] ?: appSettings.acpDefault(agentId, category)?.first
         }
+        for ((option, saved) in batch) setOption(option, saved, remember = false, restoring = true)
     }
 
     /** Muda um ajuste da conversa (modelo, raciocínio, modo...). [remember]: guarda como padrão do agente. */
@@ -829,8 +833,10 @@ class AcpChat(
 
     private fun setOption(option: ConfigOption, value: String, remember: Boolean, restoring: Boolean) {
         val id = sessionId ?: return
+        val wasModel = restoring && (option.source == ConfigOption.Source.MODEL || option.category == "model")
         if (restoring) {
             this.restoring++
+            if (wasModel) restoringModel = true
             main.removeCallbacks(restoreTimeout)
             main.postDelayed(restoreTimeout, RESTORE_TIMEOUT_MS)
         }
@@ -844,16 +850,28 @@ class AcpChat(
                 "session/set_config_option",
                 JSONObject().put("sessionId", id).put("configId", option.id).put("value", value),
             ) { result, error ->
-                if (result != null && result.has("configOptions")) parseConfig(result)
-                else if (error == null) option.current = value
-                // Agente parou (dormiu, Parar): o pedido não falhou por culpa do ajuste, então sem erro.
-                else if (!isStopped(error)) add(ChatItem.Info(context.getString(R.string.chat_acp_option_failed, option.name, error.optString("message")), isError = true))
+                if (wasModel) restoringModel = false
+                if (result?.optJSONArray("configOptions") != null) parseConfig(result)
+                else {
+                    if (error == null) option.current = value
+                    // Agente parou (dormiu, Parar) ou reaplicação automática incompatível com o modelo: sem erro na tela.
+                    else if (!isStopped(error)) {
+                        if (restoring) Log.w(TAG, "reaplicação ignorada (${option.id}=$value): ${error.optString("message")}")
+                        else add(ChatItem.Info(context.getString(R.string.chat_acp_option_failed, option.name, error.optString("message")), isError = true))
+                    }
+                    if (wasModel && !isStopped(error)) restoreChoices()
+                }
                 changed()
                 restoreDone(restoring)
             }
             ConfigOption.Source.MODEL -> request("session/set_model", JSONObject().put("sessionId", id).put("modelId", value)) { _, error ->
+                if (wasModel) restoringModel = false
                 if (error == null) option.current = value
-                else if (!isStopped(error)) add(ChatItem.Info(context.getString(R.string.chat_acp_model_failed, error.optString("message")), isError = true))
+                else if (!isStopped(error)) {
+                    if (restoring) Log.w(TAG, "reaplicação de modelo ignorada ($value): ${error.optString("message")}")
+                    else add(ChatItem.Info(context.getString(R.string.chat_acp_model_failed, error.optString("message")), isError = true))
+                }
+                if (wasModel && !isStopped(error)) restoreChoices()
                 changed()
                 restoreDone(restoring)
             }
@@ -941,6 +959,7 @@ class AcpChat(
         pending.clear()
         ready = false
         restoring = 0
+        restoringModel = false
         main.removeCallbacks(restoreTimeout)
         loadingHistory = false
         // Parou: a vigia e o alcance em andamento acabam (o load pendente recebe a falha abaixo, sem efeito).
@@ -1647,6 +1666,36 @@ class AcpChat(
         const val TAG = "JangadaAcp"
         /** Categorias de ajuste que o app lembra entre conversas (por agente). */
         val REMEMBERED = setOf("model", "thought_level", "mode")
+
+        /**
+         * Escolhe quais ajustes reaplicar agora, sem correr com o servidor: o modelo muda as opções
+         * válidas dos outros (ex.: Orchestrator do agy não tem Thinking Level, e cada modelo oferece
+         * níveis diferentes), então quando o modelo precisa ser trocado ele vai sozinho primeiro;
+         * os demais (raciocínio, modo) só são avaliados depois da resposta dele.
+         */
+        fun nextRestores(
+            options: List<ConfigOption>,
+            restored: MutableSet<String>,
+            agentId: String,
+            restoringModel: Boolean,
+            savedValue: (category: String) -> String?,
+        ): List<Pair<ConfigOption, String>> {
+            if (agentId.isEmpty() || restoringModel) return emptyList()
+            val model = options.firstOrNull { it.source == ConfigOption.Source.MODEL || it.category == "model" }
+            if (model != null && restored.add(model.category)) {
+                val saved = savedValue(model.category)
+                if (saved != null && saved != model.current && model.choices.any { it.first == saved }) {
+                    return listOf(model to saved)
+                }
+            }
+            val batch = mutableListOf<Pair<ConfigOption, String>>()
+            for (option in options) {
+                if ((option.source != ConfigOption.Source.MODE && option.category !in REMEMBERED) || !restored.add(option.category)) continue
+                val saved = savedValue(option.category) ?: continue
+                if (saved != option.current && option.choices.any { it.first == saved }) batch += option to saved
+            }
+            return batch
+        }
         /** Página do OpenCode Go (assinatura), aberta pelo aviso de limite free esgotado. */
         const val OPENCODE_GO_URL = "https://opencode.ai/go"
         /** Atualizações que compõem a conversa: no replay de uma conversa já na tela, são descartadas. */
