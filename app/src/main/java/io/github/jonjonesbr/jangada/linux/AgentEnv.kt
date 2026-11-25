@@ -24,7 +24,7 @@ object AgentEnv {
         "GIT_ASKPASS=/bin/false",
         "DEBIAN_FRONTEND=noninteractive",
         "APT_LISTCHANGES_FRONTEND=none",
-        "CONTEXT_MODE_MAX_READ_BYTES=4096",
-        "CONTEXT_MODE_MAX_LINE_RANGE=120",
+        "CONTEXT_MODE_MAX_READ_BYTES=8192",
+        "CONTEXT_MODE_MAX_LINE_RANGE=200",
     )
 }

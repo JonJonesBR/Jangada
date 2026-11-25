@@ -45,7 +45,7 @@ class AgentRecipeTest {
         assertNull(agy.acp?.install)
         assertTrue(agy.install.contains("antigravity-plugin-context-mode"))
         assertTrue(agy.install.contains("agy-context"))
-        assertTrue(agy.install.contains("antigravity-usage"))
+        assertTrue(agy.install.contains("agy-usage"))
     }
 
     @Test

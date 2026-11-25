@@ -644,8 +644,8 @@ class LinuxEnv(context: Context) {
                 "unset d\n" +
                 "export PATH\n" +
                 "export BROWSER=/usr/local/bin/jangada-open\n" +
-                "export CONTEXT_MODE_MAX_READ_BYTES=4096\n" +
-                "export CONTEXT_MODE_MAX_LINE_RANGE=120\n"
+                "export CONTEXT_MODE_MAX_READ_BYTES=8192\n" +
+                "export CONTEXT_MODE_MAX_LINE_RANGE=200\n"
 
         private const val OPEN_SCRIPT =
             "#!/bin/sh\n" +
