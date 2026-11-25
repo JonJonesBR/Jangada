@@ -1,5 +1,13 @@
 # Novidades
 
+## 1.34.0
+
+- Chat do Claude: Code Mode (experimental), em que o Claude escreve um trecho de JavaScript que faz várias ações de uma vez. Liga nas Configurações (desligado por padrão) ou por trabalho no menu ⋮ do chat, com o aviso de que regras de permissão e hooks continuam sendo a barreira para ações sensíveis.
+- Chat do Claude: chip "Code Mode" quando ligado ("Code Mode ✓" depois do primeiro uso). Cada conversa mantém o modo em que começou: ao dormir, pelo Histórico ou no ⇄ ela volta no mesmo modo; mudar o ajuste com conversa em andamento oferece uma nova conversa.
+- Terminal: "continuar no terminal" e abrir o Claude pela tela inicial seguem o Code Mode do trabalho (o login pelo terminal abre sem ele).
+- Antigravity (agy): o monitor de uso passa a ser o plugin `agy-usage`, e o corte de leitura sobe para 8 KB/200 linhas.
+- Chat ACP: ao reabrir, o modelo é reaplicado antes do nível de raciocínio, e o erro de restauração incompatível não aparece mais.
+
 ## 1.33.0
 
 - Chat do OpenCode: o chip de limites mostra a cota do OpenCode Go lida direto pela chave do próprio opencode (5 horas, semana e mês), sem depender do login no Console; a janela mensal também entra no chip, com aviso a 90%.
