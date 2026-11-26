@@ -55,6 +55,13 @@ android {
             matchingFallbacks += "release"
             proguardFiles("proguard-androidtest.pro")
         }
+        // Versão paralela para testes no aparelho sem conflitar com o Jangada oficial instalado.
+        create("dev") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            matchingFallbacks += "debug"
+        }
     }
 
     // Com -PtestarMinificado os testes do emulador rodam contra o build type "minified".

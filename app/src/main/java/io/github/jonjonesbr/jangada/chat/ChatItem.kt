@@ -344,6 +344,9 @@ interface AgentChat {
     /** Janela do plano que passou de 90% no último aviso [ChatAttention.LIMIT]; null se não há. */
     val limitCrossed: LimitWindow? get() = null
     var onChanged: (() -> Unit)?
+    /** Ouvintes adicionais (ex.: servidor LAN); chamados na thread principal junto com [onChanged]. */
+    fun addChangeListener(listener: () -> Unit) {}
+    fun removeChangeListener(listener: () -> Unit) {}
     /**
      * Avisos para o usuário (chamado na thread principal): pedido de permissão,
      * login, fim de um turno ou falha.

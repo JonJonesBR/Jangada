@@ -376,6 +376,10 @@ class ChatActivity : JangadaActivity() {
         })
         // Tocar na faixa com tarefas em segundo plano abre o painel para pará-las (isClickable em updateStatus).
         status.setOnClickListener { engine?.let { showBackgroundSheet(it) } }
+        findViewById<View>(R.id.chat_lan_access).setOnClickListener {
+            val svc = service ?: return@setOnClickListener
+            io.github.jonjonesbr.jangada.ui.LanAccessSheet.show(this, svc, chatKey = chatKey) { updateLanButton() }
+        }
         findViewById<View>(R.id.chat_terminal).setOnClickListener { switchToTerminal() }
         findViewById<View>(R.id.chat_menu).setOnClickListener { showMenu() }
         continueChip.setOnClickListener { sendAwake(getString(R.string.chat_continue_prompt)) }
@@ -503,12 +507,27 @@ class ChatActivity : JangadaActivity() {
         connection.bind(intent)
     }
 
+    private val lanSessionsListener: () -> Unit = { updateLanButton() }
+
+    private fun updateLanButton() {
+        val btn = findViewById<android.widget.ImageView?>(R.id.chat_lan_access) ?: return
+        val active = service?.isLanRunning == true
+        btn.setColorFilter(
+            androidx.core.content.ContextCompat.getColor(
+                this,
+                if (active) R.color.setup_done else R.color.setup_muted_text,
+            ),
+        )
+    }
+
     override fun onStop() {
         started = false
+        service?.removeSessionsListener(lanSessionsListener)
         engine?.onChanged = null
         // Sempre desfaz o bind feito em onStart, mesmo que o serviço ainda não tenha respondido.
         connection.unbind()
         service = null
+        updateLanButton()
         loadingJobs = false
         jobsGen++
         super.onStop()
@@ -532,6 +551,8 @@ class ChatActivity : JangadaActivity() {
         onConnected = { binder ->
             val svc = (binder as TerminalService.LocalBinder).service
             service = svc
+            svc.addSessionsListener(lanSessionsListener)
+            updateLanButton()
             // Se a tela já estava em primeiro plano quando o serviço chegou, o onResume não pôde avisar.
             if (resumed) svc.visibleChat = chatKey
             // Tirando o trabalho isolado: não reabre o chat da pasta que vai sumir. Uma remoção que
@@ -576,7 +597,9 @@ class ChatActivity : JangadaActivity() {
             }
         },
         onDisconnected = {
+            service?.removeSessionsListener(lanSessionsListener)
             service = null
+            updateLanButton()
             loadingJobs = false
             jobsGen++
         },

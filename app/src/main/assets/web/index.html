@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jangada</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="auth-screen" class="auth-screen hidden">
+    <form id="auth-form" class="auth-card">
+      <div class="brand-row">
+        <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path fill="#E9A23B" d="M3 17h18l-2 3H5l-2-3z"/>
+          <path fill="#F2EDE4" d="M12 3l7 12H12V3z"/>
+          <path fill="#7FD1C7" d="M11 6L6 15h5V6z"/>
+        </svg>
+        <div>
+          <h1>Jangada</h1>
+          <div class="muted small-text">Seus agentes de IA, no computador</div>
+        </div>
+      </div>
+      <p class="muted">Digite o PIN de 6 dígitos exibido no celular para conectar pela rede local.</p>
+      <input
+        id="pin-input"
+        type="password"
+        inputmode="numeric"
+        pattern="[0-9]*"
+        maxlength="6"
+        autocomplete="one-time-code"
+        placeholder="000000"
+        required
+      />
+      <div id="auth-error" class="auth-error hidden"></div>
+      <button type="submit" class="btn primary full">Conectar</button>
+    </form>
+  </div>
+
+  <div id="app-screen" class="app-shell hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand-row">
+          <svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#E9A23B" d="M3 17h18l-2 3H5l-2-3z"/>
+            <path fill="#F2EDE4" d="M12 3l7 12H12V3z"/>
+            <path fill="#7FD1C7" d="M11 6L6 15h5V6z"/>
+          </svg>
+          <div>
+            <strong>Jangada</strong>
+            <div class="conn-sub"><span class="brand-dot"></span> Conectado</div>
+          </div>
+        </div>
+        <button id="logout-btn" class="btn ghost small" type="button" title="Sair">Sair</button>
+      </div>
+
+      <div class="sidebar-nav">
+        <button id="catalog-btn" class="btn small" type="button">Agentes</button>
+        <button id="system-btn" class="btn small" type="button">Sistema</button>
+        <button id="settings-btn" class="btn small" type="button">Configurações</button>
+      </div>
+
+      <section class="sidebar-section">
+        <div class="section-title">Trabalhos ativos</div>
+        <div id="chats-list" class="list-stack"></div>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="section-title-row">
+          <span class="section-title">Novo trabalho</span>
+          <button id="toggle-project-tools" class="btn ghost tiny" type="button">+ Projeto</button>
+        </div>
+        <div id="project-tools" class="project-tools hidden">
+          <form id="create-project-form" class="new-chat-form">
+            <input id="new-project-name" class="compact-input" type="text" placeholder="Nome do novo projeto" required />
+            <label class="toggle-chip"><input id="new-project-git" type="checkbox" checked /><span>git init</span></label>
+            <button type="submit" class="btn small">Criar pasta</button>
+          </form>
+          <form id="clone-project-form" class="new-chat-form">
+            <input id="clone-url" class="compact-input" type="url" placeholder="URL do repositório (https://...)" required />
+            <input id="clone-folder" class="compact-input" type="text" placeholder="Nome da pasta (opcional)" />
+            <button type="submit" class="btn small">Clonar repositório</button>
+          </form>
+          <div id="project-tools-msg" class="muted"></div>
+        </div>
+        <form id="new-chat-form" class="new-chat-form">
+          <label class="field-label" for="agent-select">Agente</label>
+          <select id="agent-select"></select>
+          <label class="field-label" for="project-select">Projeto</label>
+          <select id="project-select"></select>
+          <button type="submit" class="btn primary full">Abrir conversa</button>
+        </form>
+      </section>
+
+      <section id="history-section" class="sidebar-section hidden">
+        <div class="section-title-row">
+          <span class="section-title">Histórico</span>
+          <button id="refresh-history-btn" class="btn ghost tiny" type="button">Atualizar</button>
+        </div>
+        <input id="history-search" class="compact-input" type="search" placeholder="Buscar conversas…" />
+        <div id="history-list" class="list-stack"></div>
+      </section>
+
+      <section class="sidebar-section">
+        <div class="section-title-row">
+          <span class="section-title">Terminais</span>
+          <button id="new-terminal-btn" class="btn ghost tiny" type="button">+ Terminal</button>
+        </div>
+        <div id="terminals-list" class="list-stack"></div>
+      </section>
+    </aside>
+
+    <main class="chat-main">
+      <div id="conn-banner" class="conn-banner hidden">Reconectando ao celular…</div>
+
+      <header id="chat-header" class="chat-header">
+        <div class="header-top-row">
+          <div class="header-left">
+            <button id="menu-toggle" class="btn ghost small mobile-only" type="button">☰</button>
+            <div>
+              <div id="chat-title" class="chat-title">Nenhum trabalho selecionado</div>
+              <div id="chat-subtitle" class="chat-subtitle muted"></div>
+            </div>
+          </div>
+          <div id="chat-top-actions" class="header-controls hidden">
+            <button id="new-conv-btn" class="btn small" type="button" title="Iniciar nova conversa nesta pasta">+ Nova</button>
+            <button id="open-term-btn" class="btn small" type="button" title="Abrir terminal nesta pasta">&gt;_ Terminal</button>
+            <button id="git-toggle-btn" class="btn small" type="button">Mudanças</button>
+            <button id="export-chat-btn" class="btn small" type="button" title="Exportar conversa em Markdown">Exportar</button>
+            <button id="handoff-btn" class="btn small" type="button" title="Continuar esta conversa com outro agente">Passar</button>
+            <button id="stop-btn" class="btn danger small hidden" type="button">Parar</button>
+          </div>
+        </div>
+
+        <div id="chat-quickbar" class="quickbar hidden">
+          <button id="chip-model" class="chip-btn hidden" type="button" title="Modelo e nível de raciocínio"></button>
+          <select id="mode-select" class="chip-select hidden" title="Modo de permissão"></select>
+          <label class="chip-toggle" title="Aprovar automaticamente pedidos de permissão nesta conversa">
+            <input id="auto-approve-toggle" type="checkbox" />
+            <span>Aprovar tudo</span>
+          </label>
+          <select id="view-select" class="chip-select" title="Modo de visualização">
+            <option value="detailed">Detalhado</option>
+            <option value="normal" selected>Normal</option>
+            <option value="summary">Resumo</option>
+          </select>
+          <button id="chip-context" class="chip-btn hidden" type="button" title="Uso da janela de contexto"></button>
+          <button id="chip-limits" class="chip-btn hidden" type="button" title="Limites e quota do plano"></button>
+        </div>
+      </header>
+
+      <div id="messages" class="messages">
+        <div id="empty-state" class="empty-state">
+          <p>Selecione um trabalho ativo na barra lateral ou abra uma nova conversa.</p>
+        </div>
+      </div>
+
+      <div id="status-strip" class="status-strip hidden"></div>
+
+      <div id="composer-wrap" class="composer-wrap hidden">
+        <div id="slash-popover" class="slash-popover hidden"></div>
+        <div id="pending-attachments" class="pending-attachments hidden"></div>
+        <form id="composer" class="composer">
+          <input id="file-input" type="file" multiple class="hidden" />
+          <button id="attach-btn" class="btn ghost small" type="button" title="Anexar arquivo ou imagem">📎</button>
+          <textarea
+            id="message-input"
+            rows="1"
+            placeholder="Escreva uma mensagem, digite / para comandos ou cole um print (Ctrl+V)…"
+          ></textarea>
+          <button id="send-btn" class="btn primary" type="submit">Enviar</button>
+        </form>
+      </div>
+
+      <section id="git-panel" class="git-panel hidden">
+        <div class="git-bar">
+          <div class="git-bar-left">
+            <strong>Mudanças (Git)</strong>
+            <span id="git-branch" class="badge"></span>
+          </div>
+          <div class="git-bar-actions">
+            <button id="git-refresh-btn" class="btn small" type="button">Atualizar</button>
+            <button id="git-pull-btn" class="btn small" type="button">Pull</button>
+            <button id="git-push-btn" class="btn small" type="button">Push</button>
+            <button id="git-back-btn" class="btn ghost small" type="button">Voltar ao chat</button>
+          </div>
+        </div>
+        <div class="git-body">
+          <div id="git-files" class="git-files"></div>
+          <div id="git-diff-view" class="git-diff-view"></div>
+        </div>
+        <form id="git-commit-form" class="git-commit-bar">
+          <input id="git-commit-msg" type="text" placeholder="Mensagem do commit…" required />
+          <button type="submit" class="btn primary small">Commitar tudo</button>
+        </form>
+        <pre id="git-output" class="git-output hidden"></pre>
+      </section>
+
+      <section id="terminal-panel" class="terminal-panel hidden">
+        <div class="git-bar">
+          <div class="git-bar-left">
+            <strong id="term-title">Terminal</strong>
+            <span id="term-status" class="badge"></span>
+          </div>
+          <div class="git-bar-actions">
+            <button type="button" class="btn small term-key-btn" data-key="ctrlc">Ctrl+C</button>
+            <button type="button" class="btn small term-key-btn" data-key="ctrld">Ctrl+D</button>
+            <button type="button" class="btn small term-key-btn" data-key="tab">Tab</button>
+            <button type="button" class="btn small term-key-btn" data-key="esc">Esc</button>
+            <button type="button" class="btn small term-key-btn" data-key="up">↑</button>
+            <button type="button" class="btn small term-key-btn" data-key="down">↓</button>
+            <button id="term-close-btn" class="btn danger small" type="button">Encerrar</button>
+            <button id="term-back-btn" class="btn ghost small" type="button">Voltar ao chat</button>
+          </div>
+        </div>
+        <pre id="term-screen" class="term-screen" tabindex="0"></pre>
+        <form id="term-input-form" class="git-commit-bar">
+          <input id="term-cmd-input" type="text" placeholder="Digite um comando e pressione Enter (ou clique na tela acima para digitar direto)…" />
+          <button type="submit" class="btn primary small">Enviar</button>
+        </form>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal reutilizável para Modelo/Esforço, Quota/Limites, Contexto e Catálogo de Agentes -->
+  <div id="modal-backdrop" class="modal-backdrop hidden">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <strong id="modal-title"></strong>
+        <button id="modal-close" class="btn ghost small" type="button">✕</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

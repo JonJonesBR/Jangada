@@ -111,6 +111,9 @@ class HomeActivity : JangadaActivity() {
     private var welcomeCard: View? = null
     /** Aviso quando as notificações do app estão desligadas no Android. */
     private lateinit var notificationsCard: View
+    private lateinit var lanStatusCard: View
+    private lateinit var lanStatusText: TextView
+    private lateinit var openLanAccess: android.widget.ImageView
 
     /** null = ainda verificando; senão, os comandos encontrados no Debian. */
     private var installed: Set<String>? = null
@@ -228,7 +231,26 @@ class HomeActivity : JangadaActivity() {
         findViewById<Button>(R.id.storage_details).setOnClickListener { showSpaceDetails() }
         notificationsCard = findViewById(R.id.notifications_card)
         findViewById<Button>(R.id.notifications_open).setOnClickListener { openNotificationSettings() }
+        lanStatusCard = findViewById(R.id.lan_status_card)
+        lanStatusText = findViewById(R.id.lan_status_text)
+        openLanAccess = findViewById(R.id.open_lan_access)
+        openLanAccess.setOnClickListener { openLanSheet() }
+        lanStatusCard.setOnClickListener { openLanSheet() }
+        findViewById<Button>(R.id.lan_status_share).setOnClickListener {
+            val status = service?.lanStatus() ?: return@setOnClickListener
+            io.github.jonjonesbr.jangada.ui.LanAccessSheet.shareAccess(this, status)
+        }
+        findViewById<Button>(R.id.lan_status_copy).setOnClickListener {
+            val status = service?.lanStatus() ?: return@setOnClickListener
+            val link = io.github.jonjonesbr.jangada.ui.LanAccessSheet.directLink(status) ?: return@setOnClickListener
+            io.github.jonjonesbr.jangada.ui.LanAccessSheet.copyText(this, "Jangada LAN", link, R.string.lan_copied)
+        }
+        findViewById<Button>(R.id.lan_status_stop).setOnClickListener {
+            service?.stopLanServer()
+            renderLanStatus()
+        }
         findViewById<Button>(R.id.projects_open).setOnClickListener { startActivity(Intent(this, ProjectsActivity::class.java)) }
+        findViewById<Button>(R.id.lan_access_open).setOnClickListener { openLanSheet() }
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
@@ -615,7 +637,10 @@ class HomeActivity : JangadaActivity() {
                 else showCloneFailure(done)
             }
         },
-        onDisconnected = { service = null },
+        onDisconnected = {
+            service = null
+            renderLanStatus()
+        },
     )
 
     // ---- O que está instalado e em que versão ----
@@ -1137,6 +1162,7 @@ class HomeActivity : JangadaActivity() {
      * terminais. Com 4 ou mais linhas, aparece a fileira de filtros acima.
      */
     private fun renderSessions() {
+        renderLanStatus()
         sessionsList.removeAllViews()
         jobDetails.clear()
         val jobs = orderedJobs()
@@ -1691,6 +1717,42 @@ class HomeActivity : JangadaActivity() {
     private fun formatSize(kb: Long): String =
         if (kb >= 1024 * 1024) String.format(java.util.Locale.getDefault(), "%.1f GB", kb / 1048576.0)
         else "${(kb + 512) / 1024} MB"
+
+    private fun openLanSheet() {
+        val svc = service ?: return
+        io.github.jonjonesbr.jangada.ui.LanAccessSheet.show(this, svc) { renderLanStatus() }
+    }
+
+    private fun renderLanStatus() {
+        val status = service?.lanStatus()
+        val running = status != null && status.running
+        openLanAccess.setColorFilter(
+            androidx.core.content.ContextCompat.getColor(
+                this,
+                if (running) R.color.setup_done else R.color.setup_muted_text,
+            ),
+        )
+        if (!running) {
+            lanStatusCard.visibility = View.GONE
+            return
+        }
+        val pin = status!!.pin.orEmpty()
+        val spacedPin = if (pin.length == 6) "${pin.substring(0, 3)} ${pin.substring(3)}" else pin
+        val lines = mutableListOf<String>()
+        if (status.url != null) {
+            lines += status.url
+            lines += "${getString(R.string.lan_pin_label)}: $spacedPin"
+        } else {
+            lines += getString(R.string.lan_status_no_ip, status.port, spacedPin)
+        }
+        lines += if (status.connectedClients <= 0) {
+            getString(R.string.lan_connected_none)
+        } else {
+            getString(R.string.lan_connected_count, status.connectedClients)
+        }
+        lanStatusText.text = lines.joinToString("\n")
+        lanStatusCard.visibility = View.VISIBLE
+    }
 
     private fun updatedKey(id: String) = "updated_$id"
 
