@@ -235,6 +235,10 @@ class LanServerTest {
         }
         assertNotNull(firstEvent)
         assertTrue(firstEvent!!.contains("claude-code|demo"))
+        // O servidor manda o snapshot e só depois registra o cliente (LanServer): espera o registro,
+        // senão o teste corre com a thread do servidor e falha de vez em quando.
+        val deadline = System.currentTimeMillis() + 2_000
+        while (srv.connectedClients == 0 && System.currentTimeMillis() < deadline) Thread.sleep(10)
         assertEquals(1, srv.connectedClients)
 
         val sendConn = (URL("$base/api/chats/send").openConnection() as HttpURLConnection).apply {
