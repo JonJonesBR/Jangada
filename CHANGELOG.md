@@ -4,6 +4,7 @@
 
 - Chat do OpenCode: preset de economia, ligado nas Configurações ou por trabalho no chat (menu ⋮, ajustes e painel de contexto). Usa o modelo barato do plano OpenCode Go nos agentes de apoio (título, resumo e compactação) e compacta mais cedo, gravado num arquivo próprio do app; o `opencode.json` do usuário não é lido nem alterado.
 - Concisão das respostas: ajuste geral nas Configurações e por trabalho no chat, do normal ao muito curto. No Claude vale na hora; nos outros agentes, a partir de uma conversa nova.
+- Chat: seleção parcial do texto das mensagens, para copiar comandos e trechos; o botão Copiar ao lado do horário copia a resposta inteira num toque.
 
 ## 1.35.0
 
