@@ -291,4 +291,19 @@ object LanJson {
             .put("id", conv.id)
             .put("title", conv.title)
             .put("updatedAt", conv.updatedAt)
+
+    /**
+     * Histórico dos agentes ACP: o protocolo não devolve trecho, então o filtro é só pelo título.
+     * Lista nula ou vazia vira array vazio (agente parado ou que não lista conversas).
+     */
+    fun sessionsToJson(sessions: List<ChatHistory.Conversation>?, query: String?): JSONArray {
+        val arr = JSONArray()
+        if (sessions.isNullOrEmpty()) return arr
+        val text = query?.trim().orEmpty()
+        for (conv in sessions) {
+            if (text.isNotEmpty() && !conv.title.contains(text, ignoreCase = true)) continue
+            arr.put(conversationToJson(conv))
+        }
+        return arr
+    }
 }

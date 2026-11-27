@@ -99,6 +99,16 @@
   let catalogTimer = null;
   let catalogHadRunning = false;
 
+  // Comandos "/" que o app atende (os mesmos da tela do Android).
+  const APP_COMMANDS = [
+    { name: "new", description: "Nova conversa" },
+    { name: "clear", description: "Limpar a conversa e começar uma nova" },
+    { name: "reset", description: "Igual a /new" },
+    { name: "resume", description: "Retomar uma conversa anterior" },
+    { name: "compact", description: "Resumir a conversa para liberar espaço" },
+  ];
+  const APP_COMMAND_NAMES = APP_COMMANDS.map((c) => c.name);
+
   function showAuth(msg) {
     if (eventSource) {
       eventSource.close();
@@ -277,14 +287,19 @@
         historyList.innerHTML = '<div class="muted">Sem conversas anteriores nesta pasta.</div>';
         return;
       }
+      // Apagar conversa só existe no histórico do Claude (os agentes ACP apagam pelo próprio chat).
+      const canDelete = agentId === "claude-code";
       for (const c of convs) {
         const btn = document.createElement("div");
         btn.className = "chat-item-btn";
         const snippetHtml = c.snippet ? `<div class="history-snippet">${escapeHtml(c.snippet)}</div>` : "";
+        const deleteHtml = canDelete
+          ? '<button type="button" class="btn ghost tiny del-hist-btn" title="Excluir conversa">×</button>'
+          : "";
         btn.innerHTML = `
           <div class="chat-item-top">
             <span>${escapeHtml(c.title)}</span>
-            <button type="button" class="btn ghost tiny del-hist-btn" title="Excluir conversa">×</button>
+            ${deleteHtml}
           </div>
           ${snippetHtml}
         `;
@@ -295,15 +310,18 @@
           });
           sidebar.classList.remove("open");
         };
-        btn.querySelector(".del-hist-btn").onclick = async (ev) => {
-          ev.stopPropagation();
-          if (!confirm(`Excluir a conversa "${c.title}" do histórico?`)) return;
-          await api("/api/history/delete", {
-            method: "POST",
-            body: JSON.stringify({ agentId, folder, id: c.id }),
-          });
-          loadHistory(agentId, folder, historySearch.value);
-        };
+        const delBtn = btn.querySelector(".del-hist-btn");
+        if (delBtn) {
+          delBtn.onclick = async (ev) => {
+            ev.stopPropagation();
+            if (!confirm(`Excluir a conversa "${c.title}" do histórico?`)) return;
+            await api("/api/history/delete", {
+              method: "POST",
+              body: JSON.stringify({ agentId, folder, id: c.id }),
+            });
+            loadHistory(agentId, folder, historySearch.value);
+          };
+        }
         historyList.appendChild(btn);
       }
     } catch {
@@ -1788,6 +1806,106 @@
     }
   }
 
+  /** Comandos do app que este chat oferece (mesmas regras da tela do Android). */
+  function appCommandsFor(chat) {
+    return APP_COMMANDS.filter((c) => {
+      if (c.name === "resume") return !!chat.supportsHistory;
+      if (c.name === "compact") {
+        return (chat.commands || []).some((ac) => String(ac.name).replace(/^\//, "").toLowerCase() === "compact");
+      }
+      return true;
+    });
+  }
+
+  /** Limpa a caixa, os anexos e o rascunho do trabalho antes de um comando do app. */
+  function clearComposerForCommand(chat) {
+    messageInput.value = "";
+    messageInput.style.height = "auto";
+    localStorage.removeItem(`jangada_draft_${chat.key}`);
+    pendingAttachments.forEach((a) => { if (a.previewUrl) URL.revokeObjectURL(a.previewUrl); });
+    pendingAttachments = [];
+    renderPendingAttachments();
+    slashPopover.classList.add("hidden");
+  }
+
+  /** Executa um comando do app: os do agente continuam sendo enviados como texto. */
+  async function runAppCommand(chat, name) {
+    if (name === "resume") {
+      clearComposerForCommand(chat);
+      showHistoryFor(chat);
+      return;
+    }
+    if (name === "compact") {
+      // Mesmo caminho do Enviar, sem deixar o texto na caixa.
+      clearComposerForCommand(chat);
+      await api("/api/chats/send", {
+        method: "POST",
+        body: JSON.stringify({ key: chat.key, text: "/compact", attachments: [] }),
+      });
+      return;
+    }
+    // new, clear e reset começam uma conversa nova; se não deu, o texto e os anexos ficam.
+    if (await startNewConversation(chat)) clearComposerForCommand(chat);
+  }
+
+  /**
+   * Pede ao servidor uma conversa nova (restart), fechando a atual no agente.
+   * Devolve true só quando a conversa nova realmente começou.
+   */
+  async function startNewConversation(chat) {
+    if (chat.busy) {
+      alert("O agente ainda está respondendo. Espere o turno terminar para começar uma conversa nova.");
+      return false;
+    }
+    if (chat.running && (chat.background || []).length > 0) {
+      alert("O agente ainda tem uma tarefa em segundo plano. Espere terminar para começar uma conversa nova.");
+      return false;
+    }
+    const res = await api("/api/chats/open", {
+      method: "POST",
+      body: JSON.stringify({ agentId: chat.agentId, folder: chat.folder, restart: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.key) {
+      selectedKey = data.key;
+      localStorage.setItem("jangada_selected_key", selectedKey);
+      return true;
+    }
+    if (data.error === "max_chats_reached") {
+      alert("Não há memória para abrir outro agente agora. Feche um trabalho ou ponha outro para dormir.");
+    } else if (data.error === "linux_not_ready") {
+      alert("O Linux ainda não está pronto.");
+    } else {
+      alert("Não foi possível começar uma conversa nova.");
+    }
+    return false;
+  }
+
+  /** Abre e recarrega o histórico do chat atual (o /resume do app). */
+  function showHistoryFor(chat) {
+    if (!chat.supportsHistory) {
+      alert(`O ${chat.agentName} não compartilha as conversas anteriores com o app.`);
+      return;
+    }
+    if (chat.agentId !== "claude-code" && !chat.running) {
+      alert(`${chat.agentName} não está rodando. Mande uma mensagem para acordar e use /resume de novo.`);
+      return;
+    }
+    historySection.classList.remove("hidden");
+    // Força a recarga, já com a lista inteira (o /resume não herda a busca anterior).
+    historySearch.value = "";
+    historyLoadedKey = null;
+    loadHistory(chat.agentId, chat.folder, "");
+    // Marca de novo com a pasta atual: sem isso, o próximo snapshot zeraria a busca digitada.
+    historyLoadedKey = `${chat.agentId}|${chat.folder}`;
+    // Só tem efeito na largura de celular; no computador o painel já está visível.
+    sidebar.classList.add("open");
+    setTimeout(() => {
+      historySection.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      historySearch.focus();
+    }, 0);
+  }
+
   function updateSlashPopover() {
     const chat = currentChat();
     const val = messageInput.value;
@@ -1796,7 +1914,17 @@
       return;
     }
     const q = val.slice(1).toLowerCase();
-    const matches = (chat.commands || []).filter((c) => c.name.toLowerCase().includes(q)).slice(0, 12);
+    // Primeiro os comandos do app; depois os do agente, sem repetir os nomes que o app atende.
+    const appMatches = appCommandsFor(chat)
+      .filter((c) => c.name.toLowerCase().startsWith(q))
+      .map((c) => ({ ...c, isApp: true }));
+    const agentMatches = (chat.commands || [])
+      .filter((c) => {
+        const name = String(c.name).replace(/^\//, "");
+        return name.toLowerCase().startsWith(q) && !APP_COMMAND_NAMES.includes(name.toLowerCase());
+      })
+      .map((c) => ({ ...c, isApp: false }));
+    const matches = [...appMatches, ...agentMatches].slice(0, 12);
     if (matches.length === 0) {
       slashPopover.classList.add("hidden");
       return;
@@ -1806,9 +1934,14 @@
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "slash-item";
-      const cmdText = c.name.startsWith("/") ? c.name : `/${c.name}`;
+      const name = String(c.name).replace(/^\//, "");
+      const cmdText = `/${name}`;
       btn.innerHTML = `<span class="slash-name">${escapeHtml(cmdText)}</span><span class="muted small-text">${escapeHtml(c.description || "")}</span>`;
       btn.onclick = () => {
+        if (c.isApp) {
+          runAppCommand(chat, name.toLowerCase());
+          return;
+        }
         messageInput.value = `${cmdText} `;
         slashPopover.classList.add("hidden");
         messageInput.focus();
@@ -1941,10 +2074,7 @@
   newConvBtn.addEventListener("click", async () => {
     const chat = currentChat();
     if (!chat) return;
-    await api("/api/chats/open", {
-      method: "POST",
-      body: JSON.stringify({ agentId: chat.agentId, folder: chat.folder, restart: true }),
-    });
+    await startNewConversation(chat);
   });
 
   openTermBtn.addEventListener("click", async () => {
@@ -2126,6 +2256,18 @@
     const chat = currentChat();
     const text = messageInput.value;
     if (!chat || (!text.trim() && pendingAttachments.length === 0)) return;
+    // Comandos do app não vão para o agente; com anexos, o envio segue normal.
+    const appCmd = text.trim().toLowerCase();
+    if (pendingAttachments.length === 0 && ["/new", "/clear", "/reset"].includes(appCmd)) {
+      // Se a conversa não pôde começar (agente respondendo), o texto fica na caixa.
+      if (await startNewConversation(chat)) clearComposerForCommand(chat);
+      return;
+    }
+    if (pendingAttachments.length === 0 && appCmd === "/resume") {
+      clearComposerForCommand(chat);
+      showHistoryFor(chat);
+      return;
+    }
     const attachments = pendingAttachments.map((a) => ({
       name: a.name,
       guestPath: a.guestPath,

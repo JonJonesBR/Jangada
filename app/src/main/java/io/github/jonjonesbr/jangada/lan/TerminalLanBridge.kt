@@ -45,6 +45,7 @@ import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 
 /**
@@ -158,8 +159,8 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun listHistory(agentId: String, folder: String, query: String?): JSONArray {
+        if (agentId != TerminalService.CLAUDE) return listAcpHistory(agentId, folder, query)
         val arr = JSONArray()
-        if (agentId != TerminalService.CLAUDE) return arr
         val linux = LinuxEnv(service)
         if (!linux.isReady) return arr
         val cleanFolder = Workspace.existing(linux.rootfs, folder)
@@ -174,6 +175,28 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
             }
         }
         return arr
+    }
+
+    /** Histórico de um agente ACP pelo protocolo (session/list); sem agente rodando, lista vazia. */
+    private fun listAcpHistory(agentId: String, folder: String, query: String?): JSONArray {
+        val chat = onMain {
+            service.chats[TerminalService.chatKey(agentId, folder)]?.chat as? AcpChat
+        } ?: return JSONArray()
+        if (!chat.running || !chat.supportsHistory) return JSONArray()
+        // A callback do session/list chega na thread principal; a resposta HTTP é montada nesta
+        // thread, que espera a lista (com limite) para o navegador não receber o histórico pela metade.
+        val latch = CountDownLatch(1)
+        val result = AtomicReference<List<ChatHistory.Conversation>?>(null)
+        onMain {
+            chat.listSessions { sessions ->
+                result.set(sessions)
+                latch.countDown()
+            }
+        }
+        // Interrupção (servidor encerrando) ou agente que não responde: lista vazia, sem derrubar a conexão.
+        val done = runCatching { latch.await(10, TimeUnit.SECONDS) }.getOrDefault(false)
+        if (!done) return JSONArray()
+        return LanJson.sessionsToJson(result.get(), query)
     }
 
     override fun closeChat(key: String): Boolean = onMain {

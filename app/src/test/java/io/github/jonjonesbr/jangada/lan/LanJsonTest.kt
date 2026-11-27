@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada.lan
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.ChatAttention
+import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.ContextUsage
 import io.github.jonjonesbr.jangada.chat.LimitWindow
@@ -102,5 +103,19 @@ class LanJsonTest {
         assertEquals("42", perm.getString("requestId"))
         assertTrue(perm.getJSONArray("questions").length() == 1)
         assertEquals("plan", items.getJSONObject(4).getString("type"))
+    }
+
+    @Test
+    fun listaSessoesAcpComFiltroPorTitulo() {
+        val sessions = listOf(
+            ChatHistory.Conversation("s1", "Ajustar o login", 200L),
+            ChatHistory.Conversation("s2", "Corrigir o terminal", 100L),
+        )
+        assertEquals(2, LanJson.sessionsToJson(sessions, null).length())
+        val filtrado = LanJson.sessionsToJson(sessions, "LOGIN")
+        assertEquals(1, filtrado.length())
+        assertEquals("s1", filtrado.getJSONObject(0).getString("id"))
+        assertEquals(0, LanJson.sessionsToJson(sessions, "relatório").length())
+        assertEquals(0, LanJson.sessionsToJson(null, null).length())
     }
 }
