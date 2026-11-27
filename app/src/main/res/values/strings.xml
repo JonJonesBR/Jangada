@@ -45,7 +45,7 @@
 
     <string name="home_subtitle">Your AI agents, running on your phone</string>
     <string name="home_open_terminal">Open terminal</string>
-    <string name="home_running">Running</string>
+    <string name="home_running">Open jobs</string>
     <string name="home_filter_all">All</string>
     <string name="home_filter_waiting">Needs you</string>
     <string name="home_filter_root">~/projetos</string>
@@ -202,6 +202,8 @@
     <string name="chat_stop">Stop</string>
     <string name="chat_hint">Message Claude</string>
     <string name="chat_empty">Talk to %1$s here. It works in the ~/projetos folder.\n\nTap &gt;_ at the top to open the agent’s full screen.</string>
+    <string name="chat_empty_folder">Talk to %1$s here. It works in the ~/projetos/%2$s folder.\n\nTap &gt;_ at the top to open the agent’s full screen.</string>
+    <string name="chat_empty_worktree">Talk to %1$s here. It works in the isolated copy ~/projetos/%2$s, from %3$s.\n\nTap &gt;_ at the top to open the agent’s full screen.</string>
     <string name="chat_allow">Allow</string>
     <string name="chat_deny">Deny</string>
     <string name="chat_copied">Copied</string>

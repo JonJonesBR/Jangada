@@ -338,7 +338,7 @@ class ChatActivity : JangadaActivity() {
         intent.removeExtra(EXTRA_FOLDER)
         folder = Workspace.existing(linux.rootfs, requested)
         updateTitle()
-        empty.text = getString(R.string.chat_empty, agentName)
+        empty.text = emptyText()
         input.hint = getString(R.string.chat_hint_agent, agentName)
         // Rascunho deste trabalho (o que ficou na caixa ao sair). Girar a tela não entra aqui: o próprio
         // campo restaura o texto. Vem antes do "Enter envia" (mais abaixo), para uma quebra de linha
@@ -807,7 +807,20 @@ class ChatActivity : JangadaActivity() {
     private fun showReady() {
         setPreparing(false)
         prepareActions.visibility = View.GONE
-        empty.text = getString(R.string.chat_empty, agentName)
+        empty.text = emptyText()
+    }
+
+    /**
+     * Texto do chat vazio: diz a pasta real do trabalho — a raiz, uma subpasta ou a cópia isolada
+     * (worktree) e de qual repositório ela veio.
+     */
+    private fun emptyText(): String {
+        val origin = folderWorktreeOf
+        return when {
+            folder.isEmpty() -> getString(R.string.chat_empty, agentName)
+            origin != null -> getString(R.string.chat_empty_worktree, agentName, folder, origin)
+            else -> getString(R.string.chat_empty_folder, agentName, folder)
+        }
     }
 
     /** Falha: últimas linhas do log, com Tentar de novo e Detalhes. O campo segue desligado até dar certo. */
@@ -987,6 +1000,8 @@ class ChatActivity : JangadaActivity() {
                 folderWorktreeOf = worktreeOf
                 folderInfoRead = true
                 updateTitle()
+                // O vazio segue o texto informativo; "preparando" e falha de instalação não são sobrescritos.
+                if (!preparing) empty.text = emptyText()
                 updateQuickbar()
                 readChanges()
                 then?.invoke()

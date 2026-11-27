@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Ordem da Home, de cima para baixo: cabeçalho e avisos; "Novo trabalho"; "Em andamento" (trabalhos
-    abertos, perto do botão); "Agentes" (uma linha compacta por agente); e "Sistema" no fim, recolhível.
+    Ordem da Home, de cima para baixo: cabeçalho e avisos; "Novo trabalho"; "Trabalhos abertos"
+    (perto do botão); "Agentes" (uma linha compacta por agente); e "Sistema" no fim, recolhível.
 -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -249,7 +249,7 @@
             android:textStyle="bold"
             android:visibility="gone" />
 
-        <!-- "Em andamento": trabalhos abertos, logo abaixo de "Novo trabalho" (ver HomeActivity.renderJobsSection). -->
+        <!-- "Trabalhos abertos": os trabalhos prontos, parados ou dormindo, logo abaixo de "Novo trabalho" (ver HomeActivity.renderJobsSection). -->
         <TextView
             android:id="@+id/running_title"
             style="@style/HomeSection"

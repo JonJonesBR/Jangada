@@ -43,7 +43,7 @@
 
     <string name="home_subtitle">Seus agentes de IA, rodando no celular</string>
     <string name="home_open_terminal">Abrir terminal</string>
-    <string name="home_running">Em andamento</string>
+    <string name="home_running">Trabalhos abertos</string>
     <string name="home_filter_all">Todos</string>
     <string name="home_filter_waiting">Esperando você</string>
     <string name="home_filter_root">~/projetos</string>
@@ -200,6 +200,8 @@
     <string name="chat_stop">Parar</string>
     <string name="chat_hint">Mensagem para o Claude</string>
     <string name="chat_empty">Converse com o %1$s aqui. Ele trabalha na pasta ~/projetos.\n\nToque em &gt;_ no topo para abrir a tela completa do agente.</string>
+    <string name="chat_empty_folder">Converse com o %1$s aqui. Ele trabalha na pasta ~/projetos/%2$s.\n\nToque em &gt;_ no topo para abrir a tela completa do agente.</string>
+    <string name="chat_empty_worktree">Converse com o %1$s aqui. Ele trabalha na cópia isolada ~/projetos/%2$s, de %3$s.\n\nToque em &gt;_ no topo para abrir a tela completa do agente.</string>
     <string name="chat_allow">Permitir</string>
     <string name="chat_deny">Recusar</string>
     <string name="chat_copied">Copiado</string>

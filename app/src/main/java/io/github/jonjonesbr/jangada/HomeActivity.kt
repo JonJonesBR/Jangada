@@ -1189,8 +1189,12 @@ class HomeActivity : JangadaActivity() {
                 stateText(this, state),
             )
             row.contentDescription = baseDescription
+            // O detalhe nasce escondido: só aparece com relatório de memória (ver renderJobDetails).
+            // O texto padrão do layout fica para as linhas de terminal, que não têm memória a mostrar.
+            val detail = row.findViewById<TextView>(R.id.session_detail)
+            detail.visibility = View.GONE
             jobDetails[TerminalService.chatKey(slot.agentId, slot.folder)] =
-                JobDetail(row.findViewById<TextView>(R.id.session_detail), row, baseDescription)
+                JobDetail(detail, row, baseDescription)
             row.setOnClickListener { openChat(slot.agentId, slot.folder) }
             row.findViewById<Button>(R.id.session_close).setOnClickListener {
                 // Trabalho rodando ou esperando você para na hora: pergunta antes. Parado ou pronto fecha direto.
@@ -1352,12 +1356,21 @@ class HomeActivity : JangadaActivity() {
 
     /** Texto de detalhe de cada linha de trabalho e a descrição da linha (só troca o que mudou). */
     private fun renderJobDetails(svc: TerminalService, usage: Map<String, JobMemory.Usage?>) {
-        val back = getString(R.string.session_back)
         for ((key, job) in jobDetails) {
             val slot = svc.chats[key] ?: continue
-            val text = jobMemoryText(this, slot.chat, usage[key]) ?: back
-            if (job.detail.text.toString() != text) job.detail.text = text
-            val description = if (text == back) job.baseDescription else job.baseDescription + " " + text
+            val memory = jobMemoryText(this, slot.chat, usage[key])
+            // Sem relatório de memória a linha fica só com o estado; o convite repetido não diz nada.
+            if (memory == null) {
+                if (job.detail.visibility != View.GONE) job.detail.visibility = View.GONE
+                if (job.detail.text.isNotEmpty()) job.detail.text = ""
+                if (job.row.contentDescription?.toString() != job.baseDescription) {
+                    job.row.contentDescription = job.baseDescription
+                }
+                continue
+            }
+            if (job.detail.visibility != View.VISIBLE) job.detail.visibility = View.VISIBLE
+            if (job.detail.text.toString() != memory) job.detail.text = memory
+            val description = job.baseDescription + " " + memory
             if (job.row.contentDescription?.toString() != description) job.row.contentDescription = description
         }
     }
