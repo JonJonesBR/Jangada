@@ -73,7 +73,7 @@ class CallServerTest {
         assertEquals(setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE), mode)
         val data = conf(root)
         assertEquals("${server!!.port}", data["port"])
-        assertEquals(64, data["token"]!!.length)
+        assertEquals(48, data["token"]!!.length) // 24 bytes em hexadecimal
     }
 
     @Test
