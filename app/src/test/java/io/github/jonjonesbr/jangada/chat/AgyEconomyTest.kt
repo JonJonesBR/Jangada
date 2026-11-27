@@ -103,7 +103,8 @@ class AgyEconomyTest {
     fun esforcoMedio() {
         val choices = listOf("low" to "Low", "medium" to "Medium", "high" to "High")
         assertEquals("medium", AgyEconomy.pickEffort(choices))
-        assertEquals("medium", AgyEconomy.pickEffort(listOf("m" to "MEDIUM")))
+        // O que volta é o value da opção, mesmo que o nome seja diferente.
+        assertEquals("m", AgyEconomy.pickEffort(listOf("m" to "MEDIUM")))
     }
 
     @Test
