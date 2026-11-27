@@ -932,6 +932,16 @@
     <string name="opencode_economy_global">Follow the general setting (%1$s)</string>
     <string name="opencode_economy_from_general">Follows the general setting</string>
     <string name="opencode_economy_note">Applies when the agent starts: stop it and send the message again to apply now. Your opencode.json is not changed.</string>
+
+    <string name="settings_agy_economy">Antigravity (agy) economy</string>
+<string name="settings_agy_economy_desc">Compacts earlier, keeps tool reads smaller and starts new conversations on a single cheap model with medium effort. Applies when the agent starts; your agy settings are not changed.</string>
+    <string name="settings_agy_economy_label">Antigravity (agy) economy: %1$s</string>
+    <string name="agy_economy_title">Antigravity (agy) economy</string>
+    <string name="agy_economy_on">On</string>
+    <string name="agy_economy_off">Off</string>
+    <string name="agy_economy_global">Follow the general setting (%1$s)</string>
+    <string name="agy_economy_from_general">Follows the general setting</string>
+    <string name="agy_economy_note">Applies when the agent starts: stop it and send the message again to apply now. Compaction at 55%, reads of 4 KB/120 lines, and in new conversations the Hydrogen (Medium) model with medium effort (Neon, Carbon, then 3.8 Flash if it is not available).</string>
     <string name="chat_auto_compacting">Compacting the conversation automatically (context at %1$d%%).</string>
     <string name="opencode_auth_row">Accounts and keys</string>
     <string name="opencode_auth_row_desc">Connect providers with your own key, or go back to the free plan</string>

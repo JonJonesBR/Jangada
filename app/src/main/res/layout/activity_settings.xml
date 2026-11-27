@@ -415,6 +415,29 @@
                 android:textColor="@color/setup_muted_text"
                 android:textSize="13sp" />
 
+            <!-- Economia do agy (Antigravity): preset próprio do app, nos chats do agy e no terminal. -->
+            <TextView
+                style="@style/HomeSection"
+                android:text="@string/settings_agy_economy" />
+
+            <Button
+                android:id="@+id/settings_agy_economy"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:minHeight="48dp"
+                android:textColor="@color/accent_text" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_agy_economy_desc"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
             <!-- Avançado: CPU, tela, teclas extras e contas dos agentes. -->
             <TextView
                 style="@style/HomeSection"

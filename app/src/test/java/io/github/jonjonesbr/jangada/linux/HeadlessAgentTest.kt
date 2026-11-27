@@ -48,6 +48,15 @@ class HeadlessAgentTest {
     }
 
     @Test
+    fun agyComEconomiaUsaEsforcoMedio() {
+        val read = HeadlessAgent.command("antigravity", role(AgentRoles.REVISOR), "revise", null, agyEconomy = true)!!
+        assertEquals("timeout -k 5 300 agy --mode plan --effort medium -p 'revise'", read)
+        // Sem economia, o comando fica igual ao de sempre.
+        val plain = HeadlessAgent.command("antigravity", role(AgentRoles.REVISOR), "revise", null)!!
+        assertTrue(!plain.contains("--effort"))
+    }
+
+    @Test
     fun agenteDesconhecidoNaoTemChamada() {
         assertNull(HeadlessAgent.command("codex", role(AgentRoles.REVISOR), "x", null))
     }

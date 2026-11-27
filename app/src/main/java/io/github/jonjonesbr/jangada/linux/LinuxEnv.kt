@@ -8,6 +8,7 @@ import android.os.SystemClock
 import android.util.Log
 import io.github.jonjonesbr.jangada.AppSettings
 import io.github.jonjonesbr.jangada.agents.AgentCatalog
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import java.io.File
 import java.io.IOException
 import kotlin.concurrent.thread
@@ -358,7 +359,13 @@ class LinuxEnv(context: Context) {
         // Instaladores como o do Claude Code colocam o programa em ~/.local/bin;
         // BROWSER faz os agentes abrirem links pelo app.
         val profileD = File(etc, "profile.d")
-        if (ensureRealDir(profileD)) writeReplacing(File(profileD, "jangada.sh"), PROFILE_SCRIPT)
+        // O preset de economia do agy acrescenta os exports dele ao perfil (só o ajuste geral vale aqui).
+        val profile = if (AppSettings(app).agyEconomy == AgyEconomy.ON) {
+            PROFILE_SCRIPT + AgyEconomy.profileExports()
+        } else {
+            PROFILE_SCRIPT
+        }
+        if (ensureRealDir(profileD)) writeReplacing(File(profileD, "jangada.sh"), profile)
 
         // jangada-open: entrega um link ao app. Também atende como xdg-open etc.
         val bin = File(rootfs, "usr/local/bin")

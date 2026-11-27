@@ -44,12 +44,14 @@ import io.github.jonjonesbr.jangada.chat.ModeText
 import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AutoCompact
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.concisenessText
 import io.github.jonjonesbr.jangada.chat.openCodeEconomyText
+import io.github.jonjonesbr.jangada.chat.agyEconomyText
 import io.github.jonjonesbr.jangada.chat.autoCompactShort
 import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.PlanLimits
@@ -1532,6 +1534,7 @@ class ChatActivity : JangadaActivity() {
         rows += autoCompactRow()
         rows += concisenessRow()
         if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
+        if (recipe?.id == AcpChat.AGY_ID) rows += agyEconomyRow()
         if (isClaude) rows += codeModeRow()
         Sheet(this)
             .title(getString(R.string.chat_context_title))
@@ -2027,6 +2030,7 @@ class ChatActivity : JangadaActivity() {
         rows += autoCompactRow()
         rows += concisenessRow()
         if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
+        if (recipe?.id == AcpChat.AGY_ID) rows += agyEconomyRow()
         if (isClaude) rows += codeModeRow()
         rows += Sheet.Row(
             title = getString(R.string.chat_export),
@@ -2083,6 +2087,7 @@ class ChatActivity : JangadaActivity() {
             icon = "📊",
         ) { openCode.openUsage() }
         if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
+        if (recipe?.id == AcpChat.AGY_ID) rows += agyEconomyRow()
         // Sem ajustes do agente (ou sem chat pronto), o painel mostra a pasta e a visualização, que são do app.
         if (!isClaude) rows += optionRows(engine as? AcpChat)
         // Agente pronto que não oferece modos: diz que ele pergunta antes de agir (em vez de sumir sem explicação).
@@ -2584,6 +2589,45 @@ class ChatActivity : JangadaActivity() {
         Sheet(this)
             .title(getString(R.string.opencode_economy_title))
             .message(getString(R.string.opencode_economy_note))
+            .rows(rows)
+            .show()
+    }
+
+    /**
+     * Linha do preset de economia do agy neste trabalho (menu ⋮ e ajustes). O valor é o efetivo;
+     * quando vem do ajuste geral, a descrição diz isso.
+     */
+    private fun agyEconomyRow(): Sheet.Row {
+        val job = settings.agyEconomyOfJob(chatKey)
+        val fromGeneral = job == AgyEconomy.GLOBAL
+        return Sheet.Row(
+            title = getString(R.string.agy_economy_title),
+            description = if (fromGeneral) getString(R.string.agy_economy_from_general) else null,
+            value = agyEconomyText(this, if (fromGeneral) settings.agyEconomy else job),
+            icon = "💰",
+        ) { chooseAgyEconomy() }
+    }
+
+    /**
+     * Escolha do preset de economia deste trabalho: o ajuste geral, ligado ou desligado. O preset é
+     * lido quando o agente inicia; a nota avisa disso e que os ajustes do agy não mudam.
+     */
+    private fun chooseAgyEconomy() {
+        val job = settings.agyEconomyOfJob(chatKey)
+        val rows = mutableListOf(
+            Sheet.Row(
+                title = getString(R.string.agy_economy_global, agyEconomyText(this, settings.agyEconomy)),
+                checked = job == AgyEconomy.GLOBAL,
+            ) { settings.setAgyEconomyOfJob(chatKey, AgyEconomy.GLOBAL) },
+        )
+        rows += AgyEconomy.GENERAL.map { value ->
+            Sheet.Row(title = agyEconomyText(this, value), checked = job == value) {
+                settings.setAgyEconomyOfJob(chatKey, value)
+            }
+        }
+        Sheet(this)
+            .title(getString(R.string.agy_economy_title))
+            .message(getString(R.string.agy_economy_note))
             .rows(rows)
             .show()
     }

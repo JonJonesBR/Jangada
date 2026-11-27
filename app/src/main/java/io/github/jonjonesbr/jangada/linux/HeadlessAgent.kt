@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada.linux
 
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.chat.AgentRoles
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import org.json.JSONObject
 import java.nio.file.Path
 
@@ -42,7 +43,13 @@ object HeadlessAgent {
      * Comando do turno (sem o `cd`). [readOnlyConfig] é o caminho da config de leitura do OpenCode;
      * devolve null para agente sem chamada implementada.
      */
-    fun command(agentId: String, role: AgentRoles.Role, prompt: String, readOnlyConfig: String?): String? {
+    fun command(
+        agentId: String,
+        role: AgentRoles.Role,
+        prompt: String,
+        readOnlyConfig: String?,
+        agyEconomy: Boolean = false,
+    ): String? {
         val q = AgentRecipe.q(prompt)
         val read = role.scope == AgentRoles.Scope.READ
         val model = role.model(agentId)?.let { " --model ${AgentRecipe.q(it)}" }.orEmpty()
@@ -64,7 +71,9 @@ object HeadlessAgent {
             }
             "antigravity" -> {
                 val perms = if (read) "--mode plan" else "--mode auto --dangerously-skip-permissions"
-                timeout + "agy $perms -p $q"
+                // Economia do agy: esforço médio no turno. Sem --model: não dá para saber se o modelo existe sem consultar o agy.
+                val effort = if (agyEconomy) " --effort ${AgyEconomy.EFFORT}" else ""
+                timeout + "agy $perms$effort -p $q"
             }
             else -> null
         }
@@ -81,12 +90,13 @@ object HeadlessAgent {
         cwd: String,
         prompt: String,
         onStart: ((Process) -> Unit)? = null,
+        agyEconomy: Boolean = false,
     ): Result {
         if (prompt.isBlank()) return Result(false, "pedido vazio")
         if (prompt.length > MAX_PROMPT) return Result(false, "pedido grande demais (máximo $MAX_PROMPT caracteres)")
         val config = if (role.scope == AgentRoles.Scope.READ) readOnlyConfig(linux) else null
         if (role.scope == AgentRoles.Scope.READ && config == null) return Result(false, "não deu para preparar a config de leitura")
-        val body = command(agentId, role, prompt, config) ?: return Result(false, "este agente ainda não aceita chamada")
+        val body = command(agentId, role, prompt, config, agyEconomy) ?: return Result(false, "este agente ainda não aceita chamada")
         val out = StringBuilder()
         // O filho não pode chamar outro: a profundidade já é 1.
         val script = "cd ${AgentRecipe.q(cwd)} || exit 1; export JANGADA_CALL_DEPTH=1; $body"

@@ -11,6 +11,7 @@ import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import io.github.jonjonesbr.jangada.chat.AgentRoles
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
@@ -19,6 +20,7 @@ import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.concisenessText
 import io.github.jonjonesbr.jangada.chat.openCodeEconomyText
+import io.github.jonjonesbr.jangada.chat.agyEconomyText
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.HeadlessAgent
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
@@ -305,6 +307,31 @@ class SettingsActivity : JangadaActivity() {
                         Sheet.Row(title = openCodeEconomyText(this, value), checked = value == settings.openCodeEconomy) {
                             settings.openCodeEconomy = value
                             showOpenCodeEconomy()
+                        }
+                    },
+                )
+                .show()
+        }
+
+        // Economia do agy (Antigravity): preset próprio do app (ver AgyEconomy), só nos chats do agy e no
+        // terminal. Também só vale quando o agente inicia de novo.
+        val agyButton = findViewById<Button>(R.id.settings_agy_economy)
+        fun showAgyEconomy() {
+            val value = agyEconomyText(this, settings.agyEconomy)
+            agyButton.text = value
+            agyButton.contentDescription = getString(R.string.settings_agy_economy_label, value)
+        }
+        showAgyEconomy()
+        agyButton.setOnClickListener {
+            Sheet(this)
+                .title(getString(R.string.agy_economy_title))
+                .rows(
+                    AgyEconomy.GENERAL.map { value ->
+                        Sheet.Row(title = agyEconomyText(this, value), checked = value == settings.agyEconomy) {
+                            settings.agyEconomy = value
+                            showAgyEconomy()
+                            // O terminal lê as variáveis do /etc/profile.d: regrava agora.
+                            thread(name = "agy-economy") { runCatching { linuxForTips.refreshIntegration() } }
                         }
                     },
                 )

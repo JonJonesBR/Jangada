@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada
 import android.content.Context
 import android.content.SharedPreferences
 import io.github.jonjonesbr.jangada.chat.AgentRoles
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
@@ -21,6 +22,9 @@ class AppSettings(context: Context) {
     /** Economia do OpenCode por trabalho (arquivo próprio): chave = TerminalService.chatKey. */
     private val openCodeEconomyPrefs =
         context.applicationContext.getSharedPreferences("open_code_economy", Context.MODE_PRIVATE)
+    /** Economia do agy por trabalho (arquivo próprio): chave = TerminalService.chatKey. */
+    private val agyEconomyPrefs =
+        context.applicationContext.getSharedPreferences("agy_economy", Context.MODE_PRIVATE)
 
     /** Modo Simples: chat e caixa de texto por padrão. Modo Pro: terminal primeiro. */
     var simpleMode: Boolean
@@ -252,6 +256,25 @@ class AppSettings(context: Context) {
     fun openCodeEconomyFor(key: String): Boolean =
         OpenCodeEconomy.effective(openCodeEconomy, openCodeEconomyPrefs.getString(key, null))
 
+    /** Preset de economia do agy, ajuste geral (ver AgyEconomy): "on" ou "off". */
+    var agyEconomy: String
+        get() = AgyEconomy.normalizeGeneral(prefs.getString(KEY_AGY_ECONOMY, AgyEconomy.OFF))
+        set(value) = prefs.edit().putString(KEY_AGY_ECONOMY, AgyEconomy.normalizeGeneral(value)).apply()
+
+    /** Economia do agy de um trabalho ([key] = TerminalService.chatKey); "global" segue o geral. */
+    fun agyEconomyOfJob(key: String): String =
+        AgyEconomy.normalizeJob(agyEconomyPrefs.getString(key, null))
+
+    /** Guarda a economia do agy de um trabalho; "global" tira a chave (o trabalho volta a seguir o geral). */
+    fun setAgyEconomyOfJob(key: String, value: String) {
+        if (value == AgyEconomy.GLOBAL) agyEconomyPrefs.edit().remove(key).apply()
+        else agyEconomyPrefs.edit().putString(key, AgyEconomy.normalizeJob(value)).apply()
+    }
+
+    /** Se o preset de economia vale para o trabalho [key]: o dele, ou o geral (ver AgyEconomy.effective). */
+    fun agyEconomyFor(key: String): Boolean =
+        AgyEconomy.effective(agyEconomy, agyEconomyPrefs.getString(key, null))
+
     /** Deixa um agente chamar outro pelo `jangada-call` (chat e terminal). Desligado por padrão. */
     var agentCalls: Boolean
         get() = prefs.getBoolean(KEY_AGENT_CALLS, false)
@@ -295,6 +318,9 @@ class AppSettings(context: Context) {
         val economyEditor = openCodeEconomyPrefs.edit()
         openCodeEconomyPrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { economyEditor.remove(it) }
         economyEditor.apply()
+        val agyEconomyEditor = agyEconomyPrefs.edit()
+        agyEconomyPrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { agyEconomyEditor.remove(it) }
+        agyEconomyEditor.apply()
         // A pasta não existe mais: a preferência de abrir direto nela também some.
         setDirectFolder(folder, false)
         if (chatFolder == folder) chatFolder = ""
@@ -330,6 +356,13 @@ class AppSettings(context: Context) {
             economyEditor.remove(key)
         }
         economyEditor.apply()
+        val agyEconomyEditor = agyEconomyPrefs.edit()
+        for ((key, value) in agyEconomyPrefs.all) {
+            val moved = ProjectOps.movedKey(key, old, new) ?: continue
+            if (value is String) agyEconomyEditor.putString(moved, value)
+            agyEconomyEditor.remove(key)
+        }
+        agyEconomyEditor.apply()
         // A preferência de abrir direto acompanha o novo nome (sem cópia: putStringSet guarda o conjunto).
         val folders = directFolders()
         if (old != new && old in folders) {
@@ -424,6 +457,7 @@ class AppSettings(context: Context) {
         private const val KEY_CODE_MODE = "code_mode"
         private const val KEY_CONCISENESS = "conciseness"
         private const val KEY_OPEN_CODE_ECONOMY = "open_code_economy"
+        private const val KEY_AGY_ECONOMY = "agy_economy"
         private const val KEY_AGENT_CALLS = "agent_calls"
         private const val KEY_CALL_ROLE = "call_role|"
         private const val KEY_AUTO_CLEAN = "auto_clean"

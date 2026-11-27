@@ -35,6 +35,8 @@ class AcpChat(
     private val concisionPrefix: () -> String = { "" },
     /** Preset de economia deste trabalho, lido na subida do agente (ver OpenCodeEconomy/OpenCodePreset). */
     private val economy: () -> Boolean = { false },
+    /** Preset de economia do agy deste trabalho, lido na subida do agente (ver AgyEconomy). */
+    private val agyEconomy: () -> Boolean = { false },
     /** Trabalho deste chat (ver TerminalService.chatKey): vai no ambiente para o `jangada-call` saber quem chamou. */
     private val callerKey: String = "",
 ) : ProcessChat(linux, TAG) {
@@ -204,6 +206,9 @@ class AcpChat(
                     .getOrNull()
                     ?.let { "export OPENCODE_CONFIG=${AgentRecipe.q(it)}; " }
                     .orEmpty()
+            } else if (agentId == AGY_ID && runCatching { agyEconomy() }.getOrDefault(false)) {
+                // Economia do agy: só variáveis de ambiente; nada nos ajustes dele é alterado.
+                AgyEconomy.envPrefix()
             } else {
                 ""
             }
@@ -862,9 +867,20 @@ class AcpChat(
      */
     private fun restoreChoices() {
         val batch = nextRestores(configOptions, restored, agentId, restoringModel) { category ->
-            choicesBeforeStop[category] ?: appSettings.acpDefault(agentId, category)?.first
+            choicesBeforeStop[category] ?: appSettings.acpDefault(agentId, category)?.first ?: presetDefault(category)
         }
         for ((option, saved) in batch) setOption(option, saved, remember = false, restoring = true)
+    }
+
+    /** Modelo e raciocínio do preset de economia do agy: só em conversa nova, só no agy e só sem escolha salva do usuário. */
+    private fun presetDefault(category: String): String? {
+        if (!newConversation || agentId != AGY_ID || !runCatching { agyEconomy() }.getOrDefault(false)) return null
+        val choices = configOptions.firstOrNull { it.category == category }?.choices ?: return null
+        return when (category) {
+            "model" -> AgyEconomy.pickModel(choices)
+            "thought_level" -> AgyEconomy.pickEffort(choices)
+            else -> null
+        }
     }
 
     /** Muda um ajuste da conversa (modelo, raciocínio, modo...). [remember]: guarda como padrão do agente. */

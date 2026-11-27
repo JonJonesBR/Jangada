@@ -30,6 +30,7 @@ import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.chat.AcpChat
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.AgentRoles
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.ChatAttention
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
@@ -411,6 +412,8 @@ class TerminalService : Service() {
                 concisionPrefix = { Conciseness.promptPrefix(settings.conciseness, settings.concisenessOfJob(key)) },
                 // Preset de economia do OpenCode deste trabalho, lido quando o agente inicia.
                 economy = { settings.openCodeEconomyFor(key) },
+                // Preset de economia do agy deste trabalho, lido quando o agente inicia.
+                agyEconomy = { settings.agyEconomyFor(key) },
                 callerKey = key,
             )
         }
@@ -503,7 +506,10 @@ class TerminalService : Service() {
             main.post { if (chats[call.chat]?.chat === caller) caller.addInfo(text, isError) }
         }
         tell(getString(R.string.call_started, who), false)
-        val result = HeadlessAgent.run(linux, call.agent, role, cwd, call.prompt)
+        // Economia do agy no turno chamado: o ajuste do trabalho chamador ou, vindo do terminal, o geral.
+        val agyEconomy = if (call.chat.isEmpty()) settings.agyEconomy == AgyEconomy.ON
+        else settings.agyEconomyFor(call.chat)
+        val result = HeadlessAgent.run(linux, call.agent, role, cwd, call.prompt, agyEconomy = agyEconomy)
         val text = if (result.text.length > cardText) result.text.take(cardText) + "…" else result.text
         tell(if (result.ok) getString(R.string.call_done, who, text) else getString(R.string.call_failed, who, text), !result.ok)
         return if (result.ok) CallServer.Reply(200, result.text) else CallServer.Reply(500, result.text)
