@@ -1,5 +1,10 @@
 # Novidades
 
+## 1.38.1
+
+- Limites do plano: botão "Atualizar agora" no painel do chip, nos agentes que conseguem reler sem esperar uma resposta (Codex, OpenCode e agy). No Claude o botão não aparece: o limite só chega junto com a resposta.
+- Tela inicial: os limites de Codex e OpenCode são relidos ao abrir o app (no máximo a cada 2 minutos), para o cartão não mostrar valor velho.
+
 ## 1.38.0
 
 - Acesso pelo computador: os comandos `/` do app funcionam no PC, iguais aos do celular. `/new`, `/clear` e `/reset` começam uma conversa nova, `/resume` abre o Histórico e `/compact` compacta a conversa; antes os três primeiros e o `/resume` iam como texto para o agente. O Histórico agora lista e retoma também as conversas dos agentes ACP (OpenCode, Codex, agy e outros), não só as do Claude.

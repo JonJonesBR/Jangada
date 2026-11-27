@@ -1,0 +1,1 @@
+Limites do plano: botão Atualizar agora no painel do chip, nos agentes que conseguem reler sem esperar uma resposta (Codex, OpenCode e agy). Na tela inicial, os limites de Codex e OpenCode são atualizados ao abrir o app, no máximo a cada 2 minutos.

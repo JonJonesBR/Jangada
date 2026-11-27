@@ -1,0 +1,1 @@
+Plan limits: a Refresh now button in the chip panel, for agents that can re-read without waiting for a reply (Codex, OpenCode and agy). On the home screen, Codex and OpenCode limits are refreshed when the app opens, at most every 2 minutes.
