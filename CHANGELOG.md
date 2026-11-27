@@ -1,5 +1,10 @@
 # Novidades
 
+## 1.36.0
+
+- Chat do OpenCode: preset de economia, ligado nas Configurações ou por trabalho no chat (menu ⋮, ajustes e painel de contexto). Usa o modelo barato do plano OpenCode Go nos agentes de apoio (título, resumo e compactação) e compacta mais cedo, gravado num arquivo próprio do app; o `opencode.json` do usuário não é lido nem alterado.
+- Concisão das respostas: ajuste geral nas Configurações e por trabalho no chat, do normal ao muito curto. No Claude vale na hora; nos outros agentes, a partir de uma conversa nova.
+
 ## 1.35.0
 
 - Acesso pelo computador (rede local): servidor HTTP/SSE embutido no app com interface web sincronizada em tempo real com o celular, protegida por PIN de 6 dígitos e link clicável com login automático via `sslip.io` para compartilhar no WhatsApp.
