@@ -1,5 +1,12 @@
 # Novidades
 
+## 1.35.0
+
+- Acesso pelo computador (rede local): servidor HTTP/SSE embutido no app com interface web sincronizada em tempo real com o celular, protegida por PIN de 6 dígitos e link clicável com login automático via `sslip.io` para compartilhar no WhatsApp.
+- Interface web no PC com paridade completa: chat em tempo real com Markdown, permissões e perguntas do agente, troca de modelo e nível de raciocínio/esforço, cotas e uso de contexto (`/compact`), comandos `/`, anexos (upload, arrastar e soltar ou `Ctrl+V`), Git (status, diff, commit e sincronizar), projetos e worktrees, histórico do Claude, exportação `.md`, continuar com outro agente, terminal interativo, catálogo de agentes, Configurações (com chaves de API) e Sistema (memória, armazenamento e limpeza de caches).
+- Tela inicial e chat: atalho rápido na barra superior (verde quando o acesso pelo computador está ativo), cartão de status reorganizado e correção de quebra de linha no nome dos agentes (como OpenCode).
+- Ambiente Linux: normalização para quebras de linha LF nos scripts embutidos (`jangada-agent` e `tool-env.sh`) e `.gitattributes` para builds no Windows, além da variante `dev` (`Jangada Dev`) para testes paralelos no aparelho.
+
 ## 1.34.0
 
 - Chat do Claude: Code Mode (experimental), em que o Claude escreve um trecho de JavaScript que faz várias ações de uma vez. Liga nas Configurações (desligado por padrão) ou por trabalho no menu ⋮ do chat, com o aviso de que regras de permissão e hooks continuam sendo a barreira para ações sensíveis.

@@ -59,6 +59,25 @@ object Attachments {
         return Attachment(target.name, guestPath, if (image != null) "image/jpeg" else mime, image)
     }
 
+    /** Grava [bytes] direto em ~/projetos/anexos e prepara o anexo (rodar fora da thread principal). */
+    fun prepareBytes(linux: LinuxEnv, rawName: String, mimeType: String, bytes: ByteArray): Attachment {
+        val mime = mimeType.ifBlank { "application/octet-stream" }
+        val name = safeName(rawName.ifBlank { "anexo" })
+        val dir = attachmentsDir(linux.rootfs)
+        val target = unique(dir, name)
+        try {
+            copyLimited(bytes.inputStream(), target)
+        } catch (e: FileAlreadyExistsException) {
+            throw e
+        } catch (e: Exception) {
+            target.delete()
+            throw e
+        }
+        val guestPath = "/root/${LinuxEnv.WORKSPACE}/$DIR/${target.name}"
+        val image = if (mime.startsWith("image/")) encodeImage(target) else null
+        return Attachment(target.name, guestPath, if (image != null) "image/jpeg" else mime, image)
+    }
+
     /**
      * Refaz um anexo guardado no rascunho, se o arquivo ainda estiver em ~/projetos/anexos. Só aceita
      * um arquivo direto nessa pasta, sem ".." e sem link (no arquivo nem nas pastas acima). Imagem

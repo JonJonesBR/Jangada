@@ -51,6 +51,16 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
+        <ImageView
+            android:id="@+id/chat_lan_access"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/lan_shortcut_desc"
+            android:padding="12dp"
+            android:src="@drawable/ic_lan_computer"
+            android:tint="@color/setup_muted_text" />
+
         <TextView
             android:id="@+id/chat_terminal"
             style="@style/BarButton"

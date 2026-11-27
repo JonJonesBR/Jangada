@@ -53,6 +53,16 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
+            <ImageView
+                android:id="@+id/open_lan_access"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/lan_shortcut_desc"
+                android:padding="12dp"
+                android:src="@drawable/ic_lan_computer"
+                android:tint="@color/setup_muted_text" />
+
             <TextView
                 android:id="@+id/open_settings"
                 android:layout_width="48dp"
@@ -104,6 +114,81 @@
                 android:textAllCaps="false"
                 android:textColor="@color/setup_on_accent"
                 android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Cartão de status do acesso pelo computador (visível apenas quando o servidor LAN está ativo). -->
+        <LinearLayout
+            android:id="@+id/lan_status_card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/card_bg"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/lan_status_title"
+                android:textColor="@color/setup_text"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/lan_status_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:lineSpacingMultiplier="1.2"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/lan_status_share"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:minHeight="44dp"
+                android:maxLines="1"
+                android:backgroundTint="@color/key_active"
+                android:text="@string/lan_share_link"
+                android:textAllCaps="false"
+                android:textColor="@color/setup_on_accent"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/lan_status_copy"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:text="@string/lan_copy_link"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_text" />
+
+                <Button
+                    android:id="@+id/lan_status_stop"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:minHeight="44dp"
+                    android:text="@string/lan_turn_off"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_text" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Boas-vindas: some quando o usuário toca em "Entendi". Vem alto porque é o primeiro contato. -->
@@ -435,6 +520,18 @@
                     android:layout_marginTop="12dp"
                     android:background="@drawable/card_bg"
                     android:text="@string/projects_open"
+                    android:textAllCaps="false"
+                    android:textColor="@color/setup_text"
+                    android:textSize="16sp" />
+
+                <Button
+                    android:id="@+id/lan_access_open"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="12dp"
+                    android:background="@drawable/card_bg"
+                    android:text="@string/home_lan_access"
                     android:textAllCaps="false"
                     android:textColor="@color/setup_text"
                     android:textSize="16sp" />

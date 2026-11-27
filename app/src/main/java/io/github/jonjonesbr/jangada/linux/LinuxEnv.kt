@@ -468,6 +468,7 @@ class LinuxEnv(context: Context) {
     /** Texto do asset linux/[name]; null (com aviso no log) se a leitura falhar. */
     private fun linuxAsset(name: String): String? = runCatching {
         app.assets.open("linux/$name").bufferedReader(Charsets.UTF_8).use { it.readText() }
+            .replace("\r\n", "\n").replace("\r", "\n")
     }.onFailure { Log.w(TAG, "não consegui ler o asset $name", it) }.getOrNull()
 
     /**

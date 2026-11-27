@@ -40,6 +40,9 @@ import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.limitKindName
 import io.github.jonjonesbr.jangada.chat.PermissionOption
 import io.github.jonjonesbr.jangada.chat.PermissionRisk
+import io.github.jonjonesbr.jangada.lan.LanNetwork
+import io.github.jonjonesbr.jangada.lan.LanServer
+import io.github.jonjonesbr.jangada.lan.TerminalLanBridge
 import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
 import io.github.jonjonesbr.jangada.linux.CACHE_FREED_PREFIX
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
@@ -86,6 +89,62 @@ class TerminalService : Service() {
     private val permissionNotices = HashSet<String>()
     /** Memória total do aparelho em bytes; -1 = ainda não lida (ver totalMem). */
     private var totalMemBytes = -1L
+    private var lanServer: LanServer? = null
+
+    data class LanStatus(
+        val running: Boolean,
+        val url: String?,
+        val pin: String?,
+        val port: Int,
+        val connectedClients: Int = 0,
+    )
+
+    val isLanRunning: Boolean get() = lanServer?.isRunning == true
+
+    fun lanStatus(): LanStatus {
+        val srv = lanServer
+        if (srv == null || !srv.isRunning) {
+            return LanStatus(running = false, url = null, pin = null, port = 0, connectedClients = 0)
+        }
+        val ip = LanNetwork.findLocalIpv4(this)
+        val url = ip?.let { "http://$it:${srv.port}" }
+        return LanStatus(
+            running = true,
+            url = url,
+            pin = srv.auth.currentPin(),
+            port = srv.port,
+            connectedClients = srv.connectedClients,
+        )
+    }
+
+    fun startLanServer(): LanStatus {
+        val current = lanServer
+        if (current != null && current.isRunning) return lanStatus()
+        val srv = LanServer(
+            bridge = TerminalLanBridge(this),
+            onClientsChanged = { main.post { sessionsChanged() } },
+        )
+        srv.start()
+        lanServer = srv
+        goForeground()
+        sessionsChanged()
+        return lanStatus()
+    }
+
+    fun stopLanServer() {
+        val srv = lanServer ?: return
+        lanServer = null
+        srv.stop()
+        sessionsChanged()
+        leaveForegroundIfIdle()
+    }
+
+    fun regenerateLanPin(): LanStatus {
+        val srv = lanServer ?: return lanStatus()
+        srv.regeneratePin()
+        sessionsChanged()
+        return lanStatus()
+    }
 
     /** Último trabalho de chat que esteve na tela (chave de [chatKey]): o toque na notificação volta para ele. */
     private var lastChat: String? = null
@@ -145,6 +204,10 @@ class TerminalService : Service() {
 
     fun addSessionsListener(listener: () -> Unit) { sessionListeners += listener }
     fun removeSessionsListener(listener: () -> Unit) { sessionListeners -= listener }
+
+    private val terminalTextListeners = java.util.concurrent.CopyOnWriteArrayList<(String) -> Unit>()
+    fun addTerminalTextListener(listener: (String) -> Unit) { terminalTextListeners += listener }
+    fun removeTerminalTextListener(listener: (String) -> Unit) { terminalTextListeners -= listener }
 
     /** Instalação ou atualização de um agente rodando em segundo plano. */
     class AgentTask(val recipe: AgentRecipe, val updating: Boolean, val uninstalling: Boolean = false) {
@@ -499,6 +562,8 @@ class TerminalService : Service() {
     }
 
     override fun onDestroy() {
+        lanServer?.stop()
+        lanServer = null
         memoryWatch.stop()
         main.removeCallbacks(autoCleanCheck)
         main.removeCallbacks(applyDns)
@@ -699,7 +764,13 @@ class TerminalService : Service() {
             if (task.cancelled) task.append(getString(R.string.task_cancelled))
             task.state = if (exit == 0 && !task.cancelled) AgentTask.State.OK else AgentTask.State.FAILED
             main.post {
+                if (task.state == AgentTask.State.OK) {
+                    val current = AgentPrefs.installedCommands(this)?.toMutableSet() ?: HashSet()
+                    if (task.uninstalling) current -= task.recipe.command else current += task.recipe.command
+                    AgentPrefs.saveInstalledCommands(this, current)
+                }
                 onTasksChanged?.invoke()
+                sessionsChanged()
                 updateNotification()
                 // Com a tela inicial fechada, avisa que a tarefa terminou (cancelada não avisa).
                 // Com a fila andando, um aviso só no fim, mostrando a primeira falha se houve.
@@ -1121,7 +1192,7 @@ class TerminalService : Service() {
 
     private fun hasWork() =
         liveSessions() > 0 || chats.isNotEmpty() || hasRunningTasks() || taskQueue.isNotEmpty() ||
-            cleaningCaches() || Setup.state is Setup.State.Running || foregroundHolds > 0
+            cleaningCaches() || Setup.state is Setup.State.Running || foregroundHolds > 0 || isLanRunning
 
     /** Tarefas das telas que pediram o primeiro plano (backup, restauração). Só a thread principal mexe. */
     private var foregroundHolds = 0
@@ -1246,6 +1317,8 @@ class TerminalService : Service() {
     }
 
     private fun exit() {
+        lanServer?.stop()
+        lanServer = null
         tearDownSessions().forEach { it.stop() }
         cancelRunningTasks()
         sessionListeners.forEach { it() }
@@ -1260,6 +1333,8 @@ class TerminalService : Service() {
      * A espera fica numa thread própria: a saída dos chats é contada na principal.
      */
     fun closeEverything(then: () -> Unit) {
+        lanServer?.stop()
+        lanServer = null
         val gone = tearDownSessions()
         // O vigia de links fica numa pasta do Linux que vai sumir: para e solta. startLinkWatcher o
         // recria na próxima sessão ou chat, que só existem depois que o Linux volta.
@@ -1376,6 +1451,11 @@ class TerminalService : Service() {
             )
             cleaningCaches() -> getString(R.string.storage_cleaning)
             foregroundHolds > 0 && count == 0 -> getString(R.string.service_backup)
+            isLanRunning && count == 0 -> getString(R.string.service_lan_active)
+            isLanRunning -> getString(
+                R.string.service_sessions_with_lan,
+                resources.getQuantityString(R.plurals.service_sessions, count, count),
+            )
             else -> resources.getQuantityString(R.plurals.service_sessions, count, count)
         }
         return Notification.Builder(this, CHANNEL_SESSIONS)
@@ -1684,6 +1764,7 @@ class TerminalService : Service() {
     private val proxyClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) {
             screenClient?.onTextChanged(changedSession)
+            terminalTextListeners.forEach { it(changedSession.mHandle) }
         }
         override fun onTitleChanged(changedSession: TerminalSession) {
             screenClient?.onTitleChanged(changedSession)

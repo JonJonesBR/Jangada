@@ -151,6 +151,15 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
     }
 
     private var lastPost = 0L
+    private val changeListeners = java.util.concurrent.CopyOnWriteArrayList<() -> Unit>()
+
+    override fun addChangeListener(listener: () -> Unit) {
+        changeListeners += listener
+    }
+
+    override fun removeChangeListener(listener: () -> Unit) {
+        changeListeners -= listener
+    }
 
     /**
      * Inicia o agente. [prepare] roda fora da thread principal, antes do
@@ -514,11 +523,13 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         }
         lastPost = now
         onChanged?.invoke()
+        changeListeners.forEach { it() }
     }
 
     private val notifyRunnable = Runnable {
         lastPost = System.currentTimeMillis()
         onChanged?.invoke()
+        changeListeners.forEach { it() }
     }
 
     private companion object {
