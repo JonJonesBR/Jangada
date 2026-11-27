@@ -263,6 +263,8 @@
     <string name="chat_history_unsupported">%s doesn’t share its past conversations with the app</string>
     <string name="chat_terminal_note">In the terminal, %s opens its own screen in a new conversation</string>
     <string name="chat_copy_code">Copy</string>
+    <string name="chat_copy_answer">Copy</string>
+    <string name="chat_copy_answer_desc">Copy the whole answer</string>
     <string name="chat_plan">Plan</string>
     <string name="chat_allow_always">Always allow in this conversation</string>
     <string name="chat_allow_always_command">Always allow this command in this conversation</string>

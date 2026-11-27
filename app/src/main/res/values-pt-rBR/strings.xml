@@ -261,6 +261,8 @@
     <string name="chat_history_unsupported">O %s não compartilha as conversas anteriores com o app</string>
     <string name="chat_terminal_note">No terminal, o %s abre a tela dele numa conversa nova</string>
     <string name="chat_copy_code">Copiar</string>
+    <string name="chat_copy_answer">Copiar</string>
+    <string name="chat_copy_answer_desc">Copiar a resposta inteira</string>
     <string name="chat_plan">Plano</string>
     <string name="chat_allow_always">Permitir sempre nesta conversa</string>
     <string name="chat_allow_always_command">Sempre permitir este comando nesta conversa</string>

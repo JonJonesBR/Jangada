@@ -201,12 +201,29 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
             if (body == null) box.addView(codeBlock(part)) else box.addView(prose(body, item, last))
         }
         if (!item.streaming && item.timestampMs > 0L) {
-            box.addView(TextView(activity).apply {
+            val footer = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            footer.addView(TextView(activity).apply {
                 text = formatTime(item.timestampMs)
                 setTextColor(getColor(R.color.setup_muted_text))
                 textSize = 11.5f * chatScale
                 setPadding(dp(4), dp(2), dp(4), 0)
             })
+            // Copiar a resposta inteira num toque: segurar o texto agora seleciona um trecho.
+            footer.addView(TextView(activity).apply {
+                setText(R.string.chat_copy_answer)
+                setTextColor(getColor(R.color.accent_text))
+                textSize = 11.5f * chatScale
+                gravity = Gravity.CENTER
+                minWidth = dp(48)
+                minHeight = dp(48)
+                setPadding(dp(8), 0, dp(4), 0)
+                contentDescription = getString(R.string.chat_copy_answer_desc)
+                setOnClickListener { activity.copy(item.text) }
+            })
+            box.addView(footer)
         }
         return box
     }
