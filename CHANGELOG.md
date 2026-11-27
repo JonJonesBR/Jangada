@@ -1,5 +1,11 @@
 # Novidades
 
+## 1.38.0
+
+- Acesso pelo computador: os comandos `/` do app funcionam no PC, iguais aos do celular. `/new`, `/clear` e `/reset` começam uma conversa nova, `/resume` abre o Histórico e `/compact` compacta a conversa; antes os três primeiros e o `/resume` iam como texto para o agente. O Histórico agora lista e retoma também as conversas dos agentes ACP (OpenCode, Codex, agy e outros), não só as do Claude.
+- Acesso pelo computador: backup e restauração pelo navegador (com barra de progresso e envio que não estoura mais o tempo), e reparar e reinstalar o Linux pelo PC.
+- Configurações do PC completas: concisão das respostas, preset de economia do OpenCode e do agy, chamadas entre agentes (com os papéis fixos), tempo para dormir por inatividade e as demais opções do celular.
+
 ## 1.37.0
 
 - Chat do OpenCode: preset de economia, ligado nas Configurações ou por trabalho no chat (menu ⋮, ajustes e painel de contexto). Usa o modelo barato do plano OpenCode Go nos agentes de apoio (título, resumo e compactação) e compacta mais cedo, gravado num arquivo próprio do app; o `opencode.json` do usuário não é lido nem alterado.
