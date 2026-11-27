@@ -720,17 +720,18 @@ class LanServer(
                     LanHttp.writeJson(out, 409, "Conflict", JSONObject().put("error", "backup_busy"))
                     return false
                 }
-                try {
-                    // Upload de ~1 MB/s, com piso de 10 min e teto de 60 min.
+                // Upload de ~1 MB/s, com piso de 10 min; o maior corpo aceito fica abaixo de 25 min.
+                val result = try {
                     socket.soTimeout = restoreTimeoutMs(req.bodyLength)
                     // O LimitedInputStream é aplicado aqui; o bridge repassa direto ao tar.
                     val limited = LanHttp.LimitedInputStream(input, req.bodyLength.toLong())
-                    val result = bridge.restoreBackup(limited, req.bodyLength)
-                    val ok = result.optBoolean("ok", false)
-                    LanHttp.writeJson(out, if (ok) 200 else 400, if (ok) "OK" else "Bad Request", result)
+                    bridge.restoreBackup(limited, req.bodyLength)
                 } finally {
+                    // Libera o slot antes de responder; se o restore estourar, a exceção sobe daqui.
                     bridge.endBackup()
                 }
+                val ok = result.optBoolean("ok", false)
+                LanHttp.writeJson(out, if (ok) 200 else 400, if (ok) "OK" else "Bad Request", result)
             }
             req.method == "POST" && req.path == "/api/linux/repair" -> {
                 // O bridge responde com o resultado real; a preparação abre no celular.
@@ -862,10 +863,11 @@ class LanServer(
         private const val BACKUP_STALL_NS = 120_000L * 1_000_000
         private const val BACKUP_WATCH_TICK_MS = 5_000L
 
-        /** Tempo do upload de restauração: ~1 MB/s, com piso de 10 min e teto de 60 min. */
-        internal fun restoreTimeoutMs(bodyLength: Int): Int {
-            val bySize = bodyLength / 1024L
-            return minOf(maxOf(10 * 60_000L, bySize), 60 * 60_000L).toInt()
-        }
+        /**
+         * Tempo do upload de restauração: ~1 MB/s, com piso de 10 min. Sem teto: o maior corpo
+         * aceito (BACKUP_MAX_BODY, 1,5 GB) dá ~1.465.000 ms, abaixo de 25 min.
+         */
+        internal fun restoreTimeoutMs(bodyLength: Int): Int =
+            maxOf(600_000L, bodyLength / 1024L).toInt()
     }
 }

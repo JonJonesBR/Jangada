@@ -738,11 +738,11 @@ class LanServerTest {
     }
 
     @Test
-    fun timeoutDeRestauracaoTemPisoProporcionalETeto() {
+    fun timeoutDeRestauracaoTemPisoEProporcional() {
         assertEquals(600_000, LanServer.restoreTimeoutMs(0))
         assertEquals(600_000, LanServer.restoreTimeoutMs(60 * 1024 * 1024))
         assertEquals(716_800, LanServer.restoreTimeoutMs(700 * 1024 * 1024))
-        assertEquals(3_600_000, LanServer.restoreTimeoutMs(1_500_000_000))
+        assertEquals(1_464_843, LanServer.restoreTimeoutMs(1_500_000_000))
     }
 
     @Test
