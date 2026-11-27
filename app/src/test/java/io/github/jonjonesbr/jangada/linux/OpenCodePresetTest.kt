@@ -21,7 +21,8 @@ class OpenCodePresetTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
-    private fun rootfs(): Path = tmp.newFolder("rootfs").toPath().also {
+    /** Rootfs de mentira com a home: cada chamada cria uma pasta própria (o TemporaryFolder não repete nome). */
+    private fun rootfs(): Path = tmp.newFolder().toPath().also {
         Files.createDirectories(it.resolve("root"))
     }
 
