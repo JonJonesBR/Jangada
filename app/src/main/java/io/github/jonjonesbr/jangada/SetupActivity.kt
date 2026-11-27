@@ -186,7 +186,13 @@ class SetupActivity : JangadaActivity() {
                 progress.visibility = View.VISIBLE
                 progress.isIndeterminate = state.progress == null
                 state.progress?.let { progress.progress = (it * 1000).toInt() }
-                detail.text = state.detail
+                // Nas ferramentas básicas a previsão fica fixa na primeira linha, com a saída do apt abaixo.
+                detail.text = if (state.step == Setup.Step.PACKAGES) {
+                    val hint = getString(R.string.setup_packages_hint)
+                    if (state.detail.isBlank()) hint else hint + "\n" + state.detail
+                } else {
+                    state.detail
+                }
                 error.visibility = View.GONE
                 action.visibility = View.GONE
                 issues.visibility = View.GONE
