@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
+import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.linux.ProjectOps
 
 /** Preferências do usuário (tela de configurações). */
@@ -13,6 +14,8 @@ class AppSettings(context: Context) {
     private val jobPrefs = context.applicationContext.getSharedPreferences("auto_compact", Context.MODE_PRIVATE)
     /** Code Mode por trabalho (arquivo próprio, para não misturar com a compactação): chave = TerminalService.chatKey. */
     private val codeModePrefs = context.applicationContext.getSharedPreferences("code_mode", Context.MODE_PRIVATE)
+    /** Concisão das respostas por trabalho (arquivo próprio): chave = TerminalService.chatKey. */
+    private val concisionPrefs = context.applicationContext.getSharedPreferences("conciseness", Context.MODE_PRIVATE)
 
     /** Modo Simples: chat e caixa de texto por padrão. Modo Pro: terminal primeiro. */
     var simpleMode: Boolean
@@ -208,6 +211,23 @@ class AppSettings(context: Context) {
     /** Se o Code Mode vale para o trabalho [key]: o dele, ou o geral (ver CodeMode.effective). */
     fun codeModeFor(key: String): Boolean = CodeMode.effective(codeMode, codeModePrefs.getString(key, null))
 
+    /** Concisão das respostas, ajuste geral (ver Conciseness); entra no bloco de instruções de todos os agentes. */
+    var conciseness: String
+        get() = Conciseness.normalizeGeneral(prefs.getString(KEY_CONCISENESS, Conciseness.NORMAL))
+        set(value) = prefs.edit().putString(KEY_CONCISENESS, Conciseness.normalizeGeneral(value)).apply()
+
+    /** Concisão de um trabalho ([key] = TerminalService.chatKey): um de Conciseness.JOB; "global" segue o geral. */
+    fun concisenessOfJob(key: String): String = Conciseness.normalizeJob(concisionPrefs.getString(key, null))
+
+    /** Guarda a concisão de um trabalho; "global" tira a chave (o trabalho volta a seguir o geral). */
+    fun setConcisenessOfJob(key: String, value: String) {
+        if (value == Conciseness.GLOBAL) concisionPrefs.edit().remove(key).apply()
+        else concisionPrefs.edit().putString(key, Conciseness.normalizeJob(value)).apply()
+    }
+
+    /** O nível que vale para o trabalho [key]: o dele, ou o geral (ver Conciseness.effective). */
+    fun concisenessFor(key: String): String = Conciseness.effective(conciseness, concisionPrefs.getString(key, null))
+
     /** Compactação automática de um trabalho ([key] = TerminalService.chatKey): um de AutoCompact.JOB; "global" segue o geral. */
     fun autoCompactOfJob(key: String): String = AutoCompact.normalizeJob(jobPrefs.getString(key, null))
 
@@ -232,6 +252,9 @@ class AppSettings(context: Context) {
         val codeEditor = codeModePrefs.edit()
         codeModePrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { codeEditor.remove(it) }
         codeEditor.apply()
+        val concisionEditor = concisionPrefs.edit()
+        concisionPrefs.all.keys.filter { ProjectOps.isKeyOf(it, folder) }.forEach { concisionEditor.remove(it) }
+        concisionEditor.apply()
         // A pasta não existe mais: a preferência de abrir direto nela também some.
         setDirectFolder(folder, false)
         if (chatFolder == folder) chatFolder = ""
@@ -253,6 +276,13 @@ class AppSettings(context: Context) {
             codeEditor.remove(key)
         }
         codeEditor.apply()
+        val concisionEditor = concisionPrefs.edit()
+        for ((key, value) in concisionPrefs.all) {
+            val moved = ProjectOps.movedKey(key, old, new) ?: continue
+            if (value is String) concisionEditor.putString(moved, value)
+            concisionEditor.remove(key)
+        }
+        concisionEditor.apply()
         // A preferência de abrir direto acompanha o novo nome (sem cópia: putStringSet guarda o conjunto).
         val folders = directFolders()
         if (old != new && old in folders) {
@@ -345,6 +375,7 @@ class AppSettings(context: Context) {
         private const val KEY_SLEEP_AFTER = "sleep_after_minutes"
         private const val KEY_AUTO_COMPACT = "auto_compact"
         private const val KEY_CODE_MODE = "code_mode"
+        private const val KEY_CONCISENESS = "conciseness"
         private const val KEY_AUTO_CLEAN = "auto_clean"
         private const val KEY_LAST_AUTO_CLEAN = "last_auto_clean_at"
         /** Pastas marcadas com "Sempre direto" no painel do novo trabalho (ver directFolder). */

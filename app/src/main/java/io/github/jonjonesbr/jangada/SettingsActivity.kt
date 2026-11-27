@@ -12,8 +12,10 @@ import android.widget.TextView
 import android.widget.Toast
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
+import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.codeModeText
+import io.github.jonjonesbr.jangada.chat.concisenessText
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
@@ -206,6 +208,30 @@ class SettingsActivity : JangadaActivity() {
         bindSwitch(R.id.settings_agent_tips, settings.agentMemoryTips) {
             settings.agentMemoryTips = it
             thread(name = "agent-tips") { runCatching { linuxForTips.refreshIntegration() } }
+        }
+
+        // Concisão das respostas: ajuste geral, que entra no bloco de instruções de todos os agentes.
+        // Não reinicia chat nenhum aqui; a integração é refeita já, em segundo plano, para a seção entrar ou sair.
+        val concisionButton = findViewById<Button>(R.id.settings_conciseness)
+        fun showConciseness() {
+            val value = concisenessText(this, settings.conciseness)
+            concisionButton.text = value
+            concisionButton.contentDescription = getString(R.string.conciseness_settings_label, value)
+        }
+        showConciseness()
+        concisionButton.setOnClickListener {
+            Sheet(this)
+                .title(getString(R.string.conciseness_title))
+                .rows(
+                    Conciseness.GENERAL.map { value ->
+                        Sheet.Row(title = concisenessText(this, value), checked = value == settings.conciseness) {
+                            settings.conciseness = value
+                            showConciseness()
+                            thread(name = "agent-concision") { runCatching { linuxForTips.refreshIntegration() } }
+                        }
+                    },
+                )
+                .show()
         }
 
         // ---- Aparência ----

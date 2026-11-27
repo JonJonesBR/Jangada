@@ -30,6 +30,8 @@ class AcpChat(
     private val agentId: String = "",
     /** Compactação automática deste trabalho (ver AutoCompact), lida a cada fim de turno. */
     private val autoCompact: () -> String = { AutoCompact.DEFAULT },
+    /** Instrução de concisão a prefixar na primeira mensagem de uma conversa nova (ver Conciseness); vazio não manda nada. */
+    private val concisionPrefix: () -> String = { "" },
 ) : ProcessChat(linux, TAG) {
 
     /** Pode compactar sozinho de novo? Some ao compactar e volta quando o contexto cai abaixo do percentual. */
@@ -154,6 +156,12 @@ class AcpChat(
      */
     private var skipReplay = false
 
+    /** Conversa nova nesta partida (sem [start] com resume): a concisão vai na primeira mensagem. */
+    private var newConversation = false
+
+    /** A concisão já foi prefixada nesta conversa nova (vale uma vez só). */
+    private var concisionSent = false
+
     /**
      * Inicia o agente; com [resume], recarrega essa conversa (se o agente suportar). [previous] é o
      * chat anterior do mesmo par: se era a mesma conversa, os itens dele voltam para a tela na hora.
@@ -178,6 +186,9 @@ class AcpChat(
             plan = items.lastOrNull { it is ChatItem.Plan } as? ChatItem.Plan
         }
         skipReplay = resume != null && items.isNotEmpty()
+        // Sem retomada, esta é uma conversa nova: a concisão vai prefixada na primeira mensagem.
+        newConversation = resume == null
+        concisionSent = false
         launch(interactive = true) {
             runCatching { linux.refreshIntegration(trustFolder = cwd) }.onFailure { Log.w(TAG, "integração", it) }
             "${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(launchCommand(command, agentId, autoApprove), jobId)}"
@@ -654,7 +665,17 @@ class AcpChat(
         }
         val blocks = JSONArray()
         val note = Attachments.filesNote(attachments, includeImages = !imageSupport)
-        blocks.put(JSONObject().put("type", "text").put("text", (text + note).ifBlank { " " }))
+        // Conversa nova e trabalho com nível próprio: a instrução vai uma vez, junto do texto (o
+        // protocolo não tem system prompt por sessão). O ChatItem.User já foi criado sem ela.
+        var outgoing = text
+        if (newConversation && !concisionSent) {
+            val prefix = concisionPrefix()
+            if (prefix.isNotEmpty()) {
+                outgoing = prefix + outgoing
+                concisionSent = true
+            }
+        }
+        blocks.put(JSONObject().put("type", "text").put("text", (outgoing + note).ifBlank { " " }))
         if (imageSupport) {
             for (image in attachments.filter { it.imageBase64 != null }) {
                 blocks.put(JSONObject().put("type", "image").put("mimeType", image.mimeType).put("data", image.imageBase64))

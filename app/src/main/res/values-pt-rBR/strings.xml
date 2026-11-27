@@ -893,6 +893,15 @@
     <string name="code_mode_chip_confirmed_description">Code Mode ligado e em uso. Toque para mudar.</string>
     <string name="code_mode_fixed_message">Esta conversa começou com o modo que tem agora e continua assim. O novo ajuste vale para a próxima conversa. Para usá-lo aqui, abra uma nova conversa; esta fica no Histórico.</string>
     <string name="code_mode_later">Agora não</string>
+    <string name="conciseness_title">Concisão das respostas</string>
+    <string name="conciseness_normal">Normal</string>
+    <string name="conciseness_short">Conciso</string>
+    <string name="conciseness_tiny">Muito conciso</string>
+    <string name="conciseness_from_general">Segue o ajuste geral</string>
+    <string name="conciseness_global">Seguir o ajuste geral (%1$s)</string>
+    <string name="conciseness_settings_label">Concisão das respostas: %1$s</string>
+    <string name="settings_conciseness_desc">Pede respostas curtas nas instruções de todos os agentes, inclusive no terminal.</string>
+    <string name="conciseness_note">No Claude vale na hora; nos outros agentes, a partir de uma conversa nova.</string>
     <string name="chat_auto_compacting">Compactando a conversa automaticamente (contexto em %1$d%%).</string>
     <string name="opencode_auth_row">Contas e chaves</string>
     <string name="opencode_auth_row_desc">Conecte provedores com a sua chave, ou volte ao plano free</string>

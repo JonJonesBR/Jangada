@@ -39,6 +39,8 @@ class ChatEngine(
     private val onWindowLearned: ((String, Long) -> Unit)? = null,
     /** Ajuste do Code Mode que vale para este trabalho (ver CodeMode); só conversas novas seguem o ajuste. */
     private val codeMode: Boolean = false,
+    /** Concisão deste trabalho (ver Conciseness); vazio segue o geral. */
+    private val concisionArg: String = "",
 ) : ProcessChat(linux, TAG) {
 
     @Volatile override var sessionId: String? = null
@@ -172,6 +174,7 @@ class ChatEngine(
         if (modelAlias.isNotEmpty()) args.append(" --model ").append(AgentRecipe.q(modelAlias))
         if (effort.isNotEmpty()) args.append(" --effort ").append(AgentRecipe.q(effort))
         args.append(CodeMode.chatArg(codeModeActive))
+        args.append(concisionArg)
         if (resume != null) args.append(" --resume=").append(AgentRecipe.q(resume))
         return args.toString()
     }

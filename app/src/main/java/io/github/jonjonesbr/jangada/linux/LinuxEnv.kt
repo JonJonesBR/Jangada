@@ -335,13 +335,19 @@ class LinuxEnv(context: Context) {
     private fun applyAgentInstructionsLocked() {
         synchronized(INSTRUCTIONS_LOCK) {
             // Lido dentro do lock: com o ajuste trocado duas vezes seguidas, vale o último.
-            val enabled = AppSettings(app).agentMemoryTips
+            val settings = AppSettings(app)
+            val enabled = settings.agentMemoryTips
+            val concision = settings.conciseness
             val now = SystemClock.elapsedRealtime()
             val last = instructionsApplied
-            if (last != null && last.first == enabled && now - last.second < INSTRUCTIONS_INTERVAL_MS) return
+            if (last != null && last.first == enabled && last.second == concision &&
+                now - last.third < INSTRUCTIONS_INTERVAL_MS
+            ) {
+                return
+            }
             // AgentCatalog já guarda as receitas em cache: os assets não mudam com o app aberto.
-            AgentInstructions.apply(this, AgentCatalog.load(app), enabled)
-            instructionsApplied = enabled to now
+            AgentInstructions.apply(this, AgentCatalog.load(app), enabled, concision)
+            instructionsApplied = Triple(enabled, concision, now)
         }
     }
 
@@ -554,8 +560,8 @@ class LinuxEnv(context: Context) {
         /** Serializa [applyAgentInstructions] (chamado de várias threads). */
         private val INSTRUCTIONS_LOCK = Any()
 
-        /** Última combinação aplicada (ajuste ligado?) e o momento (elapsedRealtime), só com [INSTRUCTIONS_LOCK]. */
-        @Volatile private var instructionsApplied: Pair<Boolean, Long>? = null
+        /** Última combinação aplicada (memória ligada?, concisão) e o momento (elapsedRealtime), só com [INSTRUCTIONS_LOCK]. */
+        @Volatile private var instructionsApplied: Triple<Boolean, String, Long>? = null
 
         /** Intervalo mínimo para reaplicar as instruções com o mesmo ajuste. */
         private const val INSTRUCTIONS_INTERVAL_MS = 60_000L

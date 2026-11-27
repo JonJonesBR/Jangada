@@ -45,7 +45,9 @@ import io.github.jonjonesbr.jangada.chat.Attachment
 import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
+import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.codeModeText
+import io.github.jonjonesbr.jangada.chat.concisenessText
 import io.github.jonjonesbr.jangada.chat.autoCompactShort
 import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.PlanLimits
@@ -1488,6 +1490,7 @@ class ChatActivity : JangadaActivity() {
         val rows = mutableListOf<Sheet.Row>()
         if (canCompact) rows += Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") }
         rows += autoCompactRow()
+        rows += concisenessRow()
         if (isClaude) rows += codeModeRow()
         Sheet(this)
             .title(getString(R.string.chat_context_title))
@@ -1981,6 +1984,7 @@ class ChatActivity : JangadaActivity() {
             icon = "⏏",
         ) { loadFolders { folders -> worktrees.showWorktreeFinish(folders) } }
         rows += autoCompactRow()
+        rows += concisenessRow()
         if (isClaude) rows += codeModeRow()
         rows += Sheet.Row(
             title = getString(R.string.chat_export),
@@ -2388,6 +2392,62 @@ class ChatActivity : JangadaActivity() {
     }
 
     /**
+     * Linha da concisão das respostas deste trabalho (painel do chip de contexto e menu ⋮). O valor é o
+     * efetivo; quando vem do ajuste geral, a descrição diz isso.
+     */
+    private fun concisenessRow(): Sheet.Row {
+        val job = settings.concisenessOfJob(chatKey)
+        val fromGeneral = job == Conciseness.GLOBAL
+        return Sheet.Row(
+            title = getString(R.string.conciseness_title),
+            description = if (fromGeneral) getString(R.string.conciseness_from_general) else null,
+            value = concisenessText(this, if (fromGeneral) settings.conciseness else job),
+            icon = "✂",
+        ) { chooseConciseness() }
+    }
+
+    /**
+     * Escolha da concisão deste trabalho: o ajuste geral ou um dos níveis. Nos agentes ACP, a nota
+     * explica que o texto vai na primeira mensagem de uma conversa nova.
+     */
+    private fun chooseConciseness() {
+        val job = settings.concisenessOfJob(chatKey)
+        val rows = mutableListOf(
+            Sheet.Row(
+                title = getString(R.string.conciseness_global, concisenessText(this, settings.conciseness)),
+                checked = job == Conciseness.GLOBAL,
+            ) { saveConciseness(Conciseness.GLOBAL) },
+        )
+        rows += Conciseness.GENERAL.map { value ->
+            Sheet.Row(title = concisenessText(this, value), checked = job == value) { saveConciseness(value) }
+        }
+        val sheet = Sheet(this).title(getString(R.string.conciseness_title))
+        if (!isClaude) sheet.message(getString(R.string.conciseness_note))
+        sheet.rows(rows).show()
+    }
+
+    /**
+     * Guarda a concisão do trabalho. No Claude a flag vai na linha de comando do chat: se o nível que
+     * vale mudou, reabre a mesma conversa (como o modelo e o esforço). Nos ACP, a instrução só entra na
+     * próxima conversa nova: aqui só salva.
+     */
+    private fun saveConciseness(value: String) {
+        if (settings.concisenessOfJob(chatKey) == value) return
+        val before = settings.concisenessFor(chatKey)
+        val after = Conciseness.effective(settings.conciseness, value)
+        if (after == before) {
+            settings.setConcisenessOfJob(chatKey, value)
+            return
+        }
+        // Mesmo critério da compactação: com turno ou tarefa em andamento, não salva nem reinicia.
+        if (isClaude && busyBlocks()) return
+        settings.setConcisenessOfJob(chatKey, value)
+        if (!isClaude) return
+        val svc = service ?: return
+        reopenChat(svc) { svc.openChat(agentId, folder = folder, resume = engine?.sessionId, restart = true) }
+    }
+
+    /**
      * Linha do Code Mode deste trabalho (só no Claude; painel do chip de contexto e menu ⋮). O valor é o
      * efetivo; quando vem do ajuste geral, a descrição diz isso.
      */
@@ -2523,6 +2583,8 @@ class ChatActivity : JangadaActivity() {
         }
         return CodeMode.terminalPrefix(codeMode) + AutoCompact.claudeEnvPrefix(autoCompact) +
             AgentRecipe.claudeIn(Workspace.path(folder), exec = false) + args +
+            // A conversa aberta no terminal mantém o nível de concisão deste chat.
+            Conciseness.chatArg(settings.conciseness, settings.concisenessOfJob(chatKey)) +
             AutoCompact.claudeEnvSuffix(autoCompact) + CodeMode.terminalSuffix(codeMode)
     }
 

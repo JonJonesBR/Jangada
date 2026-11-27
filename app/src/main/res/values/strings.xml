@@ -897,6 +897,15 @@
     <string name="code_mode_chip_confirmed_description">Code Mode on and in use. Tap to change.</string>
     <string name="code_mode_fixed_message">This conversation started with the mode it has now, and it stays that way. The new setting applies to the next conversation. To use it here, open a new conversation; this one stays in the History.</string>
     <string name="code_mode_later">Not now</string>
+    <string name="conciseness_title">Answer length</string>
+    <string name="conciseness_normal">Normal</string>
+    <string name="conciseness_short">Concise</string>
+    <string name="conciseness_tiny">Very concise</string>
+    <string name="conciseness_from_general">Follows the general setting</string>
+    <string name="conciseness_global">Follow the general setting (%1$s)</string>
+    <string name="conciseness_settings_label">Answer length: %1$s</string>
+    <string name="settings_conciseness_desc">Adds a request to answer briefly to the instructions of every agent, including the terminal.</string>
+    <string name="conciseness_note">On Claude the choice applies right away; on other agents, from a new conversation.</string>
     <string name="chat_auto_compacting">Compacting the conversation automatically (context at %1$d%%).</string>
     <string name="opencode_auth_row">Accounts and keys</string>
     <string name="opencode_auth_row_desc">Connect providers with your own key, or go back to the free plan</string>

@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada.linux
 import android.util.Log
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.agents.Instructions
+import io.github.jonjonesbr.jangada.chat.Conciseness
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
@@ -38,8 +39,21 @@ object AgentInstructions {
 
     private val NOFOLLOW = LinkOption.NOFOLLOW_LINKS
 
-    /** O bloco completo, pronto para gravar. */
-    fun block(): String = "$BEGIN\n$TEXT\n$END"
+    /** O bloco completo de hoje (orientação de memória, sem concisão), pronto para gravar. */
+    fun block(): String = block(memoryTips = true, concision = Conciseness.NORMAL)!!
+
+    /**
+     * O bloco com as seções pedidas: orientação de memória ([memoryTips]) e/ou concisão das
+     * respostas (ver [Conciseness]). Devolve null quando não há nada a escrever (memória
+     * desligada e nível normal).
+     */
+    fun block(memoryTips: Boolean, concision: String): String? {
+        val sections = ArrayList<String>()
+        if (memoryTips) sections += TEXT
+        if (Conciseness.normalizeGeneral(concision) != Conciseness.NORMAL) sections += Conciseness.instruction(concision)
+        if (sections.isEmpty()) return null
+        return "$BEGIN\n" + sections.joinToString("\n\n") + "\n$END"
+    }
 
     /** Como um candidato está no disco, para [target]. */
     enum class Found {
@@ -126,19 +140,24 @@ object AgentInstructions {
      * Grava (ou tira) o bloco nas receitas que têm [AgentRecipe.instructions]. O bloco fica só
      * no alvo de cada agente e sai dos outros candidatos (um arquivo que ficou vazio é apagado).
      * Com [enabled] falso, sai de todos. Cada receita é tratada à parte: uma falha (ou um link
-     * no caminho) não impede as outras.
+     * no caminho) não impede as outras. [concision] é o nível geral da concisão (ver [Conciseness]).
      */
-    fun apply(linux: LinuxEnv, recipes: List<AgentRecipe>, enabled: Boolean) {
-        apply(linux.rootfs.toPath(), recipes.mapNotNull { r -> r.instructions?.let { r.id to it } }, enabled)
+    fun apply(linux: LinuxEnv, recipes: List<AgentRecipe>, enabled: Boolean, concision: String = Conciseness.NORMAL) {
+        apply(linux.rootfs.toPath(), recipes.mapNotNull { r -> r.instructions?.let { r.id to it } }, enabled, concision)
     }
 
     /** [apply] sobre um rootfs qualquer (testes): pares id da receita e instruções. */
-    internal fun apply(root: Path, specs: List<Pair<String, Instructions>>, enabled: Boolean) {
+    internal fun apply(
+        root: Path,
+        specs: List<Pair<String, Instructions>>,
+        enabled: Boolean,
+        concision: String = Conciseness.NORMAL,
+    ) {
         // Sem o Debian instalado não há o que orientar.
         if (!Files.isDirectory(root, NOFOLLOW)) return
-        val wanted = if (enabled) block() else null
+        val wanted = block(enabled, concision)
         val targets: Map<String, String?> = specs.associate { (id, spec) ->
-            val chosen = if (!enabled) null else runCatching { target(spec) { classify(read(root, resolve(root, it))) } }
+            val chosen = if (wanted == null) null else runCatching { target(spec) { classify(read(root, resolve(root, it))) } }
                 .onFailure { Log.w(TAG, "alvo das instruções de $id: ${it.message}") }
                 .getOrNull()
             id to chosen

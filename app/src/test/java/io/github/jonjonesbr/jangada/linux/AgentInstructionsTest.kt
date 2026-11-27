@@ -1,6 +1,7 @@
 package io.github.jonjonesbr.jangada.linux
 
 import io.github.jonjonesbr.jangada.agents.Instructions
+import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.linux.AgentInstructions.Found
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -260,5 +261,53 @@ class AgentInstructionsTest {
         val root = tmp.newFolder("vazio").toPath()
         AgentInstructions.apply(root, listOf("codex" to codex), enabled = true)
         assertFalse(Files.exists(root.resolve("root")))
+    }
+
+    // ---- Concisão das respostas (ver Conciseness) ----
+
+    @Test
+    fun blocoComConcisaoSemMemoria() {
+        val short = Conciseness.instruction(Conciseness.SHORT)
+        val onlyConcision = AgentInstructions.block(memoryTips = false, concision = Conciseness.SHORT)!!
+        assertTrue(onlyConcision.startsWith(begin + "\n"))
+        assertTrue(onlyConcision.endsWith("\n" + end))
+        assertTrue(onlyConcision.contains(short))
+        assertFalse(onlyConcision.contains(AgentInstructions.TEXT))
+        // Normal sem memória não tem nada a escrever.
+        assertNull(AgentInstructions.block(memoryTips = false, concision = Conciseness.NORMAL))
+    }
+
+    @Test
+    fun normalNaoAcrescentaSecao() {
+        assertEquals(block, AgentInstructions.block(memoryTips = true, concision = Conciseness.NORMAL))
+        // Um valor desconhecido também é o normal.
+        assertEquals(block, AgentInstructions.block(memoryTips = true, concision = "breve"))
+        // Com memória ligada, a concisão entra depois dela, separada por uma linha em branco.
+        val short = Conciseness.instruction(Conciseness.SHORT)
+        assertEquals("$begin\n${AgentInstructions.TEXT}\n\n$short\n$end", AgentInstructions.block(true, Conciseness.SHORT))
+    }
+
+    @Test
+    fun discoSoComConcisaoQuandoAMemoriaEstaDesligada() {
+        val root = rootfs()
+        val file = root.resolve("root/.codex/AGENTS.md")
+        AgentInstructions.apply(root, listOf("codex" to codex), enabled = false, concision = Conciseness.SHORT)
+        assertEquals(AgentInstructions.block(false, Conciseness.SHORT)!! + "\n", file.text())
+        // Desligar tudo (memória normal, nível normal) apaga o arquivo.
+        AgentInstructions.apply(root, listOf("codex" to codex), enabled = false, concision = Conciseness.NORMAL)
+        assertFalse(Files.exists(file))
+    }
+
+    @Test
+    fun discoTemAsDuasSecoes() {
+        val root = rootfs()
+        val file = root.resolve("root/.codex/AGENTS.md")
+        AgentInstructions.apply(root, listOf("codex" to codex), enabled = true, concision = Conciseness.SHORT)
+        val text = file.text()
+        assertTrue(text.contains(AgentInstructions.TEXT))
+        assertTrue(text.contains(Conciseness.instruction(Conciseness.SHORT)))
+        // Voltar ao normal tira só a concisão; a memória continua.
+        AgentInstructions.apply(root, listOf("codex" to codex), enabled = true, concision = Conciseness.NORMAL)
+        assertEquals(block + "\n", file.text())
     }
 }

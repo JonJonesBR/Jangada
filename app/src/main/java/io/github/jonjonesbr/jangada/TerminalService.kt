@@ -34,6 +34,7 @@ import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.ChildAgents
+import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.LimitWindow
 import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.limitKindName
@@ -320,6 +321,8 @@ class TerminalService : Service() {
                 onWindowLearned = { model, size -> settings.setClaudeWindow(model, size) },
                 // O Code Mode (experimental) do trabalho; a conversa retomada decide sozinha (ver ChatEngine).
                 codeMode = settings.codeModeFor(key),
+                // A concisão do trabalho vai na linha de comando; "segue o geral" manda vazio.
+                concisionArg = Conciseness.chatArg(settings.conciseness, settings.concisenessOfJob(key)),
             )
         } else {
             // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).
@@ -328,6 +331,8 @@ class TerminalService : Service() {
             AcpChat(
                 linux, recipe.acp!!.command, appVersion, Workspace.path(folder), agentId = recipe.id,
                 autoCompact = { settings.autoCompactFor(key) },
+                // Sem system prompt por sessão no ACP: a instrução é prefixada na primeira mensagem.
+                concisionPrefix = { Conciseness.promptPrefix(settings.conciseness, settings.concisenessOfJob(key)) },
             )
         }
         // O agente que dormiu (ou foi reiniciado) volta num chat novo: Aprovar tudo e, no Claude, o modo
