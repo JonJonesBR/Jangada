@@ -11,6 +11,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.InetAddress
+import java.net.Socket
 import java.net.URL
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -170,6 +171,49 @@ class LanServerTest {
         override fun copyProject(source: String, target: String): JSONObject = JSONObject().put("ok", true).put("folder", target)
         override fun handoffSummary(key: String): JSONObject = JSONObject().put("ok", true).put("prompt", "Resumo")
 
+        override fun backupReady(): Boolean = true
+
+        /** Quando true, beginBackup recusa (simula outro backup em andamento). */
+        @Volatile
+        var backupBlocked = false
+        @Volatile
+        var exportCalls = 0
+        @Volatile
+        var restoreCalls = 0
+        @Volatile
+        var endCalls = 0
+        @Volatile
+        var lastRestore = ByteArray(0)
+        @Volatile
+        private var backupHeld = false
+
+        override fun beginBackup(): Boolean {
+            if (backupBlocked || backupHeld) return false
+            backupHeld = true
+            return true
+        }
+
+        override fun endBackup() {
+            endCalls++
+            backupHeld = false
+        }
+
+        override fun exportBackup(out: java.io.OutputStream, everything: Boolean) {
+            exportCalls++
+            out.write(if (everything) "tudo".toByteArray() else "projetos".toByteArray())
+        }
+
+        override fun restoreBackup(input: java.io.InputStream, length: Int): JSONObject {
+            restoreCalls++
+            val bytes = LanHttp.LimitedInputStream(input, length.toLong()).readBytes()
+            lastRestore = bytes
+            return JSONObject().put("ok", bytes.size == length)
+        }
+
+        override fun repairLinux(): JSONObject = JSONObject().put("ok", true)
+
+        override fun reinstallLinux(): JSONObject = JSONObject().put("ok", true)
+
         override fun readAsset(path: String): ByteArray? =
             if (path == "web/index.html") "<html><body>Jangada</body></html>".toByteArray() else null
 
@@ -184,6 +228,17 @@ class LanServerTest {
     @After
     fun tearDown() {
         server?.stop()
+    }
+
+    /** Autentica e devolve o cookie de sessão pronto para o cabeçalho Cookie. */
+    private fun authCookie(srv: LanServer, base: String): String {
+        val authConn = (URL("$base/api/auth").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            outputStream.use { it.write("""{"pin":"${srv.auth.currentPin()}"}""".toByteArray()) }
+        }
+        assertEquals(200, authConn.responseCode)
+        return authConn.getHeaderField("Set-Cookie").substringBefore(';')
     }
 
     @Test
@@ -680,5 +735,103 @@ class LanServerTest {
         }
         assertEquals(200, handoffConn.responseCode)
         assertTrue(handoffConn.inputStream.bufferedReader().readText().contains("Resumo"))
+    }
+
+    @Test
+    fun timeoutDeRestauracaoTemPisoProporcionalETeto() {
+        assertEquals(600_000, LanServer.restoreTimeoutMs(0))
+        assertEquals(600_000, LanServer.restoreTimeoutMs(60 * 1024 * 1024))
+        assertEquals(716_800, LanServer.restoreTimeoutMs(700 * 1024 * 1024))
+        assertEquals(3_600_000, LanServer.restoreTimeoutMs(1_500_000_000))
+    }
+
+    @Test
+    fun exportarBackupRecusaQuandoSlotOcupado() {
+        val bridge = FakeBridge().apply { backupBlocked = true }
+        val srv = LanServer(bridge, preferredPort = 0, bindAddress = InetAddress.getByName("127.0.0.1"))
+        server = srv
+        val base = "http://127.0.0.1:${srv.start()}"
+        val cookie = authCookie(srv, base)
+
+        val conn = (URL("$base/api/backup/export?scope=projects").openConnection() as HttpURLConnection).apply {
+            setRequestProperty("Cookie", cookie)
+        }
+        assertEquals(409, conn.responseCode)
+        assertTrue(conn.errorStream.bufferedReader().readText().contains("backup_busy"))
+        assertEquals(0, bridge.exportCalls)
+        assertEquals(0, bridge.endCalls)
+    }
+
+    @Test
+    fun exportarBackupEntregaChunksELiberaSlot() {
+        val bridge = FakeBridge()
+        val srv = LanServer(bridge, preferredPort = 0, bindAddress = InetAddress.getByName("127.0.0.1"))
+        server = srv
+        val port = srv.start()
+        val base = "http://127.0.0.1:$port"
+        val cookie = authCookie(srv, base)
+
+        // Socket cru: o HttpURLConnection esconderia os chunks e o terminador.
+        Socket("127.0.0.1", port).use { s ->
+            s.soTimeout = 15_000
+            s.getOutputStream().write(
+                (
+                    "GET /api/backup/export?scope=projects HTTP/1.1\r\n" +
+                        "Host: 127.0.0.1:$port\r\n" +
+                        "Cookie: $cookie\r\n" +
+                        "\r\n"
+                    ).toByteArray(Charsets.ISO_8859_1),
+            )
+            s.getOutputStream().flush()
+            val text = s.getInputStream().readBytes().toString(Charsets.ISO_8859_1)
+            assertTrue(text.startsWith("HTTP/1.1 200 OK"))
+            assertTrue(text.contains("Transfer-Encoding: chunked"))
+            assertTrue(text.contains("projetos"))
+            assertTrue(text.endsWith("0\r\n\r\n"))
+        }
+        assertEquals(1, bridge.exportCalls)
+        assertEquals(1, bridge.endCalls)
+    }
+
+    @Test
+    fun segundaExportacaoComSlotTomadoRecebe409() {
+        val bridge = FakeBridge()
+        val srv = LanServer(bridge, preferredPort = 0, bindAddress = InetAddress.getByName("127.0.0.1"))
+        server = srv
+        val base = "http://127.0.0.1:${srv.start()}"
+        val cookie = authCookie(srv, base)
+        assertTrue(bridge.beginBackup())
+
+        val conn = (URL("$base/api/backup/export?scope=everything").openConnection() as HttpURLConnection).apply {
+            setRequestProperty("Cookie", cookie)
+        }
+        assertEquals(409, conn.responseCode)
+        assertEquals(0, bridge.exportCalls)
+        assertEquals(0, bridge.endCalls)
+
+        bridge.endBackup()
+        assertEquals(1, bridge.endCalls)
+    }
+
+    @Test
+    fun restaurarBackupLeCorpoELiberaSlot() {
+        val bridge = FakeBridge()
+        val srv = LanServer(bridge, preferredPort = 0, bindAddress = InetAddress.getByName("127.0.0.1"))
+        server = srv
+        val base = "http://127.0.0.1:${srv.start()}"
+        val cookie = authCookie(srv, base)
+        val body = ByteArray(4096) { (it % 251).toByte() }
+
+        val conn = (URL("$base/api/backup/restore").openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            doOutput = true
+            setRequestProperty("Cookie", cookie)
+            outputStream.use { it.write(body) }
+        }
+        assertEquals(200, conn.responseCode)
+        assertTrue(JSONObject(conn.inputStream.bufferedReader().readText()).getBoolean("ok"))
+        assertTrue(bridge.lastRestore.contentEquals(body))
+        assertEquals(1, bridge.restoreCalls)
+        assertEquals(1, bridge.endCalls)
     }
 }

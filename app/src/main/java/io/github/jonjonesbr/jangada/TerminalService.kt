@@ -1414,10 +1414,14 @@ class TerminalService : Service() {
      * ou restaurar o Linux. [then] roda na thread principal, depois que todos os
      * chats saíram e as instalações terminaram (no máximo 5 s para cada espera).
      * A espera fica numa thread própria: a saída dos chats é contada na principal.
+     * Com [keepLanServer] o servidor LAN continua no ar (restauração feita pelo
+     * navegador) e o serviço segue em primeiro plano para o trabalho terminar.
      */
-    fun closeEverything(then: () -> Unit) {
-        lanServer?.stop()
-        lanServer = null
+    fun closeEverything(keepLanServer: Boolean = false, then: () -> Unit) {
+        if (!keepLanServer) {
+            lanServer?.stop()
+            lanServer = null
+        }
         val gone = tearDownSessions()
         // O vigia de links fica numa pasta do Linux que vai sumir: para e solta. startLinkWatcher o
         // recria na próxima sessão ou chat, que só existem depois que o Linux volta.
@@ -1437,7 +1441,7 @@ class TerminalService : Service() {
             cacheCleaner?.let { runCatching { it.join(60_000) } }
             main.post {
                 onExit?.invoke()
-                leaveForeground()
+                if (keepLanServer) goForeground() else leaveForegroundIfIdle()
                 then()
             }
         }

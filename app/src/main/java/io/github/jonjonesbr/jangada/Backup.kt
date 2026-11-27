@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import kotlin.concurrent.thread
 
 /**
@@ -24,78 +26,90 @@ object Backup {
 
     /** Grava o backup em [uri] (escolhido pelo usuário). Devolve o tamanho em bytes. */
     fun export(context: Context, uri: Uri, everything: Boolean): Long {
-        val linux = LinuxEnv(context)
         // O destino é aberto antes do processo: se não abrir, nada foi iniciado.
         val target = context.contentResolver.openOutputStream(uri)
             ?: throw IOException(context.getString(R.string.backup_error_target))
-        return target.use { out ->
-            val process = linux.startProcess(if (everything) EVERYTHING else PROJECTS, login = false, secrets = false)
-            try {
-                val errors = StringBuilder()
-                val stderr = thread { runCatching { errors.append(process.errorStream.bufferedReader().readText()) } }
-                var total = 0L
-                process.inputStream.use { input ->
-                    val buffer = ByteArray(64 * 1024)
-                    while (true) {
-                        val n = input.read(buffer)
-                        if (n < 0) break
-                        out.write(buffer, 0, n)
-                        total += n
-                    }
+        return target.use { writeArchive(context, it, everything) }
+    }
+
+    /**
+     * Grava o backup em [out] e devolve o tamanho em bytes. Não fecha [out]: quem chamou
+     * decide quando fechar (o arquivo pelo seletor do Android, o socket pela web).
+     */
+    fun writeArchive(context: Context, out: OutputStream, everything: Boolean): Long {
+        val linux = LinuxEnv(context)
+        val process = linux.startProcess(if (everything) EVERYTHING else PROJECTS, login = false, secrets = false)
+        try {
+            val errors = StringBuilder()
+            val stderr = thread { runCatching { errors.append(process.errorStream.bufferedReader().readText()) } }
+            var total = 0L
+            process.inputStream.use { input ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                    total += n
                 }
-                val code = process.waitFor()
-                stderr.join(2000)
-                // tar sai com 1 quando um arquivo mudou durante a leitura: o backup ainda vale.
-                if (code > 1) {
-                    throw IOException(
-                        errors.lines().lastOrNull { it.isNotBlank() }
-                            ?: context.getString(R.string.backup_error_tar_exit, code),
-                    )
-                }
-                total
-            } finally {
-                // Se algo falhou no meio, não deixa o tar rodando; se já terminou, não faz nada.
-                process.destroy()
             }
+            val code = process.waitFor()
+            stderr.join(2000)
+            // tar sai com 1 quando um arquivo mudou durante a leitura: o backup ainda vale.
+            if (code > 1) {
+                throw IOException(
+                    errors.lines().lastOrNull { it.isNotBlank() }
+                        ?: context.getString(R.string.backup_error_tar_exit, code),
+                )
+            }
+            return total
+        } finally {
+            // Se algo falhou no meio, não deixa o tar rodando; se já terminou, não faz nada.
+            process.destroy()
         }
     }
 
     /** Extrai o backup de [uri] dentro da pasta pessoal do Linux. */
     fun restore(context: Context, uri: Uri) {
-        val linux = LinuxEnv(context)
-        // Como no export: o arquivo é aberto antes do processo, e o tar nunca fica rodando à toa.
+        // Como no export: o arquivo é aberto antes do processo.
         val source = context.contentResolver.openInputStream(uri)
             ?: throw IOException(context.getString(R.string.backup_error_open_backup))
-        source.use { input ->
-            // ~/celular é o link para o armazenamento do celular (LinuxEnv.linkPhoneDir): um backup com
-            // "celular" não o troca nem escreve através dele. Ancorado: pastas "celular" dos projetos voltam.
-            val process = linux.startProcess("cd /root && tar -xzf - --anchored --exclude=./celular --exclude=celular", login = false, secrets = false)
+        source.use { readArchive(context, it) }
+    }
+
+    /**
+     * Extrai o backup de [input] dentro da pasta pessoal do Linux. Não fecha [input]: quem
+     * chamou decide quando fechar (o arquivo pelo seletor do Android, o socket pela web).
+     */
+    fun readArchive(context: Context, input: InputStream) {
+        val linux = LinuxEnv(context)
+        // ~/celular é o link para o armazenamento do celular (LinuxEnv.linkPhoneDir): um backup com
+        // "celular" não o troca nem escreve através dele. Ancorado: pastas "celular" dos projetos voltam.
+        val process = linux.startProcess("cd /root && tar -xzf - --anchored --exclude=./celular --exclude=celular", login = false, secrets = false)
+        try {
+            val errors = StringBuilder()
+            val stderr = thread { runCatching { errors.append(process.errorStream.bufferedReader().readText()) } }
             try {
-                val errors = StringBuilder()
-                val stderr = thread { runCatching { errors.append(process.errorStream.bufferedReader().readText()) } }
-                try {
-                    process.outputStream.use { input.copyTo(it, 64 * 1024) }
-                } catch (e: IOException) {
-                    // Arquivo que não é backup faz o tar sair cedo: o "Broken pipe" não é o erro real.
-                    // O use acima já fechou o stdin; espera o tar e mostra a mensagem dele, se houver.
-                    val code = process.waitFor()
-                    stderr.join(2000)
-                    // A primeira linha é a causa (ex.: "gzip: stdin: not in gzip format"); as seguintes são consequência.
-                    val message = errors.lines().firstOrNull { it.isNotBlank() }
-                    if (code != 0 && message != null) throw IOException(message)
-                    throw e
-                }
+                process.outputStream.use { input.copyTo(it, 64 * 1024) }
+            } catch (e: IOException) {
+                // Arquivo que não é backup faz o tar sair cedo: o "Broken pipe" não é o erro real.
+                // O use acima já fechou o stdin; espera o tar e mostra a mensagem dele, se houver.
                 val code = process.waitFor()
                 stderr.join(2000)
-                if (code != 0) {
-                    throw IOException(
-                        errors.lines().lastOrNull { it.isNotBlank() }
-                            ?: context.getString(R.string.backup_error_tar_exit, code),
-                    )
-                }
-            } finally {
-                process.destroy()
+                // A primeira linha é a causa (ex.: "gzip: stdin: not in gzip format"); as seguintes são consequência.
+                val message = errors.lines().firstOrNull { it.isNotBlank() }
+                if (code != 0 && message != null) throw IOException(message)
+                throw e
             }
+            val code = process.waitFor()
+            stderr.join(2000)
+            if (code != 0) {
+                throw IOException(
+                    errors.lines().lastOrNull { it.isNotBlank() }
+                        ?: context.getString(R.string.backup_error_tar_exit, code),
+                )
+            }
+        } finally {
+            process.destroy()
         }
         runCatching { linux.refreshIntegration() }
     }

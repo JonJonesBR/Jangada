@@ -957,6 +957,52 @@
     return `${v.toFixed(i >= 2 ? 1 : 0)} ${units[i]}`;
   }
 
+  // Download por formulário GET num iframe oculto: se o servidor recusar (409 JSON), a página
+  // não é substituída e o arquivo nunca é carregado na memória. O cookie da sessão vai junto.
+  let backupFrame = null;
+  function downloadBackup(scope, msgEl) {
+    if (!backupFrame) {
+      backupFrame = document.createElement("iframe");
+      backupFrame.name = "jangada-backup-download";
+      backupFrame.style.display = "none";
+      document.body.appendChild(backupFrame);
+    }
+    // Se o servidor recusar (409/500), o JSON aparece dentro do iframe: mostra o motivo no grupo.
+    backupFrame.onload = () => {
+      let text = "";
+      try {
+        const doc = backupFrame.contentDocument;
+        if (!doc || !doc.body) return;
+        text = (doc.body.textContent || "").trim();
+      } catch {
+        return;
+      }
+      if (!text) return;
+      let msg = text;
+      try { msg = JSON.parse(text).error || text; } catch { /* texto puro */ }
+      if (msgEl) msgEl.textContent = `Não foi possível exportar: ${msg}`;
+    };
+    if (msgEl) msgEl.textContent = "";
+    // Limpa um JSON de erro anterior para não reaparecer num download que deu certo.
+    try {
+      const doc = backupFrame.contentDocument;
+      if (doc && doc.body) doc.body.textContent = "";
+    } catch { /* outra origem */ }
+    const form = document.createElement("form");
+    form.method = "GET";
+    form.action = "/api/backup/export";
+    form.target = backupFrame.name;
+    form.style.display = "none";
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "scope";
+    input.value = scope;
+    form.appendChild(input);
+    document.body.appendChild(form);
+    form.submit();
+    form.remove();
+  }
+
   async function showSettingsModal() {
     openModal("Configurações do App", (body) => {
       body.innerHTML = '<div class="muted">Carregando configurações…</div>';
@@ -1141,6 +1187,123 @@
     addSelect(gDevice, "Tamanho do texto do chat", "chatTextScale", cfg.chatTextScale, [
       [0.85, "Pequeno"], [1, "Normal"], [1.15, "Grande"], [1.3, "Maior"], [1.5, "Enorme"],
     ]);
+
+    const gBackup = addGroup("Backup e Linux");
+    gBackup.insertAdjacentHTML(
+      "beforeend",
+      '<div class="muted small-text">Salve os projetos (e, se quiser, as configurações e logins dos agentes) num .tar.gz para restaurar depois de reinstalar o Linux ou trocar de celular.</div>',
+    );
+    const backupActions = document.createElement("div");
+    backupActions.className = "catalog-actions";
+    backupActions.innerHTML = `
+      <button id="web-backup-projects" type="button" class="btn small">Só projetos</button>
+      <button id="web-backup-everything" type="button" class="btn primary small">Tudo</button>
+    `;
+    gBackup.appendChild(backupActions);
+    const backupMsg = document.createElement("div");
+    backupMsg.className = "muted small-text";
+    gBackup.appendChild(backupMsg);
+    backupActions.querySelector("#web-backup-projects").onclick = () => {
+      downloadBackup("projects", backupMsg);
+    };
+    backupActions.querySelector("#web-backup-everything").onclick = () => {
+      downloadBackup("everything", backupMsg);
+    };
+    gBackup.insertAdjacentHTML(
+      "beforeend",
+      '<div class="muted small-text">"Tudo" inclui configurações e logins dos agentes. Guarde o arquivo em local seguro e não o compartilhe.</div>',
+    );
+
+    const restoreRow = document.createElement("div");
+    restoreRow.className = "inline-form";
+    restoreRow.innerHTML = `
+      <input id="web-backup-file" class="compact-input" type="file" accept=".gz,.tgz,.tar.gz,application/gzip" />
+      <button id="web-backup-restore" type="button" class="btn small">Restaurar</button>
+    `;
+    gBackup.appendChild(restoreRow);
+    const restoreMsg = document.createElement("div");
+    restoreMsg.className = "muted small-text";
+    gBackup.appendChild(restoreMsg);
+
+    restoreRow.querySelector("#web-backup-restore").onclick = async () => {
+      const fileInput = restoreRow.querySelector("#web-backup-file");
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        restoreMsg.textContent = "Escolha o arquivo .tar.gz do backup.";
+        return;
+      }
+      if (!confirm("Restaurar este backup? Arquivos do backup substituem os arquivos de mesmo nome dentro do Linux. As sessões abertas serão fechadas primeiro.")) {
+        return;
+      }
+      const btn = restoreRow.querySelector("#web-backup-restore");
+      btn.disabled = true;
+      restoreMsg.textContent = "Restaurando… não feche esta aba.";
+      try {
+        // O corpo é o próprio arquivo (sem multipart): o servidor lê em pedaços, sem carregar tudo na memória.
+        const r = await api("/api/backup/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/gzip" },
+          body: file,
+        });
+        const data = await r.json().catch(() => ({}));
+        if (r.ok && data.ok !== false) {
+          restoreMsg.textContent = "Backup restaurado. Se algum agente aparecer como não instalado, instale de novo pelo catálogo: as configurações e o login voltam.";
+        } else {
+          restoreMsg.textContent = `Não foi possível restaurar: ${data.error || "arquivo inválido"}`;
+        }
+      } catch (e) {
+        restoreMsg.textContent = e && e.message === "unauthorized"
+          ? "Sessão expirada. Entre de novo pelo PIN e repita a restauração."
+          : "A conexão caiu durante a restauração. Confira no celular se o Linux voltou e, se preciso, reabra o acesso pelo PC.";
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    const linuxActions = document.createElement("div");
+    linuxActions.className = "catalog-actions";
+    linuxActions.innerHTML = `
+      <button id="web-linux-repair" type="button" class="btn small">Reparar ferramentas básicas</button>
+      <button id="web-linux-reinstall" type="button" class="btn danger small">Reinstalar Linux</button>
+    `;
+    gBackup.appendChild(linuxActions);
+    const linuxMsg = document.createElement("div");
+    linuxMsg.className = "muted small-text";
+    gBackup.appendChild(linuxMsg);
+
+    linuxActions.querySelector("#web-linux-repair").onclick = async () => {
+      if (!confirm("Reparar as ferramentas básicas do Linux? Os agentes instalados e os projetos não são apagados.")) return;
+      linuxMsg.textContent = "Abrindo a preparação no celular…";
+      try {
+        const r = await api("/api/linux/repair", { method: "POST", body: "{}" });
+        const data = await r.json().catch(() => ({}));
+        if (data.ok === false) {
+          linuxMsg.textContent = `Não foi possível iniciar o reparo: ${data.error || "erro desconhecido"}.`;
+        } else {
+          linuxMsg.textContent = "A tela de preparação abriu no celular. Acompanhe por lá; a conexão com o PC continua.";
+        }
+      } catch {
+        linuxMsg.textContent = "Não foi possível iniciar o reparo. Tente de novo pelo celular.";
+      }
+    };
+
+    linuxActions.querySelector("#web-linux-reinstall").onclick = async () => {
+      const aviso = "Reinstalar o Linux do zero?\n\nIsso apaga TUDO dentro do Linux do Jangada: agentes instalados, logins, conversas e ~/projetos. A conexão com o PC vai cair.\n\nDepois, toque na preparação no celular e reabra o acesso pelo PC. Os arquivos do celular (~/celular) não são tocados.";
+      if (!confirm(aviso)) return;
+      linuxMsg.textContent = "Apagando o Linux…";
+      try {
+        const r = await api("/api/linux/reinstall", { method: "POST", body: "{}" });
+        const data = await r.json().catch(() => ({}));
+        if (data.ok === false) {
+          linuxMsg.textContent = `Não foi possível reinstalar: ${data.error || "erro desconhecido"}.`;
+        } else {
+          linuxMsg.textContent = "Reinstalação iniciada. O Linux será apagado e a conexão com o PC vai cair; depois toque na preparação no celular e reabra o acesso pelo PC.";
+        }
+      } catch {
+        // O servidor cai junto com o Linux: a queda de conexão é esperada.
+        linuxMsg.textContent = "A conexão com o celular caiu para apagar o Linux. Toque na preparação no celular para reinstalar; depois reabra o acesso pelo PC.";
+      }
+    };
 
     const gSecrets = addGroup("Chaves de API (criptografadas no celular)");
     const names = cfg.secretNames || [];

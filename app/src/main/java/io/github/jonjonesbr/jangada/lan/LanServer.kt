@@ -2,10 +2,14 @@ package io.github.jonjonesbr.jangada.lan
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -65,6 +69,13 @@ interface LanBridge {
     fun copyProject(source: String, target: String): JSONObject
     fun handoffSummary(key: String): JSONObject
     fun readAsset(path: String): ByteArray?
+    fun backupReady(): Boolean
+    fun beginBackup(): Boolean
+    fun endBackup()
+    fun exportBackup(out: OutputStream, everything: Boolean)
+    fun restoreBackup(input: InputStream, length: Int): JSONObject
+    fun repairLinux(): JSONObject
+    fun reinstallLinux(): JSONObject
     fun subscribe(onUpdate: () -> Unit): () -> Unit
 }
 
@@ -88,6 +99,31 @@ class LanServer(
         }
         fun close() {
             runCatching { socket.close() }
+        }
+    }
+
+    /** OutputStream que anota o último write, para o vigia do export detectar cliente travado. */
+    private class LastWriteOutputStream(private val out: OutputStream) : OutputStream() {
+        @Volatile
+        var lastWriteNanos: Long = System.nanoTime()
+            private set
+
+        override fun write(b: Int) {
+            out.write(b)
+            lastWriteNanos = System.nanoTime()
+        }
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            out.write(b, off, len)
+            lastWriteNanos = System.nanoTime()
+        }
+
+        override fun flush() {
+            out.flush()
+        }
+
+        override fun close() {
+            out.close()
         }
     }
 
@@ -263,7 +299,7 @@ class LanServer(
             val input = socket.getInputStream()
             val out = socket.getOutputStream()
             val req = try {
-                LanHttp.parseRequest(input)
+                LanHttp.parseRequest(input, deferBody = setOf(RESTORE_PATH))
             } catch (_: LanHttp.PayloadTooLargeException) {
                 LanHttp.writeJson(out, 413, "Payload Too Large", JSONObject().put("error", "payload_too_large"))
                 return
@@ -274,7 +310,7 @@ class LanServer(
                 return
             }
 
-            keepOpen = dispatch(socket, out, req)
+            keepOpen = dispatch(socket, input, out, req)
         } catch (_: Exception) {
             // Conexão encerrada pelo cliente ou timeout.
         } finally {
@@ -284,7 +320,7 @@ class LanServer(
         }
     }
 
-    private fun dispatch(socket: Socket, out: OutputStream, req: LanHttp.HttpRequest): Boolean {
+    private fun dispatch(socket: Socket, input: InputStream, out: OutputStream, req: LanHttp.HttpRequest): Boolean {
         val token = auth.extractSessionCookie(req.headers["cookie"])
         val authed = auth.isValidSession(token)
 
@@ -649,6 +685,61 @@ class LanServer(
             req.method == "POST" && req.path == "/api/system/clean-caches" -> {
                 LanHttp.writeJson(out, 200, "OK", bridge.cleanCaches())
             }
+            req.method == "GET" && req.path == "/api/backup/export" -> {
+                val everything = when (req.query["scope"] ?: "projects") {
+                    "projects", "" -> false
+                    "everything" -> true
+                    else -> return badRequest(out)
+                }
+                // Posse do slot antes de qualquer cabeçalho: um segundo export recebe 409, não um 200 quebrado.
+                if (!bridge.backupReady() || !bridge.beginBackup()) {
+                    LanHttp.writeJson(out, 409, "Conflict", JSONObject().put("error", "backup_busy"))
+                    return false
+                }
+                var watcher: Thread? = null
+                try {
+                    val watched = LastWriteOutputStream(out)
+                    watcher = thread(isDaemon = true, name = "jangada-backup-watch") {
+                        watchBackupStall(socket, watched)
+                    }
+                    val stamp = SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date())
+                    LanHttp.writeChunkedHeaders(watched, "application/gzip", "jangada-backup-$stamp.tar.gz")
+                    val chunked = LanHttp.ChunkedOutputStream(watched)
+                    bridge.exportBackup(chunked, everything)
+                    chunked.close()
+                } catch (_: Exception) {
+                    // Sem o chunk final o navegador vê o download truncado; o socket fecha no finally.
+                } finally {
+                    watcher?.interrupt()
+                    bridge.endBackup()
+                }
+            }
+            req.method == "POST" && req.path == RESTORE_PATH -> {
+                if (req.bodyLength <= 0) return badRequest(out)
+                if (!bridge.beginBackup()) {
+                    LanHttp.writeJson(out, 409, "Conflict", JSONObject().put("error", "backup_busy"))
+                    return false
+                }
+                try {
+                    // Upload de ~1 MB/s, com piso de 10 min e teto de 60 min.
+                    socket.soTimeout = restoreTimeoutMs(req.bodyLength)
+                    // O LimitedInputStream é aplicado aqui; o bridge repassa direto ao tar.
+                    val limited = LanHttp.LimitedInputStream(input, req.bodyLength.toLong())
+                    val result = bridge.restoreBackup(limited, req.bodyLength)
+                    val ok = result.optBoolean("ok", false)
+                    LanHttp.writeJson(out, if (ok) 200 else 400, if (ok) "OK" else "Bad Request", result)
+                } finally {
+                    bridge.endBackup()
+                }
+            }
+            req.method == "POST" && req.path == "/api/linux/repair" -> {
+                // O bridge responde com o resultado real; a preparação abre no celular.
+                LanHttp.writeJson(out, 200, "OK", bridge.repairLinux())
+            }
+            req.method == "POST" && req.path == "/api/linux/reinstall" -> {
+                // O bridge agenda o teardown (~800 ms), então a resposta chega antes de o servidor cair.
+                LanHttp.writeJson(out, 200, "OK", bridge.reinstallLinux())
+            }
             req.method == "POST" && req.path == "/api/projects/rename" -> {
                 val json = parseBodyJson(req) ?: return badRequest(out)
                 val oldName = json.optString("oldName", "")
@@ -742,6 +833,24 @@ class LanServer(
         }
     }
 
+    /**
+     * Vigia do export: se o cliente parar de receber por 120 s (aba suspensa, rede caída), fecha o
+     * socket. O write travado estoura, o tar é destruído no caminho de erro e o slot é liberado.
+     */
+    private fun watchBackupStall(socket: Socket, out: LastWriteOutputStream) {
+        while (!Thread.currentThread().isInterrupted) {
+            try {
+                Thread.sleep(BACKUP_WATCH_TICK_MS)
+            } catch (_: InterruptedException) {
+                return
+            }
+            if (System.nanoTime() - out.lastWriteNanos >= BACKUP_STALL_NS) {
+                runCatching { socket.close() }
+                return
+            }
+        }
+    }
+
     private fun cookieHeader(token: String): String =
         "${LanAuth.COOKIE_NAME}=$token; Path=/; HttpOnly; SameSite=Strict"
 
@@ -749,5 +858,14 @@ class LanServer(
         const val DEFAULT_PORT = 8765
         private const val BROADCAST_DEBOUNCE_MS = 100L
         private const val PING_SEC = 15L
+        private const val RESTORE_PATH = "/api/backup/restore"
+        private const val BACKUP_STALL_NS = 120_000L * 1_000_000
+        private const val BACKUP_WATCH_TICK_MS = 5_000L
+
+        /** Tempo do upload de restauração: ~1 MB/s, com piso de 10 min e teto de 60 min. */
+        internal fun restoreTimeoutMs(bodyLength: Int): Int {
+            val bySize = bodyLength / 1024L
+            return minOf(maxOf(10 * 60_000L, bySize), 60 * 60_000L).toInt()
+        }
     }
 }

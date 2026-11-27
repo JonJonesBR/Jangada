@@ -3,6 +3,7 @@ package io.github.jonjonesbr.jangada.lan
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.EOFException
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.URLDecoder
@@ -20,14 +21,28 @@ object LanHttp {
         val query: Map<String, String>,
         val headers: Map<String, String>,
         val body: ByteArray,
+        /** Tamanho declarado do corpo quando ele foi adiado ([parseRequest] com [deferBody]). */
+        val bodyLength: Int = body.size,
     )
 
     private const val DEFAULT_MAX_BODY = 262_144 // 256 KB
     const val UPLOAD_MAX_BODY = 20 * 1024 * 1024 // 20 MB
+
+    /** Backup de centenas de MB: o corpo fica no socket e é lido em pedaços, nunca inteiro na memória. */
+    const val BACKUP_MAX_BODY = 1_500_000_000
+
     private const val MAX_HEADER_LINE = 8192
     private const val MAX_HEADERS = 64
 
-    fun parseRequest(input: InputStream, maxBodyBytes: Int = DEFAULT_MAX_BODY): HttpRequest? {
+    /**
+     * Lê a linha de requisição e os cabeçalhos. Caminhos em [deferBody] não leem o corpo: ele fica
+     * no [input] para o chamador consumir, e [HttpRequest.bodyLength] traz o tamanho declarado.
+     */
+    fun parseRequest(
+        input: InputStream,
+        maxBodyBytes: Int = DEFAULT_MAX_BODY,
+        deferBody: Set<String> = emptySet(),
+    ): HttpRequest? {
         val requestLine = readLine(input) ?: return null
         if (requestLine.isEmpty()) return null
         val parts = requestLine.split(' ')
@@ -54,11 +69,17 @@ object LanHttp {
             }
         }
 
+        val declaredLength = headers["content-length"]?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+        if (path in deferBody) {
+            if (declaredLength > BACKUP_MAX_BODY) throw PayloadTooLargeException()
+            return HttpRequest(method, path, query, headers, ByteArray(0), declaredLength.toInt())
+        }
+
         val effectiveMax = if (maxBodyBytes == DEFAULT_MAX_BODY && path == "/api/attachments") UPLOAD_MAX_BODY else maxBodyBytes
-        val contentLength = headers["content-length"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        if (contentLength > effectiveMax) {
+        if (declaredLength > effectiveMax) {
             throw PayloadTooLargeException()
         }
+        val contentLength = declaredLength.toInt()
         val body = if (contentLength > 0) {
             val buf = ByteArray(contentLength)
             var offset = 0
@@ -155,6 +176,77 @@ object LanHttp {
         sb.append("\n")
         out.write(sb.toString().toByteArray(Charsets.UTF_8))
         out.flush()
+    }
+
+    /** Cabeçalhos de um download em chunks (sem Content-Length), que pode chegar aos GBs. */
+    fun writeChunkedHeaders(out: OutputStream, contentType: String, filename: String) {
+        val sb = StringBuilder()
+        sb.append("HTTP/1.1 200 OK\r\n")
+        sb.append("Content-Type: ").append(contentType).append("\r\n")
+        sb.append("Content-Disposition: attachment; filename=\"").append(filename).append("\"\r\n")
+        sb.append("Transfer-Encoding: chunked\r\n")
+        sb.append("Cache-Control: no-store\r\n")
+        sb.append("Connection: close\r\n")
+        sb.append("\r\n")
+        out.write(sb.toString().toByteArray(Charsets.ISO_8859_1))
+        out.flush()
+    }
+
+    /**
+     * Escreve o corpo no formato chunked. [close] grava o chunk final, mas não fecha o
+     * [out] de baixo: quem fecha o socket é quem chamou.
+     */
+    class ChunkedOutputStream(private val out: OutputStream) : OutputStream() {
+        private var closed = false
+
+        override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            if (closed) throw IOException("stream fechado")
+            if (len == 0) return
+            out.write(len.toString(16).toByteArray(Charsets.ISO_8859_1))
+            out.write(CRLF)
+            out.write(b, off, len)
+            out.write(CRLF)
+        }
+
+        override fun flush() {
+            if (!closed) out.flush()
+        }
+
+        override fun close() {
+            if (closed) return
+            closed = true
+            out.write(FINAL_CHUNK)
+            out.flush()
+        }
+
+        private companion object {
+            val CRLF = "\r\n".toByteArray(Charsets.ISO_8859_1)
+            val FINAL_CHUNK = "0\r\n\r\n".toByteArray(Charsets.ISO_8859_1)
+        }
+    }
+
+    /** Lê no máximo [limit] bytes do [input] e deixa o resto (a próxima requisição, num keep-alive). */
+    class LimitedInputStream(private val input: InputStream, private val limit: Long) : InputStream() {
+        private var remaining = limit
+
+        override fun read(): Int {
+            if (remaining <= 0) return -1
+            val b = input.read()
+            if (b >= 0) remaining--
+            return b
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (len == 0) return 0
+            if (remaining <= 0) return -1
+            val n = input.read(b, off, minOf(len.toLong(), remaining).toInt())
+            if (n > 0) remaining -= n
+            return n
+        }
+
+        override fun available(): Int = minOf(input.available().toLong(), remaining).toInt()
     }
 
     private fun decode(s: String): String =

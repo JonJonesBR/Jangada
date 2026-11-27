@@ -1,6 +1,7 @@
 package io.github.jonjonesbr.jangada.lan
 
 import android.app.ActivityManager
+import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.os.StatFs
@@ -8,8 +9,10 @@ import android.os.SystemClock
 import io.github.jonjonesbr.jangada.AgentLimit
 import io.github.jonjonesbr.jangada.AgentPrefs
 import io.github.jonjonesbr.jangada.AppSettings
+import io.github.jonjonesbr.jangada.Backup
 import io.github.jonjonesbr.jangada.MemoryReport
 import io.github.jonjonesbr.jangada.SecretStore
+import io.github.jonjonesbr.jangada.SetupActivity
 import io.github.jonjonesbr.jangada.TerminalService
 import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.chat.AcpChat
@@ -25,18 +28,23 @@ import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
+import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.HeadlessAgent
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Projects
+import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.linux.Workspace
 import io.github.jonjonesbr.jangada.linux.Worktrees
 import io.github.jonjonesbr.jangada.linux.measure
 import io.github.jonjonesbr.jangada.terminal.TerminalThemes
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
@@ -47,6 +55,8 @@ import kotlin.concurrent.thread
 class TerminalLanBridge(private val service: TerminalService) : LanBridge {
 
     private val main = Handler(Looper.getMainLooper())
+    /** Ligado enquanto um backup ou restauração roda pela web: o tar não pode se sobrepor a outro. */
+    private val backupRunning = AtomicBoolean(false)
     private val limitsStore by lazy { PlanLimitsStore(service) }
     private val settings by lazy { AppSettings(service) }
     private val secretStore by lazy { SecretStore(service) }
@@ -178,6 +188,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun createProject(name: String, gitInit: Boolean): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val clean = name.trim()
@@ -193,6 +204,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun cloneProject(url: String, folder: String): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val cleanUrl = url.trim()
@@ -215,6 +227,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun openChat(agentId: String, folder: String, resume: String?, restart: Boolean): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) {
             return JSONObject().put("ok", false).put("error", "linux_not_ready")
@@ -424,15 +437,100 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         }
     }
 
-    override fun runAgentTask(agentId: String, action: String): JSONObject = onMain {
-        val recipe = AgentCatalog.load(service).firstOrNull { it.id == agentId }
-            ?: return@onMain JSONObject().put("ok", false).put("error", "invalid_agent")
-        if (action == "cancel") {
-            service.cancelTask(agentId)
-            return@onMain JSONObject().put("ok", true)
+    override fun runAgentTask(agentId: String, action: String): JSONObject {
+        backupBusy()?.let { return it }
+        return onMain {
+            val recipe = AgentCatalog.load(service).firstOrNull { it.id == agentId }
+                ?: return@onMain JSONObject().put("ok", false).put("error", "invalid_agent")
+            if (action == "cancel") {
+                service.cancelTask(agentId)
+                return@onMain JSONObject().put("ok", true)
+            }
+            service.runAgentTask(recipe, updating = action == "update", uninstalling = action == "uninstall")
+            JSONObject().put("ok", true)
         }
-        service.runAgentTask(recipe, updating = action == "update", uninstalling = action == "uninstall")
-        JSONObject().put("ok", true)
+    }
+
+    override fun backupReady(): Boolean =
+        LinuxEnv(service).isReady && !backupRunning.get()
+
+    /** Toma a posse do slot de backup (CAS). Quem consegue deve chamar [endBackup] no fim. */
+    override fun beginBackup(): Boolean = backupRunning.compareAndSet(false, true)
+
+    override fun endBackup() {
+        backupRunning.set(false)
+    }
+
+    /** JSON de recusa para as mudanças de estado durante backup ou restauração. */
+    private fun backupBusy(): JSONObject? =
+        if (backupRunning.get()) JSONObject().put("ok", false).put("error", "backup_busy") else null
+
+    override fun exportBackup(out: OutputStream, everything: Boolean) {
+        // A posse do slot já foi tomada por beginBackup (LanServer).
+        Backup.writeArchive(service, out, everything)
+    }
+
+    override fun restoreBackup(input: InputStream, length: Int): JSONObject {
+        try {
+            // Como na tela do Android: fecha chats, terminais e instalações antes de extrair.
+            // O servidor LAN segue no ar para a resposta chegar ao navegador.
+            val closed = CountDownLatch(1)
+            main.post { service.closeEverything(keepLanServer = true) { closed.countDown() } }
+            // Pior caso interno: ~5 s por chat/worker + 60 s do cacheCleaner e 60 s do legacyCleanup.
+            if (!closed.await(150, TimeUnit.SECONDS)) {
+                return JSONObject().put("ok", false).put("error", "tempo esgotado ao fechar as sessões")
+            }
+            Backup.readArchive(service, input)
+            return JSONObject().put("ok", true)
+        } catch (e: Exception) {
+            return JSONObject().put("ok", false).put("error", e.message ?: e.javaClass.simpleName)
+        }
+    }
+
+    override fun repairLinux(): JSONObject = runCatching {
+        if (backupRunning.get()) {
+            return@runCatching JSONObject().put("ok", false).put("error", "backup_busy")
+        }
+        onMain {
+            LinuxEnv(service).clearBaseMarker()
+            Setup.reset()
+            // targetSdk 28 de propósito: o serviço pode abrir a tela de preparação.
+            service.startActivity(Intent(service, SetupActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            JSONObject().put("ok", true)
+        }
+    }.getOrElse { JSONObject().put("ok", false).put("error", it.message ?: it.javaClass.simpleName) }
+
+    override fun reinstallLinux(): JSONObject {
+        if (!backupReady() || !beginBackup()) {
+            return JSONObject().put("ok", false).put("error", "backup_busy")
+        }
+        // A resposta HTTP sai antes; 800 ms dão tempo de ela chegar ao navegador antes do teardown.
+        main.postDelayed({
+            // O apagar é longo: segura o serviço em primeiro plano até a preparação abrir.
+            service.holdForeground()
+            service.closeEverything {
+                thread(name = "linux-erase") {
+                    try {
+                        val linux = LinuxEnv(service)
+                        linux.clearMarkers()
+                        runCatching { Fs.deleteTree(linux.linuxDir.toPath()) }
+                    } finally {
+                        main.post {
+                            Setup.reset()
+                            runCatching {
+                                service.startActivity(
+                                    Intent(service, SetupActivity::class.java)
+                                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                            runCatching { service.releaseForeground() }
+                            endBackup()
+                        }
+                    }
+                }
+            }
+        }, 800)
+        return JSONObject().put("ok", true)
     }
 
     private fun gitCwd(folder: String): Pair<LinuxEnv, String>? {
@@ -532,6 +630,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun createTerminal(folder: String): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         val clean = if (linux.isReady) Workspace.existing(linux.rootfs, folder) else ""
         return onMain {
@@ -815,6 +914,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun renameProject(oldName: String, newName: String): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val oldClean = oldName.trim()
@@ -840,6 +940,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun deleteProject(name: String): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val clean = name.trim()
@@ -882,6 +983,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun createWorktree(repo: String, name: String): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val cleanRepo = repo.trim()
@@ -896,6 +998,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     override fun copyProject(source: String, target: String): JSONObject {
+        backupBusy()?.let { return it }
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val src = source.trim()
