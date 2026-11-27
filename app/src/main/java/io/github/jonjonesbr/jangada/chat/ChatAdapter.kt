@@ -164,7 +164,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
                 maxWidth = maxTextWidth
                 // Seleção parcial (copiar um comando ou trecho). Na mensagem não enviada o toque
                 // devolve o texto à caixa: ali a seleção sairia com esse clique.
-                isTextSelectable = !item.dropped
+                setTextIsSelectable(!item.dropped)
             },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -270,7 +270,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
         setLinkTextColor(getColor(R.color.accent_text))
         // Seleção parcial do texto (copiar um comando ou trecho); segurar fora do texto ainda
         // copia a resposta toda (o listener do cartão).
-        isTextSelectable = true
+        setTextIsSelectable(true)
         // Links abrem ao toque; a seleção continua valendo no clique longo.
         movementMethod = if (body is Spanned && body.getSpans(0, body.length, URLSpan::class.java).isNotEmpty()) {
             LinkMovementMethod.getInstance()
