@@ -121,29 +121,48 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
+        android:weightSum="3"
         android:visibility="gone">
 
         <Button
             android:id="@+id/task_retry"
             style="@style/CardTextButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:minHeight="48dp"
+            android:minWidth="0dp"
+            android:maxLines="2"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
             android:textColor="@color/accent_text"
             android:text="@string/task_retry" />
 
         <Button
             android:id="@+id/task_terminal"
             style="@style/CardTextButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:minHeight="48dp"
+            android:minWidth="0dp"
+            android:maxLines="2"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
             android:textColor="@color/accent_text"
             android:text="@string/task_terminal" />
 
         <Button
             android:id="@+id/task_details"
             style="@style/CardTextButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:minHeight="48dp"
+            android:minWidth="0dp"
+            android:maxLines="2"
+            android:paddingStart="2dp"
+            android:paddingEnd="2dp"
             android:textColor="@color/accent_text"
             android:text="@string/task_details" />
     </LinearLayout>
@@ -158,11 +177,13 @@
 
         <Button
             android:id="@+id/primary"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:minHeight="48dp"
             android:backgroundTint="@color/key_active"
-            android:minWidth="112dp"
+            android:maxLines="2"
+            android:minWidth="0dp"
             android:textAllCaps="false"
             android:textColor="@color/setup_on_accent"
             android:textSize="15sp"
