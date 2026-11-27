@@ -6,6 +6,10 @@
 - Concisão das respostas: ajuste geral nas Configurações e por trabalho no chat, do normal ao muito curto. No Claude vale na hora; nos outros agentes, a partir de uma conversa nova.
 - Chat: seleção parcial do texto das mensagens, para copiar comandos e trechos; o botão Copiar ao lado do horário copia a resposta inteira num toque.
 - Agente chamando agente: o comando `jangada-call`, no chat e no terminal, chama outro agente num turno só, com um papel (revisor, planejador, implementador ou orquestrador) e o modelo barato nos papéis de apoio. Desligado por padrão nas Configurações, com papel fixo por agente ou o chamador decidindo; papel que escreve só roda com o Aprovar tudo no chat que chamou, um agente chamado não chama outro, e o resultado aparece num cartão na conversa.
+- Chat do Antigravity (agy): preset de economia, ligado nas Configurações ou por trabalho (menu ⋮). Compacta a conversa aos 55% do contexto, corta as leituras de ferramenta em 4 KB/120 linhas e começa conversas novas num modelo único barato (Hydrogen Medium; Neon, Carbon e 3.8 Flash como alternativas) com esforço médio. Escolha salva do usuário e conversas retomadas não mudam; vale também no terminal (ajuste geral) e no `jangada-call`.
+- Telas: "Lendo as mudanças…" e "Lendo os projetos…" só na primeira leitura, chat vazio mostra a pasta real, "Trabalhos abertos" na Home, linha de trabalho sem relatório de memória esconde o detalhe, vocabulário único "cópia isolada" e ações do cartão do agente em até duas linhas.
+- Setup: previsão de alguns minutos na etapa das ferramentas básicas.
+- `jangada-call`: a ponte escuta no IPv4 e grava o endereço no `call.conf`; no celular o loopback era IPv6 e a chamada não conectava.
 
 ## 1.35.0
 
