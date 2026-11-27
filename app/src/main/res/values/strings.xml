@@ -738,6 +738,7 @@
         <item quantity="one">%d commit ahead of the remote</item>
         <item quantity="other">%d commits ahead of the remote</item>
     </plurals>
+    <string name="changes_loading">Reading changes…</string>
     <string name="changes_none">Nothing to commit</string>
     <string name="changes_not_repo">This folder is not a git repository</string>
     <string name="changes_status_timeout">Git took more than 2 minutes to read this folder. Tap ↻ to try again, or check it in the terminal.</string>
@@ -985,6 +986,7 @@
     <string name="projects_back">‹  Back</string>
     <string name="projects_open">Manage projects</string>
     <string name="projects_open_work">Chat or terminal open</string>
+    <string name="projects_loading">Reading projects…</string>
     <string name="projects_empty">No projects yet. Create one with New project… above.</string>
     <string name="projects_rename">Rename…</string>
     <string name="projects_delete">Delete…</string>

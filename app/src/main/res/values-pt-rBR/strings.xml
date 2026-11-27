@@ -736,6 +736,7 @@
         <item quantity="one">%d commit à frente do remoto</item>
         <item quantity="other">%d commits à frente do remoto</item>
     </plurals>
+    <string name="changes_loading">Lendo as mudanças…</string>
     <string name="changes_none">Nada para fazer commit</string>
     <string name="changes_not_repo">Esta pasta não é um repositório git</string>
     <string name="changes_status_timeout">O git levou mais de 2 minutos para ler esta pasta. Toque em ↻ para tentar de novo, ou confira no terminal.</string>
@@ -981,6 +982,7 @@
     <string name="projects_back">‹  Voltar</string>
     <string name="projects_open">Gerenciar projetos</string>
     <string name="projects_open_work">Chat ou terminal aberto</string>
+    <string name="projects_loading">Lendo os projetos…</string>
     <string name="projects_empty">Nenhum projeto ainda. Crie um com Novo projeto… acima.</string>
     <string name="projects_rename">Renomear…</string>
     <string name="projects_delete">Excluir…</string>

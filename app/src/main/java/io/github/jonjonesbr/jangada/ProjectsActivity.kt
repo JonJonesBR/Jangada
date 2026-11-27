@@ -111,8 +111,8 @@ class ProjectsActivity : JangadaActivity() {
             addView(clone, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        // Com os botões acima, o texto do estado vazio ganha folga em cima. Só aparece quando a
-        // primeira leitura de ~/projetos chegar vazia (render cuida disso).
+        // Com os botões acima, o texto ganha folga em cima. Mostra o aviso de carregando antes da
+        // primeira leitura e, depois dela, a explicação quando não há projeto (render cuida disso).
         empty = label(getString(R.string.projects_empty), 15f, R.color.setup_muted_text, top = 16)
             .apply { visibility = View.GONE }
         val content = LinearLayout(this).apply {
@@ -155,6 +155,8 @@ class ProjectsActivity : JangadaActivity() {
         setContentView(root)
         // Aviso de cópia que falhou: a tela abre com o log (ver showPendingCloneFailure).
         if (savedInstanceState == null) takeCloneFailure(intent)
+        // A leitura de ~/projetos começa no onStart: desenha já o aviso de carregando.
+        render()
     }
 
     override fun onStart() {
@@ -312,7 +314,14 @@ class ProjectsActivity : JangadaActivity() {
     /** Desenha uma linha por projeto (a lista já lida) e a explicação quando não há nenhum. */
     private fun render() {
         list.removeAllViews()
-        empty.visibility = if (loaded && listing.isEmpty()) View.VISIBLE else View.GONE
+        // Antes da primeira leitura, a tela mostra que está lendo; depois, a explicação do vazio.
+        if (!loaded) {
+            empty.setText(R.string.projects_loading)
+            empty.visibility = View.VISIBLE
+        } else {
+            empty.setText(R.string.projects_empty)
+            empty.visibility = if (listing.isEmpty()) View.VISIBLE else View.GONE
+        }
         val open = openFolders()
         listing.forEach { list.addView(row(it, it.name in open)) }
     }

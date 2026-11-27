@@ -97,6 +97,8 @@ class ChangesActivity : JangadaActivity() {
     private var loading = false
     /** Pedido de leitura que chegou durante outra: roda quando ela terminar (uma thread por vez). */
     private var reloadWanted = false
+    /** A primeira leitura já foi mostrada: o "Lendo as mudanças…" não volta nas releituras. */
+    private var shown = false
     /** Um diff (ou a lista de uma pasta) está sendo lido: um toque por vez. */
     private var reading = false
     /** Um commit está rodando (não deixa mandar dois). */
@@ -159,6 +161,12 @@ class ChangesActivity : JangadaActivity() {
             reloadWanted = true
             return
         }
+        // Antes da primeira leitura a tela ficaria sem nada: mostra o aviso de carregando.
+        if (!shown) {
+            empty.text = getString(R.string.changes_loading)
+            empty.visibility = View.VISIBLE
+            list.visibility = View.GONE
+        }
         loading = true
         thread(name = "changes-load") {
             val read = readState()
@@ -207,6 +215,7 @@ class ChangesActivity : JangadaActivity() {
 
     /** Mostra a leitura: título, resumo, lista ou o aviso de vazio, e o campo de commit. */
     private fun show(read: State) {
+        shown = true
         isRepo = read.isRepo
         hasHead = read.hasHead
         changes = read.changes
