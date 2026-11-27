@@ -16,13 +16,17 @@ if [ ! -r "$conf" ]; then
 fi
 
 port=""
+# Sem a chave no conf (arquivo antigo), o padrão é o IPv4.
+host="127.0.0.1"
 token=""
 while IFS='=' read -r k v; do
   case "$k" in
     port) port="$v" ;;
+    host) host="$v" ;;
     token) token="$v" ;;
   esac
 done < "$conf"
+[ -n "$host" ] || host="127.0.0.1"
 
 agent=""
 role=""
@@ -68,13 +72,19 @@ err="$tmp.err"
 trap 'rm -f "$tmp" "$out" "$err"' EXIT
 printf '%s' "$prompt" > "$tmp"
 
+# IPv6 (o app cai para ::1 quando o IPv4 não abre) vai entre colchetes na URL.
+case "$host" in
+  *:*) base="http://[$host]:$port" ;;
+  *) base="http://$host:$port" ;;
+esac
+
 code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 330 \
   -X POST \
   -H "X-Jangada-Token: $token" \
   -H "X-Jangada-Cwd: $cwd" \
   -H "X-Jangada-Chat: ${JANGADA_CHAT:-}" \
   --data-binary @"$tmp" \
-  "http://127.0.0.1:$port/call?agent=$agent&role=$role" 2>"$err")
+  "$base/call?agent=$agent&role=$role" 2>"$err")
 
 cat "$out" 2>/dev/null
 if [ "$code" != "200" ]; then

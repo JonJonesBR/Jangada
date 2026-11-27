@@ -37,12 +37,14 @@ class CallServerTest {
         headers: Map<String, String> = emptyMap(),
         body: String = "",
     ): Pair<Int, String> {
-        Socket("127.0.0.1", port).use { socket ->
+        // O host vem do conf (o app pode subir no IPv6); conf antigo não tem a chave.
+        val host = conf(root)["host"]?.takeIf { it.isNotEmpty() } ?: "127.0.0.1"
+        Socket(host, port).use { socket ->
             socket.soTimeout = 10_000
             val bytes = body.toByteArray(Charsets.UTF_8)
             val head = buildString {
                 append("$method $path HTTP/1.1\r\n")
-                append("Host: 127.0.0.1\r\n")
+                append("Host: $host\r\n")
                 append("Content-Length: ${bytes.size}\r\n")
                 append("Connection: close\r\n")
                 for ((name, value) in headers) append("$name: $value\r\n")
@@ -66,14 +68,17 @@ class CallServerTest {
 
     @Test
     fun gravaOArquivoDeAcessoComModo600() {
-        start { CallServer.Reply(200, "ok") }
+        val created = start { CallServer.Reply(200, "ok") }
         val file = File(root.toFile(), "root/.config/jangada/call.conf")
         assertTrue(file.isFile)
         val mode = Files.getPosixFilePermissions(file.toPath())
         assertEquals(setOf(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE), mode)
         val data = conf(root)
-        assertEquals("${server!!.port}", data["port"])
+        assertEquals("${created.port}", data["port"])
         assertEquals(48, data["token"]!!.length) // 24 bytes em hexadecimal
+        // O host precisa ir no conf: é por ele que o jangada-call sabe onde bater (IPv4 ou IPv6).
+        assertTrue(created.host.isNotEmpty())
+        assertEquals(created.host, data["host"])
     }
 
     @Test
@@ -115,8 +120,10 @@ class CallServerTest {
     @Test
     fun pararApagaOArquivoDeAcesso() {
         val created = start { CallServer.Reply(200, "ok") }
+        assertTrue(created.host.isNotEmpty())
         created.stop()
         assertFalse(created.isRunning)
+        assertEquals("", created.host)
         assertFalse(File(root.toFile(), "root/.config/jangada/call.conf").exists())
     }
 }

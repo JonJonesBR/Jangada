@@ -12,8 +12,9 @@ import java.security.SecureRandom
 import java.util.concurrent.Semaphore
 
 /**
- * Ponte local para um agente chamar outro: escuta só em 127.0.0.1 e exige o token gravado em
- * `~/.config/jangada/call.conf` (modo 600), que o `jangada-call` lê de dentro do Debian.
+ * Ponte local para um agente chamar outro: escuta só no loopback (IPv4; `::1` só se o IPv4 não
+ * abrir) e exige o token gravado em `~/.config/jangada/call.conf` (modo 600), que o `jangada-call`
+ * lê de dentro do Debian.
  *
  * Um pedido de cada vez: o segundo recebe 429 (cada agente chamado é um processo pesado).
  */
@@ -37,6 +38,14 @@ class CallServer(private val handle: (Call) -> Reply) {
     var port = 0
         private set
 
+    /**
+     * Endereço em que a ponte subiu ("" = desligada): `127.0.0.1` por padrão, `::1` só se o IPv4
+     * não abrir. Vai no `call.conf` para o `jangada-call` saber onde bater.
+     */
+    @Volatile
+    var host = ""
+        private set
+
     val isRunning: Boolean get() = port > 0
 
     /**
@@ -52,9 +61,13 @@ class CallServer(private val handle: (Call) -> Reply) {
     /** Versão testável: sobe sobre o rootfs [root] já pronto. */
     internal fun start(root: Path): Boolean {
         if (isRunning) return true
-        val server = runCatching { ServerSocket(0, 8, InetAddress.getLoopbackAddress()) }.getOrNull() ?: return false
+        // O IPv4 é pedido explicitamente: no Android getLoopbackAddress() devolve ::1 e o
+        // `jangada-call` fala com 127.0.0.1, que não alcançava a ponte. O IPv6 fica só como reserva.
+        val ipv4 = runCatching { ServerSocket(0, 8, InetAddress.getByName(HOST_IPV4)) }.getOrNull()
+        val server = ipv4 ?: runCatching { ServerSocket(0, 8, InetAddress.getByName(HOST_IPV6)) }.getOrNull() ?: return false
+        val boundHost = if (ipv4 != null) HOST_IPV4 else HOST_IPV6
         val secret = ByteArray(24).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it.toInt() and 0xff) }
-        val content = "port=${server.localPort}\ntoken=$secret\n"
+        val content = "port=${server.localPort}\nhost=$boundHost\ntoken=$secret\n"
         val file = root.resolve("root/.config/jangada/call.conf")
         if (runCatching { OpenCodePreset.writeFile(root, file, content) }.getOrNull() == null) {
             runCatching { server.close() }
@@ -62,6 +75,7 @@ class CallServer(private val handle: (Call) -> Reply) {
             return false
         }
         token = secret
+        host = boundHost
         conf = file.toFile()
         socket = server
         port = server.localPort
@@ -82,6 +96,7 @@ class CallServer(private val handle: (Call) -> Reply) {
         conf?.let { runCatching { it.delete() } }
         conf = null
         token = ""
+        host = ""
     }
 
     private fun acceptLoop(server: ServerSocket) {
@@ -152,6 +167,12 @@ class CallServer(private val handle: (Call) -> Reply) {
 
     companion object {
         private const val TAG = "JangadaCalls"
+
+        /** Loopback IPv4: é nele que o `jangada-call` bate por padrão. */
+        private const val HOST_IPV4 = "127.0.0.1"
+
+        /** Reserva quando o IPv4 não abre; o script escreve `host` entre colchetes. */
+        private const val HOST_IPV6 = "::1"
 
         /** Pedido de até 40 KB (o pedido do chamador, sem histórico). */
         const val MAX_BODY = 40_000
