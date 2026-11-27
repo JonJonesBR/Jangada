@@ -902,6 +902,15 @@
     <string name="conciseness_settings_label">Concisão das respostas: %1$s</string>
     <string name="settings_conciseness_desc">Pede respostas curtas nas instruções de todos os agentes, inclusive no terminal.</string>
     <string name="conciseness_note">No Claude vale na hora; nos outros agentes, a partir de uma conversa nova.</string>
+    <string name="settings_opencode_economy">Economia do OpenCode</string>
+    <string name="settings_opencode_economy_desc">Modelo barato nos trabalhos de apoio e compactação mais cedo, só nos chats do OpenCode. Exige o plano OpenCode Go conectado.</string>
+    <string name="settings_opencode_economy_label">Economia do OpenCode: %1$s</string>
+    <string name="opencode_economy_title">Economia do OpenCode</string>
+    <string name="opencode_economy_on">Ligada</string>
+    <string name="opencode_economy_off">Desligada</string>
+    <string name="opencode_economy_global">Segue o geral (%1$s)</string>
+    <string name="opencode_economy_from_general">Segue o geral</string>
+    <string name="opencode_economy_note">Vale quando o agente inicia: pare e envie a mensagem de novo para aplicar agora. O seu opencode.json não é alterado.</string>
     <string name="chat_auto_compacting">Compactando a conversa automaticamente (contexto em %1$d%%).</string>
     <string name="opencode_auth_row">Contas e chaves</string>
     <string name="opencode_auth_row_desc">Conecte provedores com a sua chave, ou volte ao plano free</string>

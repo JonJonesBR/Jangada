@@ -396,6 +396,8 @@ class TerminalService : Service() {
                 autoCompact = { settings.autoCompactFor(key) },
                 // Sem system prompt por sessão no ACP: a instrução é prefixada na primeira mensagem.
                 concisionPrefix = { Conciseness.promptPrefix(settings.conciseness, settings.concisenessOfJob(key)) },
+                // Preset de economia do OpenCode deste trabalho, lido quando o agente inicia.
+                economy = { settings.openCodeEconomyFor(key) },
             )
         }
         // O agente que dormiu (ou foi reiniciado) volta num chat novo: Aprovar tudo e, no Claude, o modo

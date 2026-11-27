@@ -46,8 +46,10 @@ import io.github.jonjonesbr.jangada.chat.AttachmentTooLargeException
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
+import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.concisenessText
+import io.github.jonjonesbr.jangada.chat.openCodeEconomyText
 import io.github.jonjonesbr.jangada.chat.autoCompactShort
 import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.PlanLimits
@@ -1514,6 +1516,7 @@ class ChatActivity : JangadaActivity() {
         if (canCompact) rows += Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") }
         rows += autoCompactRow()
         rows += concisenessRow()
+        if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
         if (isClaude) rows += codeModeRow()
         Sheet(this)
             .title(getString(R.string.chat_context_title))
@@ -2008,6 +2011,7 @@ class ChatActivity : JangadaActivity() {
         ) { loadFolders { folders -> worktrees.showWorktreeFinish(folders) } }
         rows += autoCompactRow()
         rows += concisenessRow()
+        if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
         if (isClaude) rows += codeModeRow()
         rows += Sheet.Row(
             title = getString(R.string.chat_export),
@@ -2063,6 +2067,7 @@ class ChatActivity : JangadaActivity() {
             description = getString(R.string.opencode_usage_row_desc, OpenCodeStats.DAYS),
             icon = "📊",
         ) { openCode.openUsage() }
+        if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
         // Sem ajustes do agente (ou sem chat pronto), o painel mostra a pasta e a visualização, que são do app.
         if (!isClaude) rows += optionRows(engine as? AcpChat)
         // Agente pronto que não oferece modos: diz que ele pergunta antes de agir (em vez de sumir sem explicação).
@@ -2527,6 +2532,45 @@ class ChatActivity : JangadaActivity() {
         } else {
             showCodeModeFixed()
         }
+    }
+
+    /**
+     * Linha do preset de economia do OpenCode neste trabalho (menu ⋮ e ajustes). O valor é o efetivo;
+     * quando vem do ajuste geral, a descrição diz isso.
+     */
+    private fun openCodeEconomyRow(): Sheet.Row {
+        val job = settings.openCodeEconomyOfJob(chatKey)
+        val fromGeneral = job == OpenCodeEconomy.GLOBAL
+        return Sheet.Row(
+            title = getString(R.string.opencode_economy_title),
+            description = if (fromGeneral) getString(R.string.opencode_economy_from_general) else null,
+            value = openCodeEconomyText(this, if (fromGeneral) settings.openCodeEconomy else job),
+            icon = "💰",
+        ) { chooseOpenCodeEconomy() }
+    }
+
+    /**
+     * Escolha do preset de economia deste trabalho: o ajuste geral, ligado ou desligado. O preset é
+     * lido quando o agente inicia; a nota avisa disso e que o opencode.json do usuário não muda.
+     */
+    private fun chooseOpenCodeEconomy() {
+        val job = settings.openCodeEconomyOfJob(chatKey)
+        val rows = mutableListOf(
+            Sheet.Row(
+                title = getString(R.string.opencode_economy_global, openCodeEconomyText(this, settings.openCodeEconomy)),
+                checked = job == OpenCodeEconomy.GLOBAL,
+            ) { settings.setOpenCodeEconomyOfJob(chatKey, OpenCodeEconomy.GLOBAL) },
+        )
+        rows += OpenCodeEconomy.GENERAL.map { value ->
+            Sheet.Row(title = openCodeEconomyText(this, value), checked = job == value) {
+                settings.setOpenCodeEconomyOfJob(chatKey, value)
+            }
+        }
+        Sheet(this)
+            .title(getString(R.string.opencode_economy_title))
+            .message(getString(R.string.opencode_economy_note))
+            .rows(rows)
+            .show()
     }
 
     /** Conversa com mensagens: o Code Mode é fixo nela. Oferece uma conversa nova (como o ＋ do menu ⋮). */

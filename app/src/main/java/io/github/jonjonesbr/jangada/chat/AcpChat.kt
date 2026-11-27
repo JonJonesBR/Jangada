@@ -5,6 +5,7 @@ import android.util.Log
 import io.github.jonjonesbr.jangada.R
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.OpenCodePreset
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -32,6 +33,8 @@ class AcpChat(
     private val autoCompact: () -> String = { AutoCompact.DEFAULT },
     /** Instrução de concisão a prefixar na primeira mensagem de uma conversa nova (ver Conciseness); vazio não manda nada. */
     private val concisionPrefix: () -> String = { "" },
+    /** Preset de economia deste trabalho, lido na subida do agente (ver OpenCodeEconomy/OpenCodePreset). */
+    private val economy: () -> Boolean = { false },
 ) : ProcessChat(linux, TAG) {
 
     /** Pode compactar sozinho de novo? Some ao compactar e volta quando o contexto cai abaixo do percentual. */
@@ -191,7 +194,19 @@ class AcpChat(
         concisionSent = false
         launch(interactive = true) {
             runCatching { linux.refreshIntegration(trustFolder = cwd) }.onFailure { Log.w(TAG, "integração", it) }
-            "${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(launchCommand(command, agentId, autoApprove), jobId)}"
+            // Preset de economia do OpenCode: o arquivo é do app (OpenCodePreset), e o opencode.json do
+            // usuário não é tocado. Desligado, ou em outro agente, o comando fica igual ao de sempre.
+            val env = if (agentId == OPENCODE_ID && runCatching { economy() }.getOrDefault(false)) {
+                runCatching { OpenCodePreset.ensure(linux) }
+                    .onFailure { Log.w(TAG, "preset de economia", it) }
+                    .getOrNull()
+                    ?.let { "export OPENCODE_CONFIG=${AgentRecipe.q(it)}; " }
+                    .orEmpty()
+            } else {
+                ""
+            }
+            // O export vem antes: o "&&" entre entrar na pasta e o exec continua valendo como antes.
+            "$env${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(launchCommand(command, agentId, autoApprove), jobId)}"
         }
 
         val capabilities = JSONObject()

@@ -13,9 +13,11 @@ import android.widget.Toast
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
+import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.autoCompactText
 import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.concisenessText
+import io.github.jonjonesbr.jangada.chat.openCodeEconomyText
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
@@ -228,6 +230,29 @@ class SettingsActivity : JangadaActivity() {
                             settings.conciseness = value
                             showConciseness()
                             thread(name = "agent-concision") { runCatching { linuxForTips.refreshIntegration() } }
+                        }
+                    },
+                )
+                .show()
+        }
+
+        // Economia do OpenCode: preset próprio do app (ver OpenCodeEconomy), só nos chats do OpenCode.
+        // Só vale quando o agente inicia de novo: não reinicia nada aqui.
+        val economyButton = findViewById<Button>(R.id.settings_opencode_economy)
+        fun showOpenCodeEconomy() {
+            val value = openCodeEconomyText(this, settings.openCodeEconomy)
+            economyButton.text = value
+            economyButton.contentDescription = getString(R.string.settings_opencode_economy_label, value)
+        }
+        showOpenCodeEconomy()
+        economyButton.setOnClickListener {
+            Sheet(this)
+                .title(getString(R.string.opencode_economy_title))
+                .rows(
+                    OpenCodeEconomy.GENERAL.map { value ->
+                        Sheet.Row(title = openCodeEconomyText(this, value), checked = value == settings.openCodeEconomy) {
+                            settings.openCodeEconomy = value
+                            showOpenCodeEconomy()
                         }
                     },
                 )

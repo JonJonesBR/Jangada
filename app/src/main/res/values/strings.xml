@@ -906,6 +906,15 @@
     <string name="conciseness_settings_label">Answer length: %1$s</string>
     <string name="settings_conciseness_desc">Adds a request to answer briefly to the instructions of every agent, including the terminal.</string>
     <string name="conciseness_note">On Claude the choice applies right away; on other agents, from a new conversation.</string>
+    <string name="settings_opencode_economy">OpenCode economy</string>
+    <string name="settings_opencode_economy_desc">Cheap model for background work and earlier compaction, in OpenCode chats only. Needs the OpenCode Go plan connected.</string>
+    <string name="settings_opencode_economy_label">OpenCode economy: %1$s</string>
+    <string name="opencode_economy_title">OpenCode economy</string>
+    <string name="opencode_economy_on">On</string>
+    <string name="opencode_economy_off">Off</string>
+    <string name="opencode_economy_global">Follow the general setting (%1$s)</string>
+    <string name="opencode_economy_from_general">Follows the general setting</string>
+    <string name="opencode_economy_note">Applies when the agent starts: stop it and send the message again to apply now. Your opencode.json is not changed.</string>
     <string name="chat_auto_compacting">Compacting the conversation automatically (context at %1$d%%).</string>
     <string name="opencode_auth_row">Accounts and keys</string>
     <string name="opencode_auth_row_desc">Connect providers with your own key, or go back to the free plan</string>
