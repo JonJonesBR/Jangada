@@ -162,6 +162,9 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
                 setTextColor(getColor(R.color.key_text))
                 textSize = 16f * chatScale
                 maxWidth = maxTextWidth
+                // Seleção parcial (copiar um comando ou trecho). Na mensagem não enviada o toque
+                // devolve o texto à caixa: ali a seleção sairia com esse clique.
+                textIsSelectable = !item.dropped
             },
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -265,13 +268,15 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
         setLineSpacing(0f, 1.2f)
         setPadding(dp(4), dp(4), dp(4), dp(4))
         setLinkTextColor(getColor(R.color.accent_text))
-        // Links abrem ao toque; sem link, o toque segue para o clique longo (copiar).
+        // Seleção parcial do texto (copiar um comando ou trecho); segurar fora do texto ainda
+        // copia a resposta toda (o listener do cartão).
+        textIsSelectable = true
+        // Links abrem ao toque; a seleção continua valendo no clique longo.
         movementMethod = if (body is Spanned && body.getSpans(0, body.length, URLSpan::class.java).isNotEmpty()) {
             LinkMovementMethod.getInstance()
         } else {
             null
         }
-        setOnLongClickListener { activity.copy(item.text); true }
     }
 
     private fun codeBlock(part: ChatRender.Part): View {
