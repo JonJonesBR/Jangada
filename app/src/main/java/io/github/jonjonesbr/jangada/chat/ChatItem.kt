@@ -379,4 +379,11 @@ interface AgentChat {
      * sem como retomar a conversa, ou com pedido de permissão ou login sem resposta.
      */
     fun sleep(): Boolean = false
+    /** O agente sabe reler os limites sem esperar uma mensagem (Codex, OpenCode e agy). */
+    val canRefreshLimits: Boolean get() = false
+    /**
+     * Relê os limites agora, ignorando o intervalo normal (pedido explícito no painel). Devolve false,
+     * sem fazer nada, quando o agente não informa limites fora de uma resposta (ex.: Claude).
+     */
+    fun refreshLimitsNow(): Boolean = false
 }

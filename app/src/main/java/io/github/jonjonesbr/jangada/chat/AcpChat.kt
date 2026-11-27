@@ -8,7 +8,6 @@ import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.OpenCodePreset
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import kotlin.concurrent.thread
 
 /**
@@ -438,26 +437,26 @@ class AcpChat(
     private var limitsAgain = false
 
     /**
-     * Codex: lê os limites do plano nas sessões que ele grava (numa thread própria, uma por vez) e
-     * guarda o que achar. [delayMs] dá tempo ao Codex de gravar o fim do turno. Não faz nada para os
-     * outros agentes. Roda na thread principal.
+     * Lê os limites do plano do agente e guarda o que achar: Codex pelas sessões que ele grava,
+     * OpenCode e agy por um comando (ver [CheapLimits] e [refreshScriptLimits]). [delayMs] dá tempo ao
+     * agente de gravar o fim do turno; [force] é o pedido explícito do painel, que não espera o intervalo.
+     * Roda na thread principal.
      */
-    private fun refreshLimits(delayMs: Long = 0L) {
-        if (agentId == OPENCODE_ID) return refreshOpenCodeLimits(delayMs)
-        if (agentId == AGY_ID) return refreshScriptLimits(AGY_LIMITS_SCRIPT, PlanLimitsParser::fromAgyUsage)
+    private fun refreshLimits(delayMs: Long = 0L, force: Boolean = false) {
+        if (agentId == OPENCODE_ID) return refreshOpenCodeLimits(delayMs, force)
+        if (agentId == AGY_ID) return refreshScriptLimits(AGY_LIMITS_SCRIPT, PlanLimitsParser::fromAgyUsage, force)
         if (agentId != CODEX_ID) return
         if (limitsReading) {
             limitsAgain = true
             return
         }
         limitsReading = true
-        val sessions = File(linux.rootfs, "root/.codex/sessions")
         val started = runCatching {
             thread(name = "jangada-limites") {
                 var limits: PlanLimits? = null
                 try {
                     if (delayMs > 0) Thread.sleep(delayMs)
-                    limits = CodexLimits.read(sessions, System.currentTimeMillis())
+                    limits = CheapLimits.codex(linux)
                 } catch (e: Exception) {
                     Log.w(TAG, "limites do Codex", e)
                 } finally {
@@ -486,6 +485,20 @@ class AcpChat(
         if (started.isFailure) limitsReading = false
     }
 
+    /** Codex, OpenCode e agy sabem reler os limites sem esperar uma mensagem (ver [CheapLimits]). */
+    override val canRefreshLimits: Boolean
+        get() = agentId == CODEX_ID || agentId == OPENCODE_ID || agentId == AGY_ID
+
+    /**
+     * Pedido explícito no painel dos limites: lê de novo agora, sem esperar o intervalo normal.
+     * Devolve false quando o agente não informa limites (aí só a próxima resposta atualiza).
+     */
+    override fun refreshLimitsNow(): Boolean {
+        if (!canRefreshLimits) return false
+        refreshLimits(force = true)
+        return true
+    }
+
     /** Última leitura dos limites por script (OpenCode e agy; ms; só a thread principal mexe). */
     private var scriptLimitsAt = 0L
     /** A última leitura disse que não há login no console do agente: só tenta de novo ao abrir a conversa. */
@@ -495,12 +508,13 @@ class AcpChat(
      * Limites lidos por um comando do próprio agente (agy). [script] roda num bash do Debian e
      * [parse] lê a saída. Abre outro agente, então no máximo uma vez a cada [LIMITS_EVERY_MS], e sem
      * login (resposta sem limites, exit 0) só de novo na próxima conversa. Falha ou formato inesperado: não
-     * mostra nada. As janelas "outras" (Claude/GPT) não avisam (ver [windowsToWarn]). Thread principal.
+     * mostra nada. As janelas "outras" (Claude/GPT) não avisam (ver [windowsToWarn]). Com [force]
+     * (pedido explícito no painel), não espera o intervalo. Thread principal.
      */
-    private fun refreshScriptLimits(script: String, parse: (String, Long) -> PlanLimits?) {
+    private fun refreshScriptLimits(script: String, parse: (String, Long) -> PlanLimits?, force: Boolean = false) {
         val now = System.currentTimeMillis()
         val first = scriptLimitsAt == 0L
-        if (limitsReading || (!first && (scriptLimitsNoLogin || now - scriptLimitsAt < LIMITS_EVERY_MS))) return
+        if (limitsReading || (!force && !first && (scriptLimitsNoLogin || now - scriptLimitsAt < LIMITS_EVERY_MS))) return
         limitsReading = true
         scriptLimitsAt = now
         val started = runCatching {
@@ -543,18 +557,18 @@ class AcpChat(
      * próprio opencode (funciona sem login no console); e o consumo local dos últimos dias (ver
      * [OpenCodeStats]), que o chip usa quando não há cota publicada. O Go direto continua mesmo sem
      * console; a API do console, quando responde sem login, só é tentada de novo na próxima conversa.
-     * Thread principal.
+     * Com [force] (pedido explícito no painel), não espera o intervalo e relê o consumo local. Thread principal.
      */
-    private fun refreshOpenCodeLimits(delayMs: Long = 0L) {
+    private fun refreshOpenCodeLimits(delayMs: Long = 0L, force: Boolean = false) {
         val now = System.currentTimeMillis()
         val first = scriptLimitsAt == 0L
-        if (limitsReading || (!first && now - scriptLimitsAt < LIMITS_EVERY_MS)) return
+        if (limitsReading || (!force && !first && now - scriptLimitsAt < LIMITS_EVERY_MS)) return
         limitsReading = true
         scriptLimitsAt = now
         // Sem login no console (resposta vazia), não insiste a cada leitura: economiza um opencode.
         val skipApi = scriptLimitsNoLogin
         // O stats abre outro opencode: não roda a cada leitura, só a cada [OPENCODE_USAGE_EVERY_MS].
-        val usageDue = openCodeUsageAt == 0L || now - openCodeUsageAt >= OPENCODE_USAGE_EVERY_MS
+        val usageDue = force || openCodeUsageAt == 0L || now - openCodeUsageAt >= OPENCODE_USAGE_EVERY_MS
         val started = runCatching {
             thread(name = "jangada-limites-$agentId") {
                 var limits: PlanLimits? = null
@@ -576,9 +590,7 @@ class AcpChat(
                         apiNoLogin = apiOk && parsed == null
                         parsed
                     }
-                    val goOut = StringBuilder()
-                    linux.runBash(OPENCODE_GO_LIMITS_SCRIPT) { goOut.append(it).append('\n') }
-                    val go = PlanLimitsParser.fromOpenCodeGoUsage(goOut.toString(), System.currentTimeMillis())
+                    val go = CheapLimits.openCodeGo(linux)
                     limits = when {
                         api != null && go != null -> PlanLimitsParser.merge(api, go)
                         else -> go ?: api
@@ -1797,24 +1809,6 @@ class AcpChat(
         const val OPENCODE_USAGE_EVERY_MS = 30 * 60_000L
         /** Pergunta os limites ao opencode, com servidor próprio (sai no fim) e tempo limite. */
         const val OPENCODE_LIMITS_SCRIPT = "timeout 40 opencode api experimental.usage.limits --standalone </dev/null 2>/dev/null"
-        /**
-         * Lê a cobrança do OpenCode Go direto na API, com a chave Go ativa do próprio opencode. A chave sai
-         * do `auth export` e vai ao curl pela entrada padrão (`-H @-`): não entra na linha de comando, na
-         * saída do script, em log nem no app. Sem `auth export` (versão antiga) ou sem conta Go, não imprime nada.
-         */
-        val OPENCODE_GO_LIMITS_SCRIPT = """
-            set +x
-            GO_KEY=${'$'}(timeout 40 opencode auth export opencode-go --standalone </dev/null 2>/dev/null | awk '
-              /"id":/ { active=0 }
-              /"active": *true/ { active=1 }
-              /"key":/ { line=${'$'}0; sub(/.*"key": *"/, "", line); sub(/".*/, "", line); if (active) { print line; exit } if (first == "") first=line }
-              END { if (first != "") print first }
-            ' | head -1)
-            if [ -n "${'$'}GO_KEY" ]; then
-              printf 'Authorization: Bearer %s\n' "${'$'}GO_KEY" | curl -s -m 20 -H @- -H 'Accept: application/json' https://opencode.ai/zen/go/v1/usage
-            fi
-            unset GO_KEY
-        """.trimIndent()
         /** Pergunta os limites ao agy pelo `/usage` do modo de impressão (sai sozinho, sem turno; testado em 24/11/2026). */
         const val AGY_LIMITS_SCRIPT = "timeout 40 agy -p /usage --print-timeout 30s </dev/null 2>/dev/null"
         /** Comando do agente que compacta a conversa (o mesmo do "Compactar agora") e o texto que o manda. */

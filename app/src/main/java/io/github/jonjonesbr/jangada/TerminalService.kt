@@ -35,6 +35,7 @@ import io.github.jonjonesbr.jangada.chat.ChatAttention
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
+import io.github.jonjonesbr.jangada.chat.CheapLimits
 import io.github.jonjonesbr.jangada.chat.ChildAgents
 import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.LimitWindow
@@ -42,6 +43,9 @@ import io.github.jonjonesbr.jangada.chat.formatLimitReset
 import io.github.jonjonesbr.jangada.chat.limitKindName
 import io.github.jonjonesbr.jangada.chat.PermissionOption
 import io.github.jonjonesbr.jangada.chat.PermissionRisk
+import io.github.jonjonesbr.jangada.chat.PlanLimits
+import io.github.jonjonesbr.jangada.chat.PlanLimitsParser
+import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
 import io.github.jonjonesbr.jangada.lan.LanNetwork
 import io.github.jonjonesbr.jangada.lan.LanServer
 import io.github.jonjonesbr.jangada.lan.TerminalLanBridge
@@ -209,6 +213,9 @@ class TerminalService : Service() {
     /** Chamado quando o usuário encerra tudo pela notificação. */
     var onExit: (() -> Unit)? = null
 
+    /** Chamado quando a leitura barata dos limites (ao abrir a Home) gravou algo novo. */
+    var onLimitsChanged: (() -> Unit)? = null
+
     /** Telas avisadas quando a lista de sessões (ou o chat) muda. */
     private val sessionListeners = java.util.concurrent.CopyOnWriteArraySet<() -> Unit>()
 
@@ -328,6 +335,55 @@ class TerminalService : Service() {
 
     /** Chats com o agente rodando: só eles contam no limite (um trabalho parado não usa memória). */
     fun runningChats(): List<ChatSlot> = chats.values.filter { it.chat.running }
+
+    /** Última leitura barata dos limites (ms; -1 = nunca; só a thread principal mexe). */
+    private var cheapLimitsAt = -1L
+    /** Leitura barata em andamento: uma por vez. */
+    private var cheapLimitsReading = false
+
+    /**
+     * Relê os limites que não gastam cota nem abrem outro agente (Codex pelas sessões locais, OpenCode
+     * Go pela API) para a Home não mostrar valor velho ao abrir o app. No máximo uma vez a cada
+     * [CHEAP_LIMITS_EVERY_MS]; avisa [onLimitsChanged] quando grava algo novo. Thread principal.
+     */
+    fun refreshCheapLimits() {
+        if (cheapLimitsReading) return
+        val linux = LinuxEnv(this)
+        if (!linux.isReady) return
+        val now = System.currentTimeMillis()
+        if (cheapLimitsAt >= 0 && now - cheapLimitsAt < CHEAP_LIMITS_EVERY_MS) return
+        val installed = AgentPrefs.installedCommands(this).orEmpty()
+        val ids = AgentCatalog.load(this)
+            .filter { it.command in installed && (it.id == CheapLimits.CODEX_ID || it.id == CheapLimits.OPENCODE_ID) }
+            .map { it.id }
+            .toSet()
+        if (ids.isEmpty()) return
+        cheapLimitsAt = now
+        cheapLimitsReading = true
+        thread(name = "jangada-limites-home") {
+            val found = HashMap<String, PlanLimits>()
+            try {
+                if (CheapLimits.CODEX_ID in ids) CheapLimits.codex(linux)?.let { found[CheapLimits.CODEX_ID] = it }
+                if (CheapLimits.OPENCODE_ID in ids) CheapLimits.openCodeGo(linux)?.let { found[CheapLimits.OPENCODE_ID] = it }
+            } catch (e: Exception) {
+                // IOException também cai aqui: fechar a Home no meio da leitura é normal.
+                Log.w(TAG, "limites ao abrir a Home", e)
+            } finally {
+                val result = found
+                main.post {
+                    cheapLimitsReading = false
+                    if (result.isEmpty()) return@post
+                    val store = PlanLimitsStore(this)
+                    for ((id, limits) in result) {
+                        // O consumo local só é lido de vez em quando: sem um novo, vale o último.
+                        val old = store.load(id)
+                        store.save(id, old?.let { PlanLimitsParser.merge(it, limits) } ?: limits)
+                    }
+                    onLimitsChanged?.invoke()
+                }
+            }
+        }
+    }
 
     /** Agentes de chat rodando ao mesmo tempo: a escolha dos ajustes, ou o automático pela RAM (ver AgentLimit). */
     fun maxChats(): Int = AgentLimit.effective(AppSettings(this).maxAgents, totalMem())
@@ -1894,6 +1950,8 @@ class TerminalService : Service() {
 
     companion object {
         private const val TAG = "Jangada"
+        /** Intervalo mínimo entre as leituras baratas dos limites ao abrir a Home. */
+        private const val CHEAP_LIMITS_EVERY_MS = 2 * 60_000L
         const val ACTION_EXIT = "io.github.jonjonesbr.jangada.EXIT"
         /** Instalação do Linux em primeiro plano (startService antes do Setup.start). */
         const val ACTION_SETUP = "io.github.jonjonesbr.jangada.SETUP"

@@ -497,6 +497,8 @@ class HomeActivity : JangadaActivity() {
         super.onResume()
         paused = false
         service?.homeScreenVisible = true
+        // Relê os limites baratos (Codex/OpenCode) para os cartões não abrirem com valor velho.
+        service?.refreshCheapLimits()
         if (!::agentsList.isInitialized) return
         renderNotifications()
         if (askedStorage) afterStorageRequest() else renderStorage()
@@ -598,6 +600,7 @@ class HomeActivity : JangadaActivity() {
         service?.let {
             it.removeSessionsListener(sessionsListener)
             it.onTasksChanged = null
+            it.onLimitsChanged = null
         }
         service = null
         // Desfaz o bind sempre que foi feito, mesmo se a conexão ainda não chegou.
@@ -624,6 +627,8 @@ class HomeActivity : JangadaActivity() {
             if (!paused) svc.homeScreenVisible = true
             svc.addSessionsListener(sessionsListener)
             svc.onTasksChanged = { onTasksChanged() }
+            svc.onLimitsChanged = { renderAgents() }
+            svc.refreshCheapLimits()
             // Tarefas que terminaram com a tela fora (ex.: a fila do Atualizar todos) também contam.
             if (acknowledgeFinished(svc)) refreshInstalled()
             renderSessions()
@@ -722,6 +727,8 @@ class HomeActivity : JangadaActivity() {
             installedVersions = versions
             installedSizes = sizes
             renderAgents()
+            // Primeira detecção da sessão: agora dá para reler os limites de quem está instalado.
+            service?.refreshCheapLimits()
         }
     }
 

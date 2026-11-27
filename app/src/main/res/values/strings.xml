@@ -329,6 +329,10 @@
     <string name="chat_limit_other">%1$s: %2$d%% used</string>
     <string name="chat_limit_resets">resets %1$s</string>
     <string name="chat_limits_updated">Updated %1$s.</string>
+    <string name="chat_limits_refresh_now">Refresh now</string>
+    <string name="chat_limits_refresh_now_desc">Reads the source now; may take a few seconds.</string>
+    <string name="chat_limits_refreshing">Refreshing the limits…</string>
+    <string name="chat_limits_refresh_unsupported">This agent only updates the limits along with a reply.</string>
     <string name="chat_limits_explain">Limits apply to the whole account, including the website and other devices. The values are updated with each reply.</string>
     <string name="chat_chip_usage_zen">⏱ Zen %1$s · %2$d d</string>
     <string name="chat_chip_usage_free">⏱ free %1$s · %2$d d</string>

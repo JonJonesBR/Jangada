@@ -1590,7 +1590,24 @@ class ChatActivity : JangadaActivity() {
             getString(R.string.chat_limits_updated, updated),
             getString(R.string.chat_limits_explain),
         ).joinToString("\n\n")
-        Sheet(this).title(getString(R.string.chat_limits_title)).message(text).show()
+        val sheet = Sheet(this).title(getString(R.string.chat_limits_title)).message(text)
+        // Pedido explícito: só nos agentes que sabem reler sem esperar uma resposta (ver CheapLimits).
+        val chat = engine
+        if (chat?.canRefreshLimits == true) {
+            sheet.row(
+                Sheet.Row(
+                    title = getString(R.string.chat_limits_refresh_now),
+                    description = getString(R.string.chat_limits_refresh_now_desc),
+                ) {
+                    if (chat.refreshLimitsNow()) {
+                        Toast.makeText(this, R.string.chat_limits_refreshing, Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(this, R.string.chat_limits_refresh_unsupported, Toast.LENGTH_LONG).show()
+                    }
+                },
+            )
+        }
+        sheet.show()
     }
 
     // ---- Sugestões de comandos "/" (do app e do agente) ----
