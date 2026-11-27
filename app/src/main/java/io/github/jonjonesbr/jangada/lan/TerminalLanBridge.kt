@@ -15,14 +15,18 @@ import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.chat.AcpChat
 import io.github.jonjonesbr.jangada.chat.AgentChat
 import io.github.jonjonesbr.jangada.chat.Attachments
+import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatExport
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.CodeMode
+import io.github.jonjonesbr.jangada.chat.Conciseness
+import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
 import io.github.jonjonesbr.jangada.linux.Git
+import io.github.jonjonesbr.jangada.linux.HeadlessAgent
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Workspace
@@ -33,6 +37,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.concurrent.thread
 
 /**
  * Implementação de [LanBridge] ligada ao [TerminalService].
@@ -601,6 +606,20 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
                     .put("summary", list.joinToString(" · ") { it.third }),
             )
         }
+        // Opções de "Dormir após inatividade" vêm do app para a web não divergir da lista do Android.
+        val sleepArr = JSONArray()
+        for (minutes in AppSettings.SLEEP_AFTER_MINUTES) sleepArr.put(minutes)
+        // Papéis fixos dos agentes chamados, na ordem de HeadlessAgent.AGENTS e só com receitas existentes.
+        val callRolesArr = JSONArray()
+        for (id in HeadlessAgent.AGENTS) {
+            if (id !in agentNames) continue
+            callRolesArr.put(
+                JSONObject()
+                    .put("agentId", id)
+                    .put("agentName", agentNames[id] ?: id)
+                    .put("role", settings.callRole(id)),
+            )
+        }
         return JSONObject()
             .put("simpleMode", settings.simpleMode)
             .put("enterSends", settings.enterSends)
@@ -615,8 +634,14 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
             .put("autoAgents", AgentLimit.auto(totalMemBytes()))
             .put("maxAgentsLimit", AgentLimit.MAX)
             .put("sleepAfterMinutes", settings.sleepAfterMinutes)
+            .put("sleepAfterOptions", sleepArr)
             .put("chatStallSeconds", settings.chatStallSeconds)
             .put("chatTextScale", settings.chatTextScale.toDouble())
+            .put("conciseness", settings.conciseness)
+            .put("openCodeEconomy", settings.openCodeEconomy)
+            .put("agyEconomy", settings.agyEconomy)
+            .put("agentCalls", settings.agentCalls)
+            .put("callRoles", callRolesArr)
             .put("keepCpuAwake", settings.keepCpuAwake)
             .put("keepScreenOn", settings.keepScreenOn)
             .put("showExtraKeys", settings.showExtraKeys)
@@ -654,6 +679,28 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
             val v = patch.optDouble("chatTextScale", 1.0).toFloat()
             if (v in AppSettings.CHAT_TEXT_SCALES) settings.chatTextScale = v
         }
+        if (patch.has("conciseness")) {
+            settings.conciseness = Conciseness.normalizeGeneral(patch.optString("conciseness", Conciseness.NORMAL))
+            refreshAgentIntegration()
+        }
+        if (patch.has("openCodeEconomy")) {
+            settings.openCodeEconomy =
+                OpenCodeEconomy.normalizeGeneral(patch.optString("openCodeEconomy", OpenCodeEconomy.OFF))
+        }
+        if (patch.has("agyEconomy")) {
+            settings.agyEconomy = AgyEconomy.normalizeGeneral(patch.optString("agyEconomy", AgyEconomy.OFF))
+            refreshAgentIntegration()
+        }
+        if (patch.has("agentCalls")) {
+            settings.agentCalls = patch.optBoolean("agentCalls", settings.agentCalls)
+            refreshAgentIntegration()
+        }
+        if (patch.has("callRoles")) {
+            val roles = patch.optJSONObject("callRoles")
+            if (roles != null) {
+                for (agentId in roles.keys()) settings.setCallRole(agentId, roles.optString(agentId, ""))
+            }
+        }
         if (patch.has("keepCpuAwake")) settings.keepCpuAwake = patch.optBoolean("keepCpuAwake", settings.keepCpuAwake)
         if (patch.has("keepScreenOn")) settings.keepScreenOn = patch.optBoolean("keepScreenOn", settings.keepScreenOn)
         if (patch.has("showExtraKeys")) settings.showExtraKeys = patch.optBoolean("showExtraKeys", settings.showExtraKeys)
@@ -667,6 +714,14 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
             onMain { TerminalThemes.apply(theme) }
         }
         return getSettings().put("ok", true)
+    }
+
+    /**
+     * Refaz a integração do Linux em segundo plano: a concisão, a economia do agy e as chamadas
+     * entre agentes entram no bloco de instruções, como na SettingsActivity.
+     */
+    private fun refreshAgentIntegration() {
+        thread(name = "lan-agent-settings") { runCatching { LinuxEnv(service).refreshIntegration() } }
     }
 
     override fun clearAcpDefaults(agentId: String): Boolean {

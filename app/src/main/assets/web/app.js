@@ -1011,7 +1011,11 @@
         const o = document.createElement("option");
         o.value = String(val);
         o.textContent = text;
-        if (String(val) === String(value)) o.selected = true;
+        // A escala chega do celular como float (1.15 pode vir 1.1499999…): compara com tolerância.
+        const selected = key === "chatTextScale"
+          ? Math.abs(parseFloat(val) - Number(value)) < 0.001
+          : String(val) === String(value);
+        if (selected) o.selected = true;
         sel.appendChild(o);
       }
       sel.addEventListener("change", () => {
@@ -1024,6 +1028,31 @@
       row.innerHTML = `<span>${escapeHtml(label)}</span>`;
       row.appendChild(sel);
       group.appendChild(row);
+    };
+
+    // Linha com select que salva num mapa (usada nos papéis dos agentes chamados).
+    const addRoleSelect = (group, label, agentId, value, options) => {
+      const row = document.createElement("div");
+      row.className = "setting-row";
+      const sel = document.createElement("select");
+      for (const [val, text] of options) {
+        const o = document.createElement("option");
+        o.value = val;
+        o.textContent = text;
+        if (val === value) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.addEventListener("change", () => savePatch({ callRoles: { [agentId]: sel.value } }));
+      row.innerHTML = `<span>${escapeHtml(label)}</span>`;
+      row.appendChild(sel);
+      group.appendChild(row);
+    };
+
+    // Rótulo das opções de dormir: 0 = nunca; múltiplos de 60 viram horas.
+    const sleepLabel = (raw) => {
+      const minutes = Number(raw);
+      if (!minutes) return "Nunca";
+      return minutes % 60 === 0 ? `${minutes / 60} h` : `${minutes} min`;
     };
 
     const gChat = addGroup("Chat & Agentes");
@@ -1043,17 +1072,41 @@
     addSelect(gChat, "Code Mode (Claude, experimental)", "codeMode", cfg.codeMode, [
       ["off", "Desligado"], ["on", "Ligado"],
     ]);
+    addSelect(gChat, "Concisão das respostas", "conciseness", cfg.conciseness, [
+      ["normal", "Normal"], ["short", "Conciso"], ["tiny", "Muito conciso"],
+    ]);
     const maxOpts = [[0, `Automático (${cfg.autoAgents || 2})`]];
     for (let i = 1; i <= (cfg.maxAgentsLimit || 4); i++) maxOpts.push([i, String(i)]);
     addSelect(gChat, "Agentes simultâneos", "maxAgents", cfg.maxAgents, maxOpts);
-    addSelect(gChat, "Dormir após inatividade", "sleepAfterMinutes", cfg.sleepAfterMinutes, [
-      [0, "Nunca"], [10, "10 min"], [20, "20 min"], [30, "30 min"], [60, "60 min"],
-    ]);
+    const sleepOptions = (cfg.sleepAfterOptions && cfg.sleepAfterOptions.length
+      ? cfg.sleepAfterOptions
+      : [0, 15, 30, 60, 120]
+    ).map((minutes) => [minutes, sleepLabel(minutes)]);
+    addSelect(gChat, "Dormir após inatividade", "sleepAfterMinutes", cfg.sleepAfterMinutes, sleepOptions);
     addSelect(gChat, "Aviso de agente sem sinal", "chatStallSeconds", cfg.chatStallSeconds, [
       [60, "1 min"], [120, "2 min"], [300, "5 min"], [600, "10 min"],
     ]);
     addToggle(gChat, "Dicas de memória para agentes", "agentMemoryTips", cfg.agentMemoryTips);
     addToggle(gChat, "Limpeza automática de caches", "autoClean", cfg.autoClean);
+
+    const gEconomy = addGroup("Economia & Agentes");
+    addSelect(gEconomy, "Economia do OpenCode", "openCodeEconomy", cfg.openCodeEconomy, [
+      ["off", "Desligada"], ["on", "Ligada"],
+    ]);
+    addSelect(gEconomy, "Economia do agy", "agyEconomy", cfg.agyEconomy, [
+      ["off", "Desligada"], ["on", "Ligada"],
+    ]);
+    addToggle(gEconomy, "Agentes podem chamar outros agentes", "agentCalls", cfg.agentCalls);
+    const roleOptions = [
+      ["", "O chamador decide"],
+      ["revisor", "Revisor (só leitura)"],
+      ["planejador", "Planejador (só leitura)"],
+      ["implementador", "Implementador (escreve)"],
+      ["orquestrador", "Orquestrador (escreve)"],
+    ];
+    for (const cr of (cfg.callRoles || [])) {
+      addRoleSelect(gEconomy, `Papel de ${cr.agentName} (quando chamado)`, cr.agentId, cr.role || "", roleOptions);
+    }
 
     if (cfg.acpDefaults && cfg.acpDefaults.length > 0) {
       const gAcp = addGroup("Padrões lembrados (ACP)");
@@ -1084,6 +1137,9 @@
     ]);
     addSelect(gDevice, "Tema do terminal", "terminalTheme", cfg.terminalTheme, [
       ["default", "Padrão"], ["sea", "Mar à noite"], ["dracula", "Dracula"], ["solarized_dark", "Solarized Dark"], ["solarized_light", "Solarized Light"],
+    ]);
+    addSelect(gDevice, "Tamanho do texto do chat", "chatTextScale", cfg.chatTextScale, [
+      [0.85, "Pequeno"], [1, "Normal"], [1.15, "Grande"], [1.3, "Maior"], [1.5, "Enorme"],
     ]);
 
     const gSecrets = addGroup("Chaves de API (criptografadas no celular)");
