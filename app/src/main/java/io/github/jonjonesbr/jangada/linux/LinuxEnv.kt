@@ -338,16 +338,17 @@ class LinuxEnv(context: Context) {
             val settings = AppSettings(app)
             val enabled = settings.agentMemoryTips
             val concision = settings.conciseness
+            val calls = settings.agentCalls
             val now = SystemClock.elapsedRealtime()
             val last = instructionsApplied
-            if (last != null && last.first == enabled && last.second == concision &&
-                now - last.third < INSTRUCTIONS_INTERVAL_MS
+            if (last != null && last.enabled == enabled && last.concision == concision &&
+                last.calls == calls && now - last.at < INSTRUCTIONS_INTERVAL_MS
             ) {
                 return
             }
             // AgentCatalog já guarda as receitas em cache: os assets não mudam com o app aberto.
-            AgentInstructions.apply(this, AgentCatalog.load(app), enabled, concision)
-            instructionsApplied = Triple(enabled, concision, now)
+            AgentInstructions.apply(this, AgentCatalog.load(app), enabled, concision, calls)
+            instructionsApplied = Stamp(enabled, concision, calls, now)
         }
     }
 
@@ -384,6 +385,13 @@ class LinuxEnv(context: Context) {
                 val agent = File(bin, "jangada-agent")
                 writeReplacing(agent, wrapper)
                 Fs.setMode(agent.toPath(), "755".toInt(8))
+            }
+            // jangada-call: um agente chama outro (a ponte roda no app, ver CallServer).
+            val callScript = callScriptCache ?: linuxAsset("jangada-call")?.also { callScriptCache = it }
+            if (callScript != null) {
+                val call = File(bin, "jangada-call")
+                writeReplacing(call, callScript)
+                Fs.setMode(call.toPath(), "755".toInt(8))
             }
         }
         // tool-env.sh: lido pelo bash não interativo dos agentes (BASH_ENV), dá prioridade aos comandos deles.
@@ -562,7 +570,9 @@ class LinuxEnv(context: Context) {
         private val INSTRUCTIONS_LOCK = Any()
 
         /** Última combinação aplicada (memória ligada?, concisão) e o momento (elapsedRealtime), só com [INSTRUCTIONS_LOCK]. */
-        @Volatile private var instructionsApplied: Triple<Boolean, String, Long>? = null
+        @Volatile private var instructionsApplied: Stamp? = null
+        /** Últimos ajustes que entraram no bloco das instruções (ver [INSTRUCTIONS_INTERVAL_MS]). */
+        private class Stamp(val enabled: Boolean, val concision: String, val calls: Boolean, val at: Long)
 
         /** Intervalo mínimo para reaplicar as instruções com o mesmo ajuste. */
         private const val INSTRUCTIONS_INTERVAL_MS = 60_000L
@@ -578,6 +588,7 @@ class LinuxEnv(context: Context) {
 
         /** Texto do asset linux/jangada-agent, lido uma vez (nulo até a primeira leitura bem-sucedida). */
         @Volatile private var jobWrapperCache: String? = null
+        @Volatile private var callScriptCache: String? = null
 
         /** Texto do asset linux/tool-env.sh, lido uma vez (nulo até a primeira leitura bem-sucedida). */
         @Volatile private var toolEnvCache: String? = null

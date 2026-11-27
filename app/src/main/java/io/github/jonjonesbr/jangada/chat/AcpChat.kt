@@ -35,6 +35,8 @@ class AcpChat(
     private val concisionPrefix: () -> String = { "" },
     /** Preset de economia deste trabalho, lido na subida do agente (ver OpenCodeEconomy/OpenCodePreset). */
     private val economy: () -> Boolean = { false },
+    /** Trabalho deste chat (ver TerminalService.chatKey): vai no ambiente para o `jangada-call` saber quem chamou. */
+    private val callerKey: String = "",
 ) : ProcessChat(linux, TAG) {
 
     /** Pode compactar sozinho de novo? Some ao compactar e volta quando o contexto cai abaixo do percentual. */
@@ -206,7 +208,8 @@ class AcpChat(
                 ""
             }
             // O export vem antes: o "&&" entre entrar na pasta e o exec continua valendo como antes.
-            "$env${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(launchCommand(command, agentId, autoApprove), jobId)}"
+            val caller = if (callerKey.isNotEmpty()) "export JANGADA_CHAT=${AgentRecipe.q(callerKey)}; " else ""
+            "$caller$env${AgentRecipe.enterDir(cwd)} && exec ${AgentRecipe.wrap(launchCommand(command, agentId, autoApprove), jobId)}"
         }
 
         val capabilities = JSONObject()

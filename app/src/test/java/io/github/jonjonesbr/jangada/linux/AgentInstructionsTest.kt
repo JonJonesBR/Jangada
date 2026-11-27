@@ -299,6 +299,20 @@ class AgentInstructionsTest {
     }
 
     @Test
+    fun chamadasEntramSoQuandoLigadas() {
+        val ligado = AgentInstructions.block(true, Conciseness.NORMAL, calls = true)!!
+        assertTrue(ligado.contains(AgentInstructions.CALLS))
+        assertTrue(ligado.contains("jangada-call"))
+        assertFalse(block.contains("jangada-call"))
+        val root = rootfs()
+        val file = root.resolve("root/.codex/AGENTS.md")
+        AgentInstructions.apply(root, listOf("codex" to codex), enabled = true, calls = true)
+        assertTrue(file.text().contains("jangada-call"))
+        AgentInstructions.apply(root, listOf("codex" to codex), enabled = true, calls = false)
+        assertFalse(file.text().contains("jangada-call"))
+    }
+
+    @Test
     fun discoTemAsDuasSecoes() {
         val root = rootfs()
         val file = root.resolve("root/.codex/AGENTS.md")

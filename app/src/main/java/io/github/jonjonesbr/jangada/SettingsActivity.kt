@@ -10,6 +10,7 @@ import android.widget.RadioGroup
 import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import io.github.jonjonesbr.jangada.chat.AgentRoles
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
@@ -19,6 +20,7 @@ import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.concisenessText
 import io.github.jonjonesbr.jangada.chat.openCodeEconomyText
 import io.github.jonjonesbr.jangada.linux.Fs
+import io.github.jonjonesbr.jangada.linux.HeadlessAgent
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.terminal.TerminalThemes
@@ -210,6 +212,56 @@ class SettingsActivity : JangadaActivity() {
         bindSwitch(R.id.settings_agent_tips, settings.agentMemoryTips) {
             settings.agentMemoryTips = it
             thread(name = "agent-tips") { runCatching { linuxForTips.refreshIntegration() } }
+        }
+
+        // Agente chamando agente (jangada-call): desligado por padrão. O papel fixo vale no lugar do
+        // que o chamador pediu; papel que escreve continua dependendo do Aprovar tudo do chat.
+        bindSwitch(R.id.settings_agent_calls, settings.agentCalls) {
+            settings.agentCalls = it
+            thread(name = "agent-calls") { runCatching { linuxForTips.refreshIntegration() } }
+        }
+        val callRoles = findViewById<Button>(R.id.settings_call_roles)
+        fun roleText(id: String): String = getString(
+            when (id) {
+                AgentRoles.REVISOR -> R.string.call_role_revisor
+                AgentRoles.PLANEJADOR -> R.string.call_role_planejador
+                AgentRoles.IMPLEMENTADOR -> R.string.call_role_implementador
+                AgentRoles.ORQUESTRADOR -> R.string.call_role_orquestrador
+                else -> R.string.call_role_auto
+            },
+        )
+        val recipes = io.github.jonjonesbr.jangada.agents.AgentCatalog.load(this).associateBy { it.id }
+        callRoles.text = getString(R.string.settings_call_roles)
+        callRoles.setOnClickListener {
+            val agents = HeadlessAgent.AGENTS.mapNotNull { recipes[it] }
+            Sheet(this)
+                .title(getString(R.string.settings_call_roles))
+                .rows(
+                    agents.map { recipe ->
+                        Sheet.Row(
+                            title = recipe.name,
+                            value = roleText(settings.callRole(recipe.id)),
+                            icon = "🤝",
+                        ) {
+                            val current = settings.callRole(recipe.id)
+                            Sheet(this)
+                                .title(recipe.name)
+                                .rows(
+                                    listOf(
+                                        Sheet.Row(title = roleText(""), checked = current.isEmpty()) {
+                                            settings.setCallRole(recipe.id, "")
+                                        },
+                                    ) + AgentRoles.IDS.map { id ->
+                                        Sheet.Row(title = roleText(id), checked = current == id) {
+                                            settings.setCallRole(recipe.id, id)
+                                        }
+                                    },
+                                )
+                                .show()
+                        }
+                    },
+                )
+                .show()
         }
 
         // Concisão das respostas: ajuste geral, que entra no bloco de instruções de todos os agentes.

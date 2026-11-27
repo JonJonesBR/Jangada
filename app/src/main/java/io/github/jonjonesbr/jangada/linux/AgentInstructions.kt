@@ -32,6 +32,12 @@ object AgentInstructions {
         - Save context and quota: avoid reading whole files over 200 lines at once (use search tools like `ctx_search` or read line ranges), ignore heavy folders (`node_modules/`, `.git/`, `dist/`, `build/`, `.log`), and keep responses concise without repeating unchanged code.
     """.trimIndent()
 
+    /** Seção que só entra com as chamadas entre agentes ligadas (ver AgentRoles/jangada-call). */
+    val CALLS = """
+        ## Calling another agent (Jangada)
+        `jangada-call --agent ID [--role ROLE] "request"` calls another agent for one turn (ID: claude-code, opencode, antigravity; ROLE: revisor, planejador, implementador, orquestrador). It sees only the request, not this conversation; a called agent cannot call another.
+    """.trimIndent()
+
     /** Arquivo maior que isso não é lido nem alterado pelo app. */
     private const val MAX_BYTES = 1024L * 1024L
 
@@ -47,10 +53,11 @@ object AgentInstructions {
      * respostas (ver [Conciseness]). Devolve null quando não há nada a escrever (memória
      * desligada e nível normal).
      */
-    fun block(memoryTips: Boolean, concision: String): String? {
+    fun block(memoryTips: Boolean, concision: String, calls: Boolean = false): String? {
         val sections = ArrayList<String>()
         if (memoryTips) sections += TEXT
         if (Conciseness.normalizeGeneral(concision) != Conciseness.NORMAL) sections += Conciseness.instruction(concision)
+        if (calls) sections += CALLS
         if (sections.isEmpty()) return null
         return "$BEGIN\n" + sections.joinToString("\n\n") + "\n$END"
     }
@@ -142,8 +149,14 @@ object AgentInstructions {
      * Com [enabled] falso, sai de todos. Cada receita é tratada à parte: uma falha (ou um link
      * no caminho) não impede as outras. [concision] é o nível geral da concisão (ver [Conciseness]).
      */
-    fun apply(linux: LinuxEnv, recipes: List<AgentRecipe>, enabled: Boolean, concision: String = Conciseness.NORMAL) {
-        apply(linux.rootfs.toPath(), recipes.mapNotNull { r -> r.instructions?.let { r.id to it } }, enabled, concision)
+    fun apply(
+        linux: LinuxEnv,
+        recipes: List<AgentRecipe>,
+        enabled: Boolean,
+        concision: String = Conciseness.NORMAL,
+        calls: Boolean = false,
+    ) {
+        apply(linux.rootfs.toPath(), recipes.mapNotNull { r -> r.instructions?.let { r.id to it } }, enabled, concision, calls)
     }
 
     /** [apply] sobre um rootfs qualquer (testes): pares id da receita e instruções. */
@@ -152,10 +165,11 @@ object AgentInstructions {
         specs: List<Pair<String, Instructions>>,
         enabled: Boolean,
         concision: String = Conciseness.NORMAL,
+        calls: Boolean = false,
     ) {
         // Sem o Debian instalado não há o que orientar.
         if (!Files.isDirectory(root, NOFOLLOW)) return
-        val wanted = block(enabled, concision)
+        val wanted = block(enabled, concision, calls)
         val targets: Map<String, String?> = specs.associate { (id, spec) ->
             val chosen = if (wanted == null) null else runCatching { target(spec) { classify(read(root, resolve(root, it))) } }
                 .onFailure { Log.w(TAG, "alvo das instruções de $id: ${it.message}") }

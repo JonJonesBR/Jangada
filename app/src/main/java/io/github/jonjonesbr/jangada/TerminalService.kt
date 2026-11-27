@@ -29,6 +29,7 @@ import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.agents.AgentRecipe
 import io.github.jonjonesbr.jangada.chat.AcpChat
 import io.github.jonjonesbr.jangada.chat.AgentChat
+import io.github.jonjonesbr.jangada.chat.AgentRoles
 import io.github.jonjonesbr.jangada.chat.ChatAttention
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatHistory
@@ -45,13 +46,19 @@ import io.github.jonjonesbr.jangada.lan.LanServer
 import io.github.jonjonesbr.jangada.lan.TerminalLanBridge
 import io.github.jonjonesbr.jangada.linux.CACHE_CLEAN_SCRIPT
 import io.github.jonjonesbr.jangada.linux.CACHE_FREED_PREFIX
+import io.github.jonjonesbr.jangada.linux.CallServer
+import io.github.jonjonesbr.jangada.linux.HeadlessAgent
 import io.github.jonjonesbr.jangada.linux.LinkWatcher
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.linux.Workspace
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 /**
@@ -68,6 +75,8 @@ class TerminalService : Service() {
 
     private val binder = LocalBinder()
     private val main = Handler(Looper.getMainLooper())
+    /** Quanto da resposta de um agente chamado cabe no aviso do chat (o texto completo vai ao chamador). */
+    private val cardText = 600
     private var wakeLock: PowerManager.WakeLock? = null
     /** Mantém o Wi-Fi ativo com a tela apagada: sem ele, o Android derruba conexões longas (agentes em streaming). */
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
@@ -297,6 +306,8 @@ class TerminalService : Service() {
 
     /** Trabalhos de chat abertos, por [chatKey] (um por par agente + pasta). Só a thread principal mexe. */
     val chats = LinkedHashMap<String, ChatSlot>()
+    /** Ponte para um agente chamar outro (`jangada-call`); sobe quando o Debian está pronto. */
+    private var callServer: CallServer? = null
 
     /** Põe para dormir os agentes parados quando a memória aperta, ou quando ficam ociosos ou falta vaga. */
     val memoryWatch = MemoryWatch(this)
@@ -373,6 +384,7 @@ class TerminalService : Service() {
         // A integração com o Linux é refeita pelo próprio chat, fora da thread principal.
         startLinkWatcher(linux)
         val settings = AppSettings(this)
+        thread(name = "jangada-calls") { ensureCallServer() }
         val chat: AgentChat = if (agentId == CLAUDE) {
             // O Claude lê a compactação ao iniciar: trocar o ajuste reabre a conversa (ver ChatActivity).
             ChatEngine(
@@ -386,6 +398,7 @@ class TerminalService : Service() {
                 codeMode = settings.codeModeFor(key),
                 // A concisão do trabalho vai na linha de comando; "segue o geral" manda vazio.
                 concisionArg = Conciseness.chatArg(settings.conciseness, settings.concisenessOfJob(key)),
+                callerKey = key,
             )
         } else {
             // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).
@@ -398,6 +411,7 @@ class TerminalService : Service() {
                 concisionPrefix = { Conciseness.promptPrefix(settings.conciseness, settings.concisenessOfJob(key)) },
                 // Preset de economia do OpenCode deste trabalho, lido quando o agente inicia.
                 economy = { settings.openCodeEconomyFor(key) },
+                callerKey = key,
             )
         }
         // O agente que dormiu (ou foi reiniciado) volta num chat novo: Aprovar tudo e, no Claude, o modo
@@ -435,6 +449,64 @@ class TerminalService : Service() {
             val result = ChatHistory.pickSessionConversation(files, started, saved)
             main.post { onResult(result) }
         }
+    }
+
+    /** Sobe a ponte do `jangada-call` se o Debian está pronto e ela ainda não está no ar. */
+    @Synchronized
+    private fun ensureCallServer() {
+        if (callServer?.isRunning == true) return
+        val linux = LinuxEnv(this)
+        if (!linux.isReady) return
+        val server = CallServer { call -> handleAgentCall(call) }
+        if (!server.start(linux)) Log.w(TAG, "ponte de chamadas não subiu")
+        else callServer = server
+    }
+
+    /**
+     * Atende um `jangada-call`: valida agente, papel, pasta e permissão de escrita, roda o agente
+     * num turno só e devolve o texto. Papel que escreve depende do Aprovar tudo do chat chamador.
+     */
+    private fun handleAgentCall(call: CallServer.Call): CallServer.Reply {
+        val settings = AppSettings(this)
+        if (!settings.agentCalls) return CallServer.Reply(403, "chamadas entre agentes estão desligadas nos Ajustes")
+        if (call.agent !in HeadlessAgent.AGENTS) return CallServer.Reply(400, "agente sem chamada: ${call.agent}")
+        // O papel fixo dos Ajustes vence o que o chamador pediu; sem ele, vale o pedido.
+        val fixed = settings.callRole(call.agent)
+        val role = (if (fixed.isEmpty()) null else AgentRoles.byId(fixed)) ?: AgentRoles.byId(call.role)
+            ?: return CallServer.Reply(
+                400,
+                if (call.role.isEmpty()) "informe --role (ou fixe um papel nos Ajustes)" else "papel desconhecido: ${call.role}",
+            )
+        val linux = LinuxEnv(this)
+        if (!linux.isReady) return CallServer.Reply(503, "o Linux ainda não está pronto")
+        val cwd = call.cwd.ifBlank { Workspace.ROOT }
+        val inside = cwd == Workspace.ROOT || cwd.startsWith(Workspace.ROOT + "/")
+        val real = runCatching {
+            Files.isDirectory(linux.rootfs.toPath().resolve(cwd.removePrefix("/")), LinkOption.NOFOLLOW_LINKS)
+        }.getOrDefault(false)
+        if (!inside || cwd.contains("..") || !real) return CallServer.Reply(400, "pasta inválida: $cwd")
+        // A lista de chats é da thread principal: lê o chamador lá e espera a resposta.
+        var found: AgentChat? = null
+        val ready = CountDownLatch(1)
+        main.post {
+            found = chats[call.chat]?.chat
+            ready.countDown()
+        }
+        ready.await(5, TimeUnit.SECONDS)
+        val caller = found
+        if (role.scope == AgentRoles.Scope.WRITE && caller?.autoApprove != true) {
+            return CallServer.Reply(403, "para escrever, chame pelo chat com o Aprovar tudo ligado")
+        }
+        val who = "${call.agent} (${role.id})"
+        fun tell(text: String, isError: Boolean) {
+            if (caller == null) return
+            main.post { if (chats[call.chat]?.chat === caller) caller.addInfo(text, isError) }
+        }
+        tell(getString(R.string.call_started, who), false)
+        val result = HeadlessAgent.run(linux, call.agent, role, cwd, call.prompt)
+        val text = if (result.text.length > cardText) result.text.take(cardText) + "…" else result.text
+        tell(if (result.ok) getString(R.string.call_done, who, text) else getString(R.string.call_failed, who, text), !result.ok)
+        return if (result.ok) CallServer.Reply(200, result.text) else CallServer.Reply(500, result.text)
     }
 
     /** Fecha o trabalho do par ([agentId], [folder]); [then] roda depois que o agente terminou de sair. */
@@ -522,6 +594,7 @@ class TerminalService : Service() {
         }
         watchNetworkDns()
         scheduleAutoClean()
+        thread(name = "jangada-calls") { ensureCallServer() }
         // Trocar o ajuste nas configurações acorda ou solta o processador na hora.
         cpuAwakeListener = AppSettings(this).watchCpuAwake { main.post { applyCpuAwake() } }
     }
@@ -564,6 +637,8 @@ class TerminalService : Service() {
     }
 
     override fun onDestroy() {
+        callServer?.stop()
+        callServer = null
         lanServer?.stop()
         lanServer = null
         memoryWatch.stop()

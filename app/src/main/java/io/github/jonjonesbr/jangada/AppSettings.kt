@@ -2,6 +2,7 @@ package io.github.jonjonesbr.jangada
 
 import android.content.Context
 import android.content.SharedPreferences
+import io.github.jonjonesbr.jangada.chat.AgentRoles
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
@@ -251,6 +252,19 @@ class AppSettings(context: Context) {
     fun openCodeEconomyFor(key: String): Boolean =
         OpenCodeEconomy.effective(openCodeEconomy, openCodeEconomyPrefs.getString(key, null))
 
+    /** Deixa um agente chamar outro pelo `jangada-call` (chat e terminal). Desligado por padrão. */
+    var agentCalls: Boolean
+        get() = prefs.getBoolean(KEY_AGENT_CALLS, false)
+        set(value) = prefs.edit().putBoolean(KEY_AGENT_CALLS, value).apply()
+
+    /** Papel fixo de um agente chamado ("" = o chamador decide; ver AgentRoles). */
+    fun callRole(agentId: String): String =
+        prefs.getString("$KEY_CALL_ROLE$agentId", null)?.takeIf { AgentRoles.byId(it) != null } ?: ""
+
+    /** Guarda o papel fixo de um agente chamado; id desconhecido volta a "" (automático). */
+    fun setCallRole(agentId: String, roleId: String) =
+        prefs.edit().putString("$KEY_CALL_ROLE$agentId", if (AgentRoles.byId(roleId) == null) "" else roleId).apply()
+
     /** Compactação automática de um trabalho ([key] = TerminalService.chatKey): um de AutoCompact.JOB; "global" segue o geral. */
     fun autoCompactOfJob(key: String): String = AutoCompact.normalizeJob(jobPrefs.getString(key, null))
 
@@ -410,6 +424,8 @@ class AppSettings(context: Context) {
         private const val KEY_CODE_MODE = "code_mode"
         private const val KEY_CONCISENESS = "conciseness"
         private const val KEY_OPEN_CODE_ECONOMY = "open_code_economy"
+        private const val KEY_AGENT_CALLS = "agent_calls"
+        private const val KEY_CALL_ROLE = "call_role|"
         private const val KEY_AUTO_CLEAN = "auto_clean"
         private const val KEY_LAST_AUTO_CLEAN = "last_auto_clean_at"
         /** Pastas marcadas com "Sempre direto" no painel do novo trabalho (ver directFolder). */

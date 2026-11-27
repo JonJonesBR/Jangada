@@ -48,21 +48,31 @@ object OpenCodePreset {
         // Sem /root o Debian está sendo apagado ou reinstalado: não recria a home.
         val home = root.resolve("root")
         if (!Files.isDirectory(home, NOFOLLOW)) return null
-        val file = home.resolve(FILE)
+        return writeFile(root, home.resolve(FILE), OpenCodeEconomy.configJson())
+    }
+
+    /**
+     * Grava [content] em [file] (dentro do rootfs) sem seguir link, de forma atômica e 600. Devolve
+     * [file] quando já está igual ou quando gravou; null se não deu para gravar.
+     */
+    internal fun writeFile(root: Path, file: Path, content: String): Path? {
+        if (!Files.isDirectory(root, NOFOLLOW)) return null
+        // makeParents para na home: sem ela, não cria pasta nenhuma.
+        if (!Files.isDirectory(root.resolve("root"), NOFOLLOW)) return null
         // Nunca grava através de link: nem no arquivo, nem numa pasta entre o rootfs e ele.
         if (!parentsAreReal(root, file)) return null
         if (Files.exists(file, NOFOLLOW) && !Files.isRegularFile(file, NOFOLLOW)) return null
-        val content = OpenCodeEconomy.configJson().toByteArray(StandardCharsets.UTF_8)
+        val bytes = content.toByteArray(StandardCharsets.UTF_8)
         if (Files.isRegularFile(file, NOFOLLOW)) {
             val same = try {
-                Files.readAllBytes(file).contentEquals(content)
+                Files.readAllBytes(file).contentEquals(bytes)
             } catch (e: IOException) {
                 false
             }
             if (same) return file
         }
         if (!makeParents(root, file)) return null
-        writeAtomic(file, content)
+        writeAtomic(file, bytes)
         return file
     }
 

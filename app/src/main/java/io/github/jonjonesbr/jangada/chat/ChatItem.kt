@@ -320,6 +320,8 @@ interface AgentChat {
     val childAgents: ChildSummary? get() = null
     /** Para uma tarefa em segundo plano (ver [background]). Sem efeito se o agente não sabe parar tarefas. */
     fun stopBackground(taskId: String) {}
+    /** Acrescenta um aviso do app à conversa (ex.: o resultado de um agente chamado pelo próprio agente). */
+    fun addInfo(text: String, isError: Boolean = false) {}
     /** Cutuca o agente que ficou esperando uma aprovação fora de turno (agy): manda uma mensagem curta. Sem efeito nos outros. */
     fun continueStuck() {}
     /** O agente está recarregando a conversa anterior (session/load): ainda não aceita turno; mensagens ficam na fila. */

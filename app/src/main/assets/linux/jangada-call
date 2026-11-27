@@ -1,0 +1,84 @@
+#!/bin/sh
+# Chama outro agente pelo app Jangada (um turno só, sem abrir chat).
+# Gerado pelo Jangada; some quando o app desinstala a integração.
+#
+# uso: jangada-call --agent ID [--role PAPEL] [--cwd PASTA] [pedido]
+#       sem pedido nos argumentos, lê o pedido da entrada padrão
+#
+# PAPEL: revisor | planejador | implementador | orquestrador (opcional quando o
+#        agente tem um papel fixo nos Ajustes do Jangada)
+# ID:    claude-code | opencode | antigravity
+
+conf="$HOME/.config/jangada/call.conf"
+if [ ! -r "$conf" ]; then
+  echo "jangada-call: chamadas entre agentes estão desligadas (ligue nos Ajustes do Jangada)" >&2
+  exit 1
+fi
+
+port=""
+token=""
+while IFS='=' read -r k v; do
+  case "$k" in
+    port) port="$v" ;;
+    token) token="$v" ;;
+  esac
+done < "$conf"
+
+agent=""
+role=""
+cwd="$PWD"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --agent) agent="$2"; shift 2 ;;
+    --role) role="$2"; shift 2 ;;
+    --cwd) cwd="$2"; shift 2 ;;
+    --help|-h)
+      echo "uso: jangada-call --agent ID [--role revisor|planejador|implementador|orquestrador] [--cwd PASTA] [pedido]"
+      exit 0
+      ;;
+    --) shift; break ;;
+    *) break ;;
+  esac
+done
+
+if [ -z "$agent" ] || [ -z "$port" ] || [ -z "$token" ]; then
+  echo "uso: jangada-call --agent ID [--role PAPEL] [--cwd PASTA] [pedido]" >&2
+  exit 2
+fi
+
+# Um agente chamado não chama outro (a profundidade fica em 1).
+if [ "${JANGADA_CALL_DEPTH:-0}" -ge 1 ]; then
+  echo "jangada-call: um agente chamado não pode chamar outro" >&2
+  exit 3
+fi
+
+if [ $# -gt 0 ]; then
+  prompt="$*"
+else
+  prompt=$(cat)
+fi
+if [ -z "$prompt" ]; then
+  echo "jangada-call: pedido vazio" >&2
+  exit 2
+fi
+
+tmp=$(mktemp) || exit 1
+out="$tmp.out"
+err="$tmp.err"
+trap 'rm -f "$tmp" "$out" "$err"' EXIT
+printf '%s' "$prompt" > "$tmp"
+
+code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 330 \
+  -X POST \
+  -H "X-Jangada-Token: $token" \
+  -H "X-Jangada-Cwd: $cwd" \
+  -H "X-Jangada-Chat: ${JANGADA_CHAT:-}" \
+  --data-binary @"$tmp" \
+  "http://127.0.0.1:$port/call?agent=$agent&role=$role" 2>"$err")
+
+cat "$out" 2>/dev/null
+if [ "$code" != "200" ]; then
+  cat "$err" >&2 2>/dev/null
+  exit 1
+fi
+exit 0

@@ -514,6 +514,9 @@ abstract class ProcessChat(protected val linux: LinuxEnv, private val tag: Strin
         }
     }
 
+    /** Aviso do app na conversa (ex.: resultado de um agente chamado); sempre na thread principal. */
+    override fun addInfo(text: String, isError: Boolean) = add(ChatItem.Info(text, isError))
+
     protected fun changed(throttle: Boolean = false) {
         val now = System.currentTimeMillis()
         if (throttle && now - lastPost < THROTTLE_MS) {

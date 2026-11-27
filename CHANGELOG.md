@@ -1,10 +1,11 @@
 # Novidades
 
-## 1.36.0
+## 1.37.0
 
 - Chat do OpenCode: preset de economia, ligado nas Configurações ou por trabalho no chat (menu ⋮, ajustes e painel de contexto). Usa o modelo barato do plano OpenCode Go nos agentes de apoio (título, resumo e compactação) e compacta mais cedo, gravado num arquivo próprio do app; o `opencode.json` do usuário não é lido nem alterado.
 - Concisão das respostas: ajuste geral nas Configurações e por trabalho no chat, do normal ao muito curto. No Claude vale na hora; nos outros agentes, a partir de uma conversa nova.
 - Chat: seleção parcial do texto das mensagens, para copiar comandos e trechos; o botão Copiar ao lado do horário copia a resposta inteira num toque.
+- Agente chamando agente: o comando `jangada-call`, no chat e no terminal, chama outro agente num turno só, com um papel (revisor, planejador, implementador ou orquestrador) e o modelo barato nos papéis de apoio. Desligado por padrão nas Configurações, com papel fixo por agente ou o chamador decidindo; papel que escreve só roda com o Aprovar tudo no chat que chamou, um agente chamado não chama outro, e o resultado aparece num cartão na conversa.
 
 ## 1.35.0
 

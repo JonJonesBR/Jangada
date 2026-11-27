@@ -255,6 +255,30 @@
                 android:textColor="@color/setup_muted_text"
                 android:textSize="13sp" />
 
+            <!-- Agente chamando agente (jangada-call): desligado por padrão; escrita só com o Aprovar tudo. -->
+            <Switch
+                android:id="@+id/settings_agent_calls"
+                style="@style/SettingsOption"
+                android:text="@string/settings_agent_calls" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/settings_agent_calls_desc"
+                android:textColor="@color/setup_muted_text"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/settings_call_roles"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:minHeight="48dp"
+                android:textColor="@color/accent_text" />
+
             <!-- Memória e desempenho: quantos agentes rodam, quando os parados dormem e a compactação da conversa. -->
             <TextView
                 style="@style/HomeSection"

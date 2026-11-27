@@ -41,6 +41,8 @@ class ChatEngine(
     private val codeMode: Boolean = false,
     /** Concisão deste trabalho (ver Conciseness); vazio segue o geral. */
     private val concisionArg: String = "",
+    /** Trabalho deste chat (ver TerminalService.chatKey): vai no ambiente para o `jangada-call` saber quem chamou. */
+    private val callerKey: String = "",
 ) : ProcessChat(linux, TAG) {
 
     @Volatile override var sessionId: String? = null
@@ -168,6 +170,7 @@ class ChatEngine(
     private fun command(resume: String?): String {
         // O prefixo põe a variável de ambiente antes do cd e do exec: o Claude a lê ao iniciar.
         val args = StringBuilder(AutoCompact.claudeEnvPrefix(autoCompact) + AgentRecipe.claudeIn(cwd, exec = true, job = jobId))
+        if (callerKey.isNotEmpty()) args.insert(0, "export JANGADA_CHAT=${AgentRecipe.q(callerKey)}; ")
         args.append(" --output-format stream-json --verbose --input-format stream-json")
         args.append(" --include-partial-messages")
         args.append(" --permission-prompt-tool stdio --permission-mode ").append(permissionMode)
