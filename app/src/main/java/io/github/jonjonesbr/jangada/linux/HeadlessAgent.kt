@@ -109,11 +109,11 @@ object HeadlessAgent {
             }
             "antigravity" -> {
                 val perms = if (read) "--mode plan" else "--mode auto --dangerously-skip-permissions"
-                // Economia do agy: variáveis de corte/compactação + esforço médio. Sem --model: não dá para saber se o modelo existe sem consultar o agy.
+                // Economia do agy: variáveis de corte/compactação + esforço médio. O modelo vem do papel (Hydrogen/Neon).
                 val env = if (agyEconomy) AgyEconomy.envPrefix() else ""
                 val effort = if (agyEconomy) " --effort ${AgyEconomy.EFFORT}" else ""
                 val qWithRole = AgentRecipe.q(prefixedPrompt(role, prompt))
-                env + timeout + "agy $perms$effort -p $qWithRole"
+                env + timeout + "agy $perms$model$effort -p $qWithRole"
             }
             else -> null
         }

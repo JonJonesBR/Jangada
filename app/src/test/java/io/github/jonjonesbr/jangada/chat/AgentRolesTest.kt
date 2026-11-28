@@ -30,11 +30,15 @@ class AgentRolesTest {
         val implementador = AgentRoles.byId(AgentRoles.IMPLEMENTADOR)!!
         assertEquals("haiku", implementador.model("claude-code"))
         assertEquals("opencode-go/deepseek-v4.1-flash", implementador.model("opencode"))
-        assertNull(implementador.model("antigravity"))
+        assertEquals("gemini-4-hydrogen-medium", implementador.model("antigravity"))
         val revisor = AgentRoles.byId(AgentRoles.REVISOR)!!
         assertEquals("sonnet", revisor.model("claude-code"))
         assertEquals("opencode-go/deepseek-v4-pro", revisor.model("opencode"))
+        assertEquals("gemini-4-neon-medium", revisor.model("antigravity"))
+        assertEquals("gemini-4-neon-medium", AgentRoles.byId(AgentRoles.PLANEJADOR)!!.model("antigravity"))
+        assertEquals("gemini-4-neon-medium", AgentRoles.byId(AgentRoles.ORQUESTRADOR)!!.model("antigravity"))
         assertNotEquals(implementador.model("opencode"), revisor.model("opencode"))
+        assertNotEquals(implementador.model("antigravity"), revisor.model("antigravity"))
     }
 
     @Test

@@ -769,10 +769,10 @@ class AcpChat(
             // Erro, login ou recusa: a fila não segue sozinha, a pessoa revisa antes.
             // O erro de um turno que a pessoa mesma parou não conta: a fila já foi descartada no Parar.
             if ((error != null || refused) && !cancelled) dropQueue()
-            // Turno que acabou bem com o contexto cheio: o /compact entra na fila antes da próxima mensagem.
-            if (!cancelled && error == null && !refused) autoCompactIfDue()
             // Turno que acabou bem, sem parar o agente: se ficou ação em segundo plano, a vigia do alcance arma.
             if (!cancelled && error == null && !refused && !quotaInReply && !AcpParse.cancelled(result)) armCatchUpAfterTurn()
+            // Turno que acabou bem com o contexto cheio (e sem vigia forte esperando segundo plano): o /compact entra na fila.
+            if (!cancelled && error == null && !refused && !quotaInReply && !watching) autoCompactIfDue()
             changed()
             // O turno acabou: a próxima mensagem da fila (se houver) vai agora.
             sendNext()
@@ -782,16 +782,24 @@ class AcpChat(
     /**
      * Compactação automática (ver AutoCompact), no fim de um turno (thread principal). Manda /compact
      * como mensagem na fila: o turno segue, sem o aviso de fim, e o /compact vai à frente de quem
-     * esperava. Só uma vez seguida: depois, espera o contexto cair abaixo do percentual.
+     * esperava. Só uma vez seguida: depois, espera o contexto cair abaixo do percentual (ou teto de tokens).
      */
     private fun autoCompactIfDue() {
-        val percentSetting = AutoCompact.percentOf(autoCompact())
-        val used = contextUsage?.percent
-        if (AutoCompact.rearms(percentSetting, used)) autoCompactArmed = true
+        val setting = autoCompact()
+        val percentSetting = AutoCompact.percentOf(setting)
+        val tokenLimit = if (agentId == AGY_ID && setting != AutoCompact.OFF && runCatching { agyEconomy() }.getOrDefault(false)) {
+            AgyEconomy.COMPACT_TOKENS
+        } else {
+            null
+        }
+        val usage = contextUsage
+        val used = usage?.percent
+        val usedTokens = usage?.used
+        if (AutoCompact.rearms(percentSetting, used, tokenLimit, usedTokens)) autoCompactArmed = true
         val hasCompact = commands.any { it.name == COMPACT_NAME }
-        if (used == null || !AutoCompact.shouldCompact(percentSetting, used, autoCompactArmed, hasCompact, queue.isNotEmpty())) return
+        if (!AutoCompact.shouldCompact(percentSetting, used, autoCompactArmed, hasCompact, queue.isNotEmpty(), tokenLimit, usedTokens)) return
         autoCompactArmed = false
-        add(ChatItem.Info(context.getString(R.string.chat_auto_compacting, used)))
+        add(ChatItem.Info(context.getString(R.string.chat_auto_compacting, used ?: 0)))
         // Mesmo caminho de uma mensagem enviada com turno em andamento: entra na fila e sai em sendNext().
         val item = ChatItem.User(COMPACT_TEXT, timestampMs = System.currentTimeMillis())
         item.queued = true
@@ -1308,9 +1316,10 @@ class AcpChat(
         catchUpTimeout = null
     }
 
-    /** Fim do alcance (com ou sem novidade): libera o envio, segue a fila e reprograma a vigia se ainda armada. */
+    /** Fim do alcance (com ou sem novidade): libera o envio, compacta se a vigia forte acabou, segue a fila e reprograma a vigia se ainda armada. */
     private fun resumeAfterCatchUp() {
         ready = true
+        if (!watching && !continueAfterCatchUp) autoCompactIfDue()
         changed()
         sendNext()
         // Aprovar tudo: a ação pendente foi vista no alcance; agora que o chat está pronto, cutuca o agente.

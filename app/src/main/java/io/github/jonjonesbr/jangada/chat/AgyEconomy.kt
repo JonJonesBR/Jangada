@@ -4,7 +4,7 @@ import android.content.Context
 import io.github.jonjonesbr.jangada.R
 
 /**
- * Preset de economia do Antigravity (agy): liga a compactação nativa em teto absoluto (180K tokens,
+ * Preset de economia do Antigravity (agy): liga a compactação nativa em teto absoluto (120K tokens,
  * eficaz mesmo em janelas de 1M onde 55% seria ~550K), corta o tamanho das leituras que o agente
  * faz das ferramentas e, em conversa nova, começa num modelo barato com esforço médio. Nada no agy
  * é alterado: tudo vai por variável de ambiente (ou pelo ajuste da conversa, quando o agente já
@@ -30,7 +30,9 @@ object AgyEconomy {
     val JOB = listOf(GLOBAL, ON, OFF)
 
     /** Compactação nativa do agy em teto absoluto de tokens (eficaz em janelas de 1M). */
-    const val COMPACT_LIMIT = "180K"
+    const val COMPACT_LIMIT = "120K"
+    /** Mesmo teto em tokens, para o AcpChat disparar `/compact` no fim do turno com o preset ligado. */
+    const val COMPACT_TOKENS = 120_000L
     /** Leituras de ferramenta cortadas em 4 KB. */
     const val MAX_READ_BYTES = 4096
     /** Intervalo de linhas por leitura cortado em 120. */

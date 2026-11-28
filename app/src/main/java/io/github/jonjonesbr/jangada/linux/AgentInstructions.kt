@@ -29,14 +29,14 @@ object AgentInstructions {
         - Close the browser as soon as each test ends (browser.close()), and stop any server or background process you started once you no longer need it.
         - Prefer headless browsers with a single page, and avoid running heavy builds or test suites in parallel subagents.
         - If a command dies with "Killed" or exit code 137, memory ran out: run it again alone, with less parallelism.
-        - Save context and quota: avoid reading whole files over 200 lines at once (use search tools like `ctx_search`/grep or read line ranges), ignore heavy folders (`node_modules/`, `.git/`, `dist/`, `build/`, `.log`), and keep responses concise without repeating unchanged code.
-        - When delegating or orchestrating subagents, use lightweight models (flash/flash_lite/haiku) for research and routine reads, keep subagent prompts and replies concise, avoid redundant `| head`/`| tail` pipes when `chop` is active, and avoid polling loops in long conversations.
+        - Save context and quota: search first (`ctx_search`/grep) to locate exact lines before reading a slice once (never page through whole files in repeated 100-line reads), batch independent tool calls in a single turn, ignore heavy folders (`node_modules/`, `.git/`, `dist/`, `build/`, `.log`), and keep responses concise without repeating unchanged code.
+        - When delegating or orchestrating subagents, offload multi-file exploration and routine implementation to lightweight models (Hydrogen/flash/flash_lite/haiku) and reserve stronger models (Neon/Sonnet/Pro) for planning and code review; keep subagent prompts and replies concise, avoid redundant `| head`/`| tail` pipes when `chop` is active, and avoid polling loops in long conversations.
     """.trimIndent()
 
     /** Seção que só entra com as chamadas entre agentes ligadas (ver AgentRoles/jangada-call). */
     val CALLS = """
         ## Calling another agent (Jangada)
-        `jangada-call --agent ID [--role ROLE] "request"` calls another agent for one turn (ID: claude-code, opencode, antigravity; ROLE: revisor, planejador, implementador, orquestrador). It sees only the request, not this conversation; a called agent cannot call another.
+        `jangada-call --agent ID [--role ROLE] "request"` calls another agent for one turn (ID: claude-code, opencode, antigravity; ROLE: revisor, planejador, implementador, orquestrador). `implementador` uses a fast/cheap model (Hydrogen/Haiku/Flash) for execution, while `revisor`, `planejador`, and `orquestrador` use a stronger model (Neon/Sonnet/Pro) for review and planning. It sees only the request, not this conversation; a called agent cannot call another.
     """.trimIndent()
 
     /** Arquivo maior que isso não é lido nem alterado pelo app. */

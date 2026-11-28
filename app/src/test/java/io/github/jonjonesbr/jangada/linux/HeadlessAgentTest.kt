@@ -62,12 +62,15 @@ class HeadlessAgentTest {
     fun agyUsaOModoDoPapelEInstrucaoDoPapel() {
         val reviewer = role(AgentRoles.REVISOR)
         val read = HeadlessAgent.command("antigravity", reviewer, "revise", null)!!
-        assertTrue(read.startsWith("timeout -k 5 300 agy --mode plan -p "))
+        assertTrue(read.startsWith("timeout -k 5 300 agy --mode plan --model 'gemini-4-neon-medium' -p "))
         assertTrue(read.contains(reviewer.prompt))
         assertTrue(read.contains("revise"))
+        val impl = role(AgentRoles.IMPLEMENTADOR)
+        val writeImpl = HeadlessAgent.command("antigravity", impl, "implemente", null)!!
+        assertTrue(writeImpl.contains("agy --mode auto --dangerously-skip-permissions --model 'gemini-4-hydrogen-medium' -p "))
         val orch = role(AgentRoles.ORQUESTRADOR)
         val write = HeadlessAgent.command("antigravity", orch, "faça", null)!!
-        assertTrue(write.contains("agy --mode auto --dangerously-skip-permissions -p "))
+        assertTrue(write.contains("agy --mode auto --dangerously-skip-permissions --model 'gemini-4-neon-medium' -p "))
         assertTrue(write.contains(orch.prompt))
         assertTrue(write.contains("faça"))
     }
@@ -77,10 +80,10 @@ class HeadlessAgentTest {
         val reviewer = role(AgentRoles.REVISOR)
         val read = HeadlessAgent.command("antigravity", reviewer, "revise", null, agyEconomy = true)!!
         assertTrue(read.startsWith(AgyEconomy.envPrefix()))
-        assertTrue(read.contains("timeout -k 5 300 agy --mode plan --effort medium -p "))
+        assertTrue(read.contains("timeout -k 5 300 agy --mode plan --model 'gemini-4-neon-medium' --effort medium -p "))
         assertTrue(read.contains(reviewer.prompt))
         assertTrue(read.contains("revise"))
-        // Sem economia, o comando fica igual ao de sempre.
+        // Sem economia, o comando fica sem --effort e sem variáveis de corte.
         val plain = HeadlessAgent.command("antigravity", reviewer, "revise", null)!!
         assertTrue(!plain.contains("--effort"))
         assertTrue(!plain.contains("AGY_CLI_AUTO_COMPACT_OVERRIDE"))

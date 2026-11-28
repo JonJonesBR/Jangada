@@ -103,6 +103,35 @@ class AutoCompactTest {
         assertFalse(AutoCompact.shouldCompact(80, 95, armed = true, hasCompact = true, queued = true))
     }
 
+    @Test
+    fun rearmaEAtingeTetoDeTokensMesmoSemPercentual() {
+        val limit = 120_000L
+        assertTrue(AutoCompact.rearms(null, 10, tokenLimit = limit, usedTokens = 119_999L))
+        assertFalse(AutoCompact.rearms(null, 12, tokenLimit = limit, usedTokens = 120_000L))
+        assertTrue(
+            AutoCompact.shouldCompact(
+                percentSetting = null,
+                usedPercent = 12,
+                armed = true,
+                hasCompact = true,
+                queued = false,
+                tokenLimit = limit,
+                usedTokens = 120_000L,
+            ),
+        )
+        assertFalse(
+            AutoCompact.shouldCompact(
+                percentSetting = null,
+                usedPercent = 11,
+                armed = true,
+                hasCompact = true,
+                queued = false,
+                tokenLimit = limit,
+                usedTokens = 119_999L,
+            ),
+        )
+    }
+
     /** Sequência de turnos: compacta uma vez, não de novo enquanto o contexto segue alto, e volta quando cai. */
     @Test
     fun naoCompactaDuasVezesSeguidas() {

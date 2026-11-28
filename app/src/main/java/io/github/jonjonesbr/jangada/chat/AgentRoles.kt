@@ -31,34 +31,38 @@ object AgentRoles {
     private const val GO_FLASH = "opencode-go/deepseek-v4.1-flash"
     private const val GO_PRO = "opencode-go/deepseek-v4-pro"
 
+    /** Modelos do Antigravity (agy): Hydrogen para volume/implementação, Neon para revisão/planejamento. */
+    const val AGY_HYDROGEN = "gemini-4-hydrogen-medium"
+    const val AGY_NEON = "gemini-4-neon-medium"
+
     val ALL = listOf(
         Role(
             REVISOR, Scope.READ,
             "You are a reviewer called by another agent. Read the code and report concrete problems " +
                 "(correctness, security, missing tests), quoting file:line. Do not change any file. " +
                 "Answer with a short list, in the language of the request.",
-            mapOf("claude-code" to "sonnet", "opencode" to GO_PRO),
+            mapOf("claude-code" to "sonnet", "opencode" to GO_PRO, "antigravity" to AGY_NEON),
         ),
         Role(
             PLANEJADOR, Scope.READ,
             "You are a planner called by another agent. Inspect the code and answer with a short " +
                 "step-by-step plan: files to touch, order and risks. Do not change any file. " +
                 "Answer in the language of the request.",
-            mapOf("claude-code" to "sonnet", "opencode" to GO_PRO),
+            mapOf("claude-code" to "sonnet", "opencode" to GO_PRO, "antigravity" to AGY_NEON),
         ),
         Role(
             IMPLEMENTADOR, Scope.WRITE,
             "You are an implementer called by another agent. Make the requested change in the " +
                 "current folder, following the existing style, and answer briefly with what changed. " +
                 "Answer in the language of the request.",
-            mapOf("claude-code" to "haiku", "opencode" to GO_FLASH),
+            mapOf("claude-code" to "haiku", "opencode" to GO_FLASH, "antigravity" to AGY_HYDROGEN),
         ),
         Role(
             ORQUESTRADOR, Scope.WRITE,
             "You are an orchestrator called by another agent. Split the request into steps, do the " +
                 "ones you can in the current folder and answer with what was done and what is left " +
                 "for the main agent. Keep the answer short, in the language of the request.",
-            mapOf("claude-code" to "sonnet", "opencode" to GO_PRO),
+            mapOf("claude-code" to "sonnet", "opencode" to GO_PRO, "antigravity" to AGY_NEON),
         ),
     )
 

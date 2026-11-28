@@ -74,16 +74,39 @@ object AutoCompact {
         return "export AGY_CLI_AUTO_COMPACT_OVERRIDE=${percent}%; "
     }
 
-    /** Depois de um turno: volta a poder compactar quando o contexto está abaixo do percentual (ou não se sabe). */
-    fun rearms(percentSetting: Int?, usedPercent: Int?): Boolean =
-        percentSetting == null || usedPercent == null || usedPercent < percentSetting
+    /**
+     * Depois de um turno: volta a poder compactar quando o contexto está abaixo dos limites ativos
+     * (percentual e/ou teto de tokens) ou ainda não há leitura.
+     */
+    fun rearms(
+        percentSetting: Int?,
+        usedPercent: Int?,
+        tokenLimit: Long? = null,
+        usedTokens: Long? = null,
+    ): Boolean {
+        val belowPercent = percentSetting == null || usedPercent == null || usedPercent < percentSetting
+        val belowTokens = tokenLimit == null || usedTokens == null || usedTokens < tokenLimit
+        return belowPercent && belowTokens
+    }
 
     /**
-     * Compactar agora (ACP, fim de turno)? Só com um percentual escolhido, contexto no percentual ou
-     * acima, armado (sem compactação automática seguida), o agente com /compact e sem mensagem na fila.
+     * Compactar agora (ACP, fim de turno)? Só quando armado, o agente tem /compact, sem mensagem na fila
+     * e o contexto atingiu o percentual escolhido ou o teto de tokens (ex.: economia do agy em janela de 1M).
      */
-    fun shouldCompact(percentSetting: Int?, usedPercent: Int?, armed: Boolean, hasCompact: Boolean, queued: Boolean): Boolean =
-        percentSetting != null && usedPercent != null && usedPercent >= percentSetting && armed && hasCompact && !queued
+    fun shouldCompact(
+        percentSetting: Int?,
+        usedPercent: Int?,
+        armed: Boolean,
+        hasCompact: Boolean,
+        queued: Boolean,
+        tokenLimit: Long? = null,
+        usedTokens: Long? = null,
+    ): Boolean {
+        if (!armed || !hasCompact || queued) return false
+        val byPercent = percentSetting != null && usedPercent != null && usedPercent >= percentSetting
+        val byTokens = tokenLimit != null && usedTokens != null && usedTokens >= tokenLimit
+        return byPercent || byTokens
+    }
 }
 
 /** Texto de um valor (ajuste geral ou do trabalho, exceto "global"): "Padrão do agente", "Desligada", "Ao chegar a 80%". */

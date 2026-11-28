@@ -945,7 +945,7 @@
     <string name="agy_economy_off">Desligada</string>
     <string name="agy_economy_global">Segue o geral (%1$s)</string>
     <string name="agy_economy_from_general">Segue o geral</string>
-    <string name="agy_economy_note">Vale quando o agente inicia: pare e envie a mensagem de novo para aplicar agora. Compactação em 180K tokens, leituras de 4 KB/120 linhas e, em conversa nova, o modelo Hydrogen (Medium) com esforço médio (Neon, Carbon e, se não houver, 3.8 Flash).</string>
+    <string name="agy_economy_note">Vale quando o agente inicia: pare e envie a mensagem de novo para aplicar agora. Compactação em 120K tokens, leituras de 4 KB/120 linhas e, em conversa nova, o modelo Hydrogen (Medium) com esforço médio (Neon, Carbon e, se não houver, 3.8 Flash).</string>
     <string name="chat_auto_compacting">Compactando a conversa automaticamente (contexto em %1$d%%).</string>
     <string name="opencode_auth_row">Contas e chaves</string>
     <string name="opencode_auth_row_desc">Conecte provedores com a sua chave, ou volte ao plano free</string>
