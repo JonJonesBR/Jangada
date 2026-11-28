@@ -7,6 +7,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.EOFException
 
 class LanHttpTest {
 
@@ -119,5 +120,31 @@ class LanHttpTest {
 
         assertEquals(10, lido.size)
         assertEquals(90, origem.available())
+    }
+
+    @Test
+    fun adiaCorpoDeAttachmentsQuandoConfiguradoELeComReadBody() {
+        val body = ByteArray(1024) { (it % 127).toByte() }
+        val head = (
+            "POST /api/attachments?name=a.bin HTTP/1.1\r\n" +
+                "Content-Length: ${body.size}\r\n" +
+                "\r\n"
+            ).toByteArray(Charsets.ISO_8859_1)
+        val input = ByteArrayInputStream(head + body)
+
+        val req = LanHttp.parseRequest(input, deferBody = setOf("/api/attachments"))!!
+        assertEquals(0, req.body.size)
+        assertEquals(body.size, req.bodyLength)
+        assertArrayEquals(body, LanHttp.readBody(input, req.bodyLength, LanHttp.UPLOAD_MAX_BODY))
+    }
+
+    @Test(expected = LanHttp.PayloadTooLargeException::class)
+    fun readBodyRecusaAcimaDoLimite() {
+        LanHttp.readBody(ByteArrayInputStream(ByteArray(0)), 256, maxBytes = 128)
+    }
+
+    @Test(expected = EOFException::class)
+    fun readBodyFalhaEmCorpoTruncado() {
+        LanHttp.readBody(ByteArrayInputStream(byteArrayOf(1, 2)), 10, maxBytes = 128)
     }
 }

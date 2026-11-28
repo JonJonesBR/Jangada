@@ -79,21 +79,23 @@ object LanHttp {
         if (declaredLength > effectiveMax) {
             throw PayloadTooLargeException()
         }
-        val contentLength = declaredLength.toInt()
-        val body = if (contentLength > 0) {
-            val buf = ByteArray(contentLength)
-            var offset = 0
-            while (offset < contentLength) {
-                val n = input.read(buf, offset, contentLength - offset)
-                if (n < 0) throw EOFException("Unexpected EOF reading body")
-                offset += n
-            }
-            buf
-        } else {
-            ByteArray(0)
-        }
+        val body = readBody(input, declaredLength.toInt(), effectiveMax)
 
         return HttpRequest(method, path, query, headers, body)
+    }
+
+    /** Lê exatamente [length] bytes do [input], recusando tamanhos fora de 0..[maxBytes]. */
+    fun readBody(input: InputStream, length: Int, maxBytes: Int): ByteArray {
+        if (length < 0 || length > maxBytes) throw PayloadTooLargeException()
+        if (length == 0) return ByteArray(0)
+        val buf = ByteArray(length)
+        var offset = 0
+        while (offset < length) {
+            val n = input.read(buf, offset, length - offset)
+            if (n < 0) throw EOFException("Unexpected EOF reading body")
+            offset += n
+        }
+        return buf
     }
 
     fun parseQuery(query: String): Map<String, String> {

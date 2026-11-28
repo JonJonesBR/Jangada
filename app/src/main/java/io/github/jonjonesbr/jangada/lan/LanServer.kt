@@ -10,13 +10,18 @@ import java.net.Socket
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.ThreadFactory
+import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
 
 /**
@@ -88,6 +93,10 @@ class LanServer(
     private val preferredPort: Int = DEFAULT_PORT,
     private val bindAddress: InetAddress? = null,
     private val onClientsChanged: (() -> Unit)? = null,
+    private val maxWorkers: Int = MAX_WORKERS,
+    private val maxPending: Int = MAX_PENDING,
+    private val maxSseClients: Int = MAX_SSE_CLIENTS,
+    private val maxTerminalSseClients: Int = MAX_TERMINAL_SSE_CLIENTS,
 ) {
     private class SseClient(val socket: Socket, val out: OutputStream) {
         val lock = Any()
@@ -134,6 +143,9 @@ class LanServer(
     private var scheduler: ScheduledExecutorService? = null
     private var unsubscribe: (() -> Unit)? = null
     private var unsubscribeTerminal: (() -> Unit)? = null
+    private val sseLock = Any()
+    private var pendingSse = 0
+    private var pendingTermSse = 0
     private val sseClients = CopyOnWriteArrayList<SseClient>()
     private val terminalSseClients = CopyOnWriteArrayList<Pair<String, SseClient>>()
     private val broadcastLock = Any()
@@ -154,7 +166,19 @@ class LanServer(
         val socket = openSocket()
         serverSocket = socket
         port = socket.localPort
-        workers = Executors.newCachedThreadPool()
+        val workerIds = AtomicInteger(0)
+        val factory = ThreadFactory { r ->
+            Thread(r, "jangada-lan-worker-${workerIds.incrementAndGet()}").apply { isDaemon = true }
+        }
+        val pool = ThreadPoolExecutor(
+            maxWorkers,
+            maxWorkers,
+            60L,
+            TimeUnit.SECONDS,
+            ArrayBlockingQueue(maxPending),
+            factory,
+        ).apply { allowCoreThreadTimeOut(true) }
+        workers = pool
         scheduler = Executors.newSingleThreadScheduledExecutor()
         running.set(true)
 
@@ -165,7 +189,11 @@ class LanServer(
         acceptThread = thread(name = "jangada-lan-accept") {
             while (running.get()) {
                 val client = runCatching { socket.accept() }.getOrNull() ?: break
-                workers?.execute { handleClient(client) }
+                try {
+                    pool.execute { handleClient(client) }
+                } catch (_: RejectedExecutionException) {
+                    rejectBusy(client)
+                }
             }
         }
         return port
@@ -211,13 +239,30 @@ class LanServer(
     }
 
     private fun closeAllSse() {
-        val clients = sseClients.toList()
-        sseClients.clear()
+        val clients: List<SseClient>
+        val termClients: List<Pair<String, SseClient>>
+        synchronized(sseLock) {
+            clients = sseClients.toList()
+            sseClients.clear()
+            termClients = terminalSseClients.toList()
+            terminalSseClients.clear()
+        }
         clients.forEach { it.close() }
-        val termClients = terminalSseClients.toList()
-        terminalSseClients.clear()
         termClients.forEach { it.second.close() }
         if (clients.isNotEmpty()) onClientsChanged?.invoke()
+    }
+
+    private fun rejectBusy(client: Socket) {
+        runCatching {
+            client.soTimeout = 1_000
+            LanHttp.writeJson(
+                client.getOutputStream(),
+                503,
+                "Service Unavailable",
+                JSONObject().put("error", "server_busy"),
+            )
+        }
+        runCatching { client.close() }
     }
 
     private fun scheduleTerminalBroadcast(handle: String) {
@@ -299,7 +344,7 @@ class LanServer(
             val input = socket.getInputStream()
             val out = socket.getOutputStream()
             val req = try {
-                LanHttp.parseRequest(input, deferBody = setOf(RESTORE_PATH))
+                LanHttp.parseRequest(input, deferBody = setOf(RESTORE_PATH, ATTACHMENTS_PATH))
             } catch (_: LanHttp.PayloadTooLargeException) {
                 LanHttp.writeJson(out, 413, "Payload Too Large", JSONObject().put("error", "payload_too_large"))
                 return
@@ -413,16 +458,45 @@ class LanServer(
         }
 
         if (req.method == "GET" && req.path == "/api/events") {
-            socket.soTimeout = 0
-            LanHttp.writeSseHeaders(out)
-            val client = SseClient(socket, out)
-            val initial = runCatching { bridge.snapshot().toString() }.getOrElse { "{\"chats\":[]}" }
-            if (!client.send("snapshot", initial)) {
+            val reserved = synchronized(sseLock) {
+                if (sseClients.size + pendingSse >= maxSseClients) {
+                    false
+                } else {
+                    pendingSse++
+                    true
+                }
+            }
+            if (!reserved) {
+                LanHttp.writeJson(out, 429, "Too Many Requests", JSONObject().put("error", "too_many_clients"))
                 return false
             }
-            sseClients.add(client)
-            onClientsChanged?.invoke()
-            return true
+            var added = false
+            try {
+                socket.soTimeout = 0
+                LanHttp.writeSseHeaders(out)
+                val client = SseClient(socket, out)
+                val initial = runCatching { bridge.snapshot().toString() }.getOrElse { "{\"chats\":[]}" }
+                if (!client.send("snapshot", initial)) {
+                    return false
+                }
+                val active = synchronized(sseLock) {
+                    if (!running.get()) {
+                        false
+                    } else {
+                        sseClients.add(client)
+                        pendingSse--
+                        added = true
+                        true
+                    }
+                }
+                if (!active) return false
+                onClientsChanged?.invoke()
+                return true
+            } finally {
+                if (!added) {
+                    synchronized(sseLock) { pendingSse-- }
+                }
+            }
         }
 
         if (req.method == "GET" && req.path == "/api/terminals/stream") {
@@ -432,14 +506,42 @@ class LanServer(
                 LanHttp.writeJson(out, 404, "Not Found", JSONObject().put("error", "terminal_not_found"))
                 return false
             }
-            socket.soTimeout = 0
-            LanHttp.writeSseHeaders(out)
-            val client = SseClient(socket, out)
-            if (!client.send("screen", screen.toString())) {
+            val reserved = synchronized(sseLock) {
+                if (terminalSseClients.size + pendingTermSse >= maxTerminalSseClients) {
+                    false
+                } else {
+                    pendingTermSse++
+                    true
+                }
+            }
+            if (!reserved) {
+                LanHttp.writeJson(out, 429, "Too Many Requests", JSONObject().put("error", "too_many_clients"))
                 return false
             }
-            terminalSseClients.add(handle to client)
-            return true
+            var added = false
+            try {
+                socket.soTimeout = 0
+                LanHttp.writeSseHeaders(out)
+                val client = SseClient(socket, out)
+                if (!client.send("screen", screen.toString())) {
+                    return false
+                }
+                val active = synchronized(sseLock) {
+                    if (!running.get()) {
+                        false
+                    } else {
+                        terminalSseClients.add(handle to client)
+                        pendingTermSse--
+                        added = true
+                        true
+                    }
+                }
+                return active
+            } finally {
+                if (!added) {
+                    synchronized(sseLock) { pendingTermSse-- }
+                }
+            }
         }
 
         when {
@@ -495,12 +597,17 @@ class LanServer(
                 val status = if (result.optBoolean("ok", true)) 200 else 409
                 LanHttp.writeJson(out, status, if (status == 200) "OK" else "Conflict", result)
             }
-            req.method == "POST" && req.path == "/api/attachments" -> {
-                if (req.body.isEmpty()) return badRequest(out)
+            req.method == "POST" && req.path == ATTACHMENTS_PATH -> {
+                if (req.bodyLength <= 0) return badRequest(out)
+                if (req.bodyLength > LanHttp.UPLOAD_MAX_BODY) {
+                    LanHttp.writeJson(out, 413, "Payload Too Large", JSONObject().put("error", "payload_too_large"))
+                    return false
+                }
+                val bytes = LanHttp.readBody(input, req.bodyLength, LanHttp.UPLOAD_MAX_BODY)
                 val name = req.query["name"]?.takeIf { it.isNotBlank() } ?: "anexo"
                 val mime = req.headers["content-type"]?.substringBefore(';')?.trim().orEmpty()
                     .ifEmpty { "application/octet-stream" }
-                val res = bridge.uploadAttachment(name, mime, req.body)
+                val res = bridge.uploadAttachment(name, mime, bytes)
                 val status = if (res.optBoolean("ok", false)) 200 else 400
                 LanHttp.writeJson(out, status, if (status == 200) "OK" else "Bad Request", res)
             }
@@ -857,9 +964,14 @@ class LanServer(
 
     companion object {
         const val DEFAULT_PORT = 8765
+        const val MAX_WORKERS = 16
+        const val MAX_PENDING = 32
+        const val MAX_SSE_CLIENTS = 8
+        const val MAX_TERMINAL_SSE_CLIENTS = 8
         private const val BROADCAST_DEBOUNCE_MS = 100L
         private const val PING_SEC = 15L
         private const val RESTORE_PATH = "/api/backup/restore"
+        private const val ATTACHMENTS_PATH = "/api/attachments"
         private const val BACKUP_STALL_NS = 120_000L * 1_000_000
         private const val BACKUP_WATCH_TICK_MS = 5_000L
 

@@ -32,6 +32,7 @@ import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.HeadlessAgent
 import io.github.jonjonesbr.jangada.linux.LinuxEnv
+import io.github.jonjonesbr.jangada.linux.ProjectOps
 import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.linux.Workspace
@@ -942,14 +943,13 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val oldClean = oldName.trim()
         val newClean = newName.trim()
-        if (!Workspace.isListable(oldClean) || !Workspace.isValidName(newClean)) {
-            return JSONObject().put("ok", false).put("error", "invalid_name")
-        }
+        validateRenameProject(oldClean, newClean, Workspace.list(linux))?.let { return it }
         val closed = CountDownLatch(1)
         val accepted = onMain { service.closeFolder(oldClean) { closed.countDown() } }
         if (!accepted) return JSONObject().put("ok", false).put("error", "folder_busy")
         return try {
             closed.await(6, TimeUnit.SECONDS)
+            validateRenameProject(oldClean, newClean, Workspace.list(linux))?.let { return it }
             val res = Projects.rename(linux, oldClean, newClean)
             if (res == Projects.Renamed.OK || res == Projects.Renamed.HISTORY_KEPT) {
                 settings.moveFolder(oldClean, newClean)
@@ -967,13 +967,15 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         val linux = LinuxEnv(service)
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val clean = name.trim()
-        val folder = Workspace.list(linux).firstOrNull { it.name == clean }
-            ?: return JSONObject().put("ok", false).put("error", "not_found")
+        validateDeleteProject(clean, Workspace.list(linux))?.let { return it }
         val closed = CountDownLatch(1)
         val accepted = onMain { service.closeFolder(clean) { closed.countDown() } }
         if (!accepted) return JSONObject().put("ok", false).put("error", "folder_busy")
         return try {
             closed.await(6, TimeUnit.SECONDS)
+            val freshListing = Workspace.list(linux)
+            validateDeleteProject(clean, freshListing)?.let { return it }
+            val folder = freshListing.first { it.name == clean }
             val res = Projects.delete(linux, folder)
             if (res is Projects.Deleted.Ok) {
                 settings.forgetFolder(clean)
@@ -1026,11 +1028,17 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         if (!linux.isReady) return JSONObject().put("ok", false).put("error", "linux_not_ready")
         val src = source.trim()
         val dst = target.trim()
+        validateCopyProject(src, dst, Workspace.list(linux))?.let { return it }
+        if (Fs.exists(Workspace.hostPath(linux.rootfs, Workspace.path(dst)).toPath())) {
+            return JSONObject().put("ok", false).put("error", "exists")
+        }
         return onMain {
             val task = service.runCopy(src, dst)
-            JSONObject()
-                .put("ok", task != null)
-                .put("folder", dst)
+            if (task == null) {
+                JSONObject().put("ok", false).put("error", "folder_busy")
+            } else {
+                JSONObject().put("ok", true).put("folder", dst)
+            }
         }
     }
 
@@ -1105,5 +1113,41 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
             throw IllegalStateException("Timeout waiting for main thread")
         }
         return result!!.getOrThrow()
+    }
+
+    companion object {
+        internal fun refusalError(refusal: ProjectOps.Refusal): String = when (refusal) {
+            ProjectOps.Refusal.NOT_PROJECT -> "not_found"
+            ProjectOps.Refusal.HAS_WORKTREES -> "has_worktrees"
+            ProjectOps.Refusal.IS_WORKTREE -> "is_worktree"
+            ProjectOps.Refusal.INVALID_NAME -> "invalid_name"
+            ProjectOps.Refusal.SAME_NAME -> "same_name"
+            ProjectOps.Refusal.EXISTS -> "exists"
+        }
+
+        private fun fail(error: String): JSONObject = JSONObject().put("ok", false).put("error", error)
+
+        internal fun validateRenameProject(
+            oldName: String,
+            newName: String,
+            listing: List<Workspace.Folder>,
+        ): JSONObject? = ProjectOps.renameRefusal(oldName, newName, listing)?.let { fail(refusalError(it)) }
+
+        internal fun validateDeleteProject(
+            name: String,
+            listing: List<Workspace.Folder>,
+        ): JSONObject? = ProjectOps.deleteRefusal(name, listing)?.let { fail(refusalError(it)) }
+
+        internal fun validateCopyProject(
+            source: String,
+            target: String,
+            listing: List<Workspace.Folder>,
+        ): JSONObject? {
+            ProjectOps.duplicateRefusal(source, listing)?.let { return fail(refusalError(it)) }
+            if (!Workspace.isValidName(target)) return fail("invalid_name")
+            if (target == source) return fail("same_name")
+            if (listing.any { it.name.equals(target, ignoreCase = true) }) return fail("exists")
+            return null
+        }
     }
 }

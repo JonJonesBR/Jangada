@@ -14,6 +14,10 @@ import java.net.InetAddress
 import java.net.Socket
 import java.net.URL
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 
 class LanServerTest {
 
@@ -22,6 +26,8 @@ class LanServerTest {
         val permissions = CopyOnWriteArrayList<Triple<String, String, String?>>()
         var currentMode = "default"
         var termText = "$ "
+        var uploadCalls = 0
+        var onSnapshot: (() -> Unit)? = null
         private var listener: (() -> Unit)? = null
         private var termListener: ((String) -> Unit)? = null
 
@@ -29,19 +35,22 @@ class LanServerTest {
             listener?.invoke()
         }
 
-        override fun snapshot(): JSONObject = JSONObject().put(
-            "chats",
-            JSONArray().put(
-                JSONObject()
-                    .put("key", "claude-code|demo")
-                    .put("agentId", "claude-code")
-                    .put("agentName", "Claude Code")
-                    .put("folder", "demo")
-                    .put("state", "READY")
-                    .put("currentMode", currentMode)
-                    .put("items", JSONArray().put(JSONObject().put("type", "user").put("text", "oi"))),
-            ),
-        )
+        override fun snapshot(): JSONObject {
+            onSnapshot?.invoke()
+            return JSONObject().put(
+                "chats",
+                JSONArray().put(
+                    JSONObject()
+                        .put("key", "claude-code|demo")
+                        .put("agentId", "claude-code")
+                        .put("agentName", "Claude Code")
+                        .put("folder", "demo")
+                        .put("state", "READY")
+                        .put("currentMode", currentMode)
+                        .put("items", JSONArray().put(JSONObject().put("type", "user").put("text", "oi"))),
+                ),
+            )
+        }
 
         override fun listProjects(): JSONArray = JSONArray().put(JSONObject().put("name", "demo"))
         override fun listAgents(): JSONArray = JSONArray().put(JSONObject().put("id", "claude-code").put("name", "Claude Code"))
@@ -66,13 +75,15 @@ class LanServerTest {
             return true
         }
 
-        override fun uploadAttachment(name: String, mimeType: String, bytes: ByteArray): JSONObject =
-            JSONObject()
+        override fun uploadAttachment(name: String, mimeType: String, bytes: ByteArray): JSONObject {
+            uploadCalls++
+            return JSONObject()
                 .put("ok", true)
                 .put("name", name)
                 .put("guestPath", "/root/projetos/anexos/$name")
                 .put("mimeType", mimeType)
                 .put("isImage", mimeType.startsWith("image/"))
+        }
 
         override fun stopChat(key: String): Boolean = true
 
@@ -833,5 +844,198 @@ class LanServerTest {
         assertTrue(bridge.lastRestore.contentEquals(body))
         assertEquals(1, bridge.restoreCalls)
         assertEquals(1, bridge.endCalls)
+    }
+
+    @Test
+    fun uploadDeAnexoSemLoginRecusa401SemLerCorpo() {
+        val bridge = FakeBridge()
+        val srv = LanServer(bridge, preferredPort = 0, bindAddress = InetAddress.getByName("127.0.0.1"))
+        server = srv
+        val port = srv.start()
+
+        Socket("127.0.0.1", port).use { s ->
+            s.soTimeout = 5_000
+            s.getOutputStream().write(
+                (
+                    "POST /api/attachments?name=big.bin HTTP/1.1\r\n" +
+                        "Host: 127.0.0.1:$port\r\n" +
+                        "Content-Length: 10485760\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n"
+                    ).toByteArray(Charsets.ISO_8859_1),
+            )
+            s.getOutputStream().flush()
+            val text = s.getInputStream().readBytes().toString(Charsets.UTF_8)
+            assertTrue(text.startsWith("HTTP/1.1 401"))
+            assertTrue(text.contains("unauthorized"))
+        }
+        assertEquals(0, bridge.uploadCalls)
+    }
+
+    @Test
+    fun uploadDeAnexoAcimaDoLimiteRecusa413SemLerCorpo() {
+        val bridge = FakeBridge()
+        val srv = LanServer(bridge, preferredPort = 0, bindAddress = InetAddress.getByName("127.0.0.1"))
+        server = srv
+        val port = srv.start()
+        val cookie = authCookie(srv, "http://127.0.0.1:$port")
+
+        Socket("127.0.0.1", port).use { s ->
+            s.soTimeout = 5_000
+            s.getOutputStream().write(
+                (
+                    "POST /api/attachments?name=huge.bin HTTP/1.1\r\n" +
+                        "Host: 127.0.0.1:$port\r\n" +
+                        "Cookie: $cookie\r\n" +
+                        "Content-Length: ${LanHttp.UPLOAD_MAX_BODY + 1}\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n"
+                    ).toByteArray(Charsets.ISO_8859_1),
+            )
+            s.getOutputStream().flush()
+            val text = s.getInputStream().readBytes().toString(Charsets.UTF_8)
+            assertTrue(text.startsWith("HTTP/1.1 413"))
+            assertTrue(text.contains("payload_too_large"))
+        }
+        assertEquals(0, bridge.uploadCalls)
+    }
+
+    @Test
+    fun limitaClientesSseEClientesSseDeTerminal() {
+        val bridge = FakeBridge()
+        lateinit var srv: LanServer
+        val twoSse = CountDownLatch(1)
+        srv = LanServer(
+            bridge,
+            preferredPort = 0,
+            bindAddress = InetAddress.getByName("127.0.0.1"),
+            onClientsChanged = { if (srv.connectedClients == 2) twoSse.countDown() },
+            maxSseClients = 2,
+            maxTerminalSseClients = 2,
+        )
+        server = srv
+        val base = "http://127.0.0.1:${srv.start()}"
+        val cookie = authCookie(srv, base)
+
+        fun openSse(url: String): HttpURLConnection =
+            (URL(url).openConnection() as HttpURLConnection).apply {
+                setRequestProperty("Cookie", cookie)
+                readTimeout = 5_000
+            }
+
+        val sse1 = openSse("$base/api/events")
+        assertEquals(200, sse1.responseCode)
+        BufferedReader(InputStreamReader(sse1.inputStream)).readLine()
+
+        val sse2 = openSse("$base/api/events")
+        assertEquals(200, sse2.responseCode)
+        BufferedReader(InputStreamReader(sse2.inputStream)).readLine()
+        assertTrue(twoSse.await(5, TimeUnit.SECONDS))
+
+        val sse3 = openSse("$base/api/events")
+        assertEquals(429, sse3.responseCode)
+        assertTrue(sse3.errorStream.bufferedReader().readText().contains("too_many_clients"))
+
+        val term1 = openSse("$base/api/terminals/stream?handle=term-1")
+        assertEquals(200, term1.responseCode)
+        BufferedReader(InputStreamReader(term1.inputStream)).readLine()
+
+        val term2 = openSse("$base/api/terminals/stream?handle=term-1")
+        assertEquals(200, term2.responseCode)
+        BufferedReader(InputStreamReader(term2.inputStream)).readLine()
+
+        val term3 = openSse("$base/api/terminals/stream?handle=term-1")
+        assertEquals(429, term3.responseCode)
+        assertTrue(term3.errorStream.bufferedReader().readText().contains("too_many_clients"))
+
+        sse1.disconnect()
+        sse2.disconnect()
+        term1.disconnect()
+        term2.disconnect()
+        srv.regeneratePin()
+        assertEquals(0, srv.connectedClients)
+
+        val cookie2 = authCookie(srv, base)
+        val sse4 = (URL("$base/api/events").openConnection() as HttpURLConnection).apply {
+            setRequestProperty("Cookie", cookie2)
+            readTimeout = 5_000
+        }
+        assertEquals(200, sse4.responseCode)
+        sse4.disconnect()
+    }
+
+    @Test
+    fun limitaPoolDeWorkersDoServidor() {
+        val bridge = FakeBridge()
+        val srv = LanServer(
+            bridge,
+            preferredPort = 0,
+            bindAddress = InetAddress.getByName("127.0.0.1"),
+            maxWorkers = 1,
+            maxPending = 1,
+        )
+        server = srv
+        val port = srv.start()
+        val base = "http://127.0.0.1:$port"
+        val cookie = authCookie(srv, base)
+
+        val inSnapshot = CountDownLatch(1)
+        val releaseSnapshot = CountDownLatch(1)
+        bridge.onSnapshot = {
+            inSnapshot.countDown()
+            releaseSnapshot.await(10, TimeUnit.SECONDS)
+        }
+
+        val holder = thread(isDaemon = true) {
+            runCatching {
+                (URL("$base/api/state").openConnection() as HttpURLConnection).apply {
+                    setRequestProperty("Cookie", cookie)
+                    readTimeout = 10_000
+                }.responseCode
+            }
+        }
+        assertTrue(inSnapshot.await(5, TimeUnit.SECONDS))
+
+        val got503 = AtomicInteger(0)
+        val twoRejected = CountDownLatch(2)
+        val codes = CopyOnWriteArrayList<Int>()
+        val clients = (1..4).map {
+            thread(isDaemon = true) {
+                val code = Socket("127.0.0.1", port).use { s ->
+                    s.soTimeout = 10_000
+                    s.getOutputStream().write(
+                        (
+                            "GET /api/state HTTP/1.1\r\n" +
+                                "Host: 127.0.0.1:$port\r\n" +
+                                "Cookie: $cookie\r\n" +
+                                "Connection: close\r\n" +
+                                "\r\n"
+                            ).toByteArray(Charsets.ISO_8859_1),
+                    )
+                    s.getOutputStream().flush()
+                    val statusLine = BufferedReader(InputStreamReader(s.getInputStream())).readLine().orEmpty()
+                    statusLine.substringAfter("HTTP/1.1 ").take(3).toIntOrNull() ?: -1
+                }
+                codes.add(code)
+                if (code == 503) {
+                    got503.incrementAndGet()
+                    twoRejected.countDown()
+                }
+            }
+        }
+
+        assertTrue("esperava rejeição 503 com pool cheio", twoRejected.await(5, TimeUnit.SECONDS))
+        bridge.onSnapshot = null
+        releaseSnapshot.countDown()
+        holder.join(5_000)
+        clients.forEach { it.join(5_000) }
+
+        assertTrue(got503.get() >= 2)
+        assertTrue(codes.all { it == 200 || it == 503 })
+
+        val afterConn = (URL("$base/api/state").openConnection() as HttpURLConnection).apply {
+            setRequestProperty("Cookie", cookie)
+        }
+        assertEquals(200, afterConn.responseCode)
     }
 }
