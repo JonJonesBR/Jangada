@@ -258,7 +258,7 @@ class AppSettings(context: Context) {
 
     /** Preset de economia do agy, ajuste geral (ver AgyEconomy): "on" ou "off". */
     var agyEconomy: String
-        get() = AgyEconomy.normalizeGeneral(prefs.getString(KEY_AGY_ECONOMY, AgyEconomy.OFF))
+        get() = AgyEconomy.normalizeGeneral(prefs.getString(KEY_AGY_ECONOMY, AgyEconomy.DEFAULT))
         set(value) = prefs.edit().putString(KEY_AGY_ECONOMY, AgyEconomy.normalizeGeneral(value)).apply()
 
     /** Economia do agy de um trabalho ([key] = TerminalService.chatKey); "global" segue o geral. */

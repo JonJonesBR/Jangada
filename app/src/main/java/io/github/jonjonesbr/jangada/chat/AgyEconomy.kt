@@ -4,20 +4,22 @@ import android.content.Context
 import io.github.jonjonesbr.jangada.R
 
 /**
- * Preset de economia do Antigravity (agy): liga a compactação nativa mais cedo, corta o tamanho
- * das leituras que o agente faz das ferramentas e, em conversa nova, começa num modelo barato com
- * esforço médio. Nada no agy é alterado: tudo vai por variável de ambiente (ou pelo ajuste da
- * conversa, quando o agente já oferece as opções).
+ * Preset de economia do Antigravity (agy): liga a compactação nativa em teto absoluto (180K tokens,
+ * eficaz mesmo em janelas de 1M onde 55% seria ~550K), corta o tamanho das leituras que o agente
+ * faz das ferramentas e, em conversa nova, começa num modelo barato com esforço médio. Nada no agy
+ * é alterado: tudo vai por variável de ambiente (ou pelo ajuste da conversa, quando o agente já
+ * oferece as opções).
  *
- * Ressalva: o corte de leitura salvo no plugin context-mode (`cutoff:global`, em
- * `~/.context-mode/context.db`) tem precedência sobre as variáveis `CONTEXT_MODE_*`; o preset não
- * mexe no banco do plugin.
+ * Ressalva: no plugin context-mode (v2.0.1+), `CONTEXT_MODE_MAX_READ_BYTES` vence o `cutoff:global`
+ * salvo em `~/.context-mode/context.db`, perdendo só para override explícito da sessão.
  *
  * Valores: "off", "on" e, nos trabalhos, "global" (segue o ajuste geral).
  */
 object AgyEconomy {
     const val OFF = "off"
     const val ON = "on"
+    /** Padrão geral: ligado para economizar cota em chats novos do agy. */
+    const val DEFAULT = ON
     /** Só nos trabalhos: segue o ajuste geral. */
     const val GLOBAL = "global"
 
@@ -27,8 +29,8 @@ object AgyEconomy {
     /** Valores de um trabalho: os do geral mais "global". */
     val JOB = listOf(GLOBAL, ON, OFF)
 
-    /** Compactação nativa do agy em 55% (antes do padrão dele). */
-    const val COMPACT_PERCENT = "55%"
+    /** Compactação nativa do agy em teto absoluto de tokens (eficaz em janelas de 1M). */
+    const val COMPACT_LIMIT = "180K"
     /** Leituras de ferramenta cortadas em 4 KB. */
     const val MAX_READ_BYTES = 4096
     /** Intervalo de linhas por leitura cortado em 120. */
@@ -58,13 +60,13 @@ object AgyEconomy {
 
     /** Exports para o comando que sobe o agente no chat (mesma linha, antes do `cd`). */
     fun envPrefix(): String =
-        "export AGY_CLI_AUTO_COMPACT_OVERRIDE=$COMPACT_PERCENT; " +
+        "export AGY_CLI_AUTO_COMPACT_OVERRIDE=$COMPACT_LIMIT; " +
             "export CONTEXT_MODE_MAX_READ_BYTES=$MAX_READ_BYTES; " +
             "export CONTEXT_MODE_MAX_LINE_RANGE=$MAX_LINE_RANGE; "
 
     /** Exports para o /etc/profile.d/jangada.sh (terminal): uma variável por linha. */
     fun profileExports(): String =
-        "export AGY_CLI_AUTO_COMPACT_OVERRIDE=$COMPACT_PERCENT\n" +
+        "export AGY_CLI_AUTO_COMPACT_OVERRIDE=$COMPACT_LIMIT\n" +
             "export CONTEXT_MODE_MAX_READ_BYTES=$MAX_READ_BYTES\n" +
             "export CONTEXT_MODE_MAX_LINE_RANGE=$MAX_LINE_RANGE\n"
 

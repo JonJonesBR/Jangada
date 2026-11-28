@@ -99,6 +99,31 @@ internal class HandoffFlow(private val activity: ChatActivity) {
         }
     }
 
+    /** Continua no mesmo agente em conversa nova, levando o resumo editável sem enviar sozinho. */
+    fun startFresh() {
+        if (starting) return
+        val items = activity.engine?.items?.toList().orEmpty()
+        if (!ChatHandoff.hasConversation(items)) {
+            Toast.makeText(activity, R.string.chat_handoff_empty, Toast.LENGTH_SHORT).show()
+            return
+        }
+        starting = true
+        val linux = activity.linux
+        val cwd = Workspace.path(activity.folder)
+        val branch = activity.folderBranch
+        val isolated = activity.folderWorktreeOf != null
+        thread(name = "chat-handoff-fresh") {
+            val repo = runCatching {
+                Repo(changedFiles(linux, cwd), diffStat(linux, cwd), branch, isolated)
+            }.getOrNull()
+            activity.runOnUiThread {
+                starting = false
+                if (activity.isDestroyed || activity.isFinishing || repo == null) return@runOnUiThread
+                review(items, repo) { summary -> activity.reopenWithSummary(summary) }
+            }
+        }
+    }
+
     /** Nenhum outro agente instalado: explica e oferece abrir o catálogo na tela inicial. */
     private fun showNoAgents() {
         openDialog?.dismiss()
@@ -129,13 +154,13 @@ internal class HandoffFlow(private val activity: ChatActivity) {
                     title = agent.name,
                     description = windows[agent]?.let { limitName(activity, it) }
                         ?: activity.getString(R.string.chat_handoff_no_limit),
-                ) { review(agent, items, repo) }
+                ) { review(items, repo) { summary -> open(agent, summary) } }
             })
             .show()
     }
 
-    /** Mostra o resumo num campo editável; só Continuar abre o chat do agente, com o texto no campo. */
-    private fun review(agent: AgentRecipe, items: List<ChatItem>, repo: Repo) {
+    /** Mostra o resumo num campo editável; só Continuar entrega o texto para [onConfirm]. */
+    private fun review(items: List<ChatItem>, repo: Repo, onConfirm: (String) -> Unit) {
         val labels = ChatHandoff.Labels(
             header = activity.getString(R.string.chat_handoff_header, activity.agentName),
             originalTitle = activity.getString(R.string.chat_handoff_original),
@@ -219,7 +244,7 @@ internal class HandoffFlow(private val activity: ChatActivity) {
         val dialog = AlertDialog.Builder(activity)
             .setTitle(R.string.chat_handoff_review_title)
             .setView(content)
-            .setPositiveButton(R.string.chat_handoff_go) { _, _ -> open(agent, field.text.toString()) }
+            .setPositiveButton(R.string.chat_handoff_go) { _, _ -> onConfirm(field.text.toString()) }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
         dialog.setOnDismissListener {

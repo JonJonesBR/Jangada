@@ -312,6 +312,8 @@
     <string name="chat_model_effort_title">Modelo e esforço</string>
     <string name="chat_context_title">Contexto da conversa</string>
     <string name="chat_context_explain">%1$d%% da memória da conversa já está em uso. Compactar resume a conversa para ela continuar com mais espaço.</string>
+    <string name="chat_context_explain_tokens">%1$d%% (~%2$dK tokens) da memória da conversa já estão em uso. Compactar resume a conversa, ou você pode continuar em conversa nova levando um resumo curto.</string>
+    <string name="chat_context_high_tokens">A conversa passou de ~%1$dK tokens. Compacte ou continue em conversa nova para poupar cota.</string>
     <string name="chat_chip_limits">⏱ %1$s</string>
     <string name="chat_chip_limits_high">⚠ %1$s</string>
     <string name="chat_chip_limits_description">Limites do plano: %1$s. Toque para detalhes.</string>
@@ -853,6 +855,8 @@
     <string name="chat_export_empty">Ainda não há o que exportar</string>
     <string name="chat_handoff">Continuar com outro agente</string>
     <string name="chat_handoff_desc">Passa o pedido e as mudanças para outro agente nesta pasta</string>
+    <string name="chat_handoff_fresh">Continuar em conversa nova</string>
+    <string name="chat_handoff_fresh_desc">Começar limpo no mesmo agente levando um resumo curto</string>
     <string name="chat_handoff_empty">Ainda não há conversa para passar</string>
     <string name="chat_handoff_none">Nenhum outro agente com chat está instalado</string>
     <string name="chat_handoff_open_catalog">Abrir catálogo</string>
@@ -886,9 +890,9 @@
     <string name="auto_compact_percent">Ao chegar a %1$d%%</string>
     <string name="auto_compact_global">Usar o ajuste geral (%1$s)</string>
     <string name="auto_compact_from_general">Segue o ajuste geral</string>
-    <string name="auto_compact_acp_note">Neste agente, o app manda /compact ao fim de uma resposta quando o contexto chega ao percentual (se o agente tiver esse comando). Desligar só é possível no Claude.</string>
+    <string name="auto_compact_acp_note">Neste agente, o app manda /compact ao fim de uma resposta quando o contexto chega ao percentual (se o agente tiver esse comando). No agy, também configura a compactação nativa na subida. Desligar só é possível no Claude.</string>
     <string name="settings_auto_compact_label">Compactação automática: %1$s</string>
-    <string name="settings_auto_compact_desc">Resume a conversa quando o contexto enche, para o agente seguir com espaço. No Claude, ele mesmo compacta e o ajuste vale quando ele iniciar de novo. Nos outros agentes, o app manda /compact ao fim de uma resposta quando o contexto chega ao percentual (se o agente tiver esse comando). Cada trabalho pode ter o seu, no menu ⋮ do chat.</string>
+    <string name="settings_auto_compact_desc">Resume a conversa quando o contexto enche, para o agente seguir com espaço. No Claude, ele mesmo compacta e o ajuste vale quando ele iniciar de novo. Nos outros agentes, o app manda /compact ao fim de uma resposta quando o contexto chega ao percentual (se o agente tiver esse comando), e no agy também configura a compactação nativa na subida. Cada trabalho pode ter o seu, no menu ⋮ do chat.</string>
     <string name="code_mode_title">Code Mode (experimental)</string>
     <string name="code_mode_on">Ligado</string>
     <string name="code_mode_off">Desligado</string>
@@ -941,7 +945,7 @@
     <string name="agy_economy_off">Desligada</string>
     <string name="agy_economy_global">Segue o geral (%1$s)</string>
     <string name="agy_economy_from_general">Segue o geral</string>
-    <string name="agy_economy_note">Vale quando o agente inicia: pare e envie a mensagem de novo para aplicar agora. Compactação aos 55%, leituras de 4 KB/120 linhas e, em conversa nova, o modelo Hydrogen (Medium) com esforço médio (Neon, Carbon e, se não houver, 3.8 Flash).</string>
+    <string name="agy_economy_note">Vale quando o agente inicia: pare e envie a mensagem de novo para aplicar agora. Compactação em 180K tokens, leituras de 4 KB/120 linhas e, em conversa nova, o modelo Hydrogen (Medium) com esforço médio (Neon, Carbon e, se não houver, 3.8 Flash).</string>
     <string name="chat_auto_compacting">Compactando a conversa automaticamente (contexto em %1$d%%).</string>
     <string name="opencode_auth_row">Contas e chaves</string>
     <string name="opencode_auth_row_desc">Conecte provedores com a sua chave, ou volte ao plano free</string>

@@ -233,6 +233,115 @@ class AgyHooksTest {
         assertEquals(disabled, hooksFile.readText())
     }
 
+    @Test
+    fun ensureChopFiltersCriaEPreservaUsuarioERecusaSymlink() {
+        val sample = "filters:\n  \"adb logcat\":\n    tail: 80\n"
+
+        // Sem chop instalado, não cria nada.
+        val noChop = rootfs(withChop = false, withConfig = false)
+        assertNull(AgyHooks.ensureChopFilters(noChop, sample))
+        assertFalse(Files.exists(noChop.resolve("root/${AgyHooks.CHOP_FILTERS_FILE}")))
+
+        // Com chop instalado, cria diretório e arquivo com modo 600.
+        val root = rootfs(withChop = true, withConfig = false)
+        val created = AgyHooks.ensureChopFilters(root, sample)
+        val expectedFile = root.resolve("root/${AgyHooks.CHOP_FILTERS_FILE}")
+        assertEquals(expectedFile, created)
+        assertNotNull(created)
+        assertEquals(sample, expectedFile.text())
+        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(expectedFile)))
+
+        // Já existente: preserva modificações do usuário.
+        val userFilters = "filters:\n  \"meu-cmd\":\n    tail: 10\n"
+        expectedFile.write(userFilters)
+        assertEquals(expectedFile, AgyHooks.ensureChopFilters(root, sample))
+        assertEquals(userFilters, expectedFile.text())
+
+        // Recusa links simbólicos em .config, .config/chop e filters.yml.
+        val outside = tmp.newFolder("fora-filters").toPath()
+        val linkConfig = rootfs(withChop = true, withConfig = false)
+        Files.createSymbolicLink(linkConfig.resolve("root/.config"), outside)
+        assertNull(AgyHooks.ensureChopFilters(linkConfig, sample))
+
+        val linkChopDir = rootfs(withChop = true, withConfig = false)
+        Files.createDirectories(linkChopDir.resolve("root/.config"))
+        Files.createSymbolicLink(linkChopDir.resolve("root/${AgyHooks.CHOP_FILTERS_DIR}"), outside)
+        assertNull(AgyHooks.ensureChopFilters(linkChopDir, sample))
+
+        val linkFile = rootfs(withChop = true, withConfig = false)
+        Files.createDirectories(linkFile.resolve("root/${AgyHooks.CHOP_FILTERS_DIR}"))
+        val outsideFile = outside.resolve("filters.yml")
+        outsideFile.write("orig")
+        Files.createSymbolicLink(linkFile.resolve("root/${AgyHooks.CHOP_FILTERS_FILE}"), outsideFile)
+        assertNull(AgyHooks.ensureChopFilters(linkFile, sample))
+        assertEquals("orig", outsideFile.text())
+    }
+
+    @Test
+    fun hookReescreveAdbLogcatQuandoHaFiltersYml() {
+        assumeNodeAvailable()
+        val script = File("src/main/assets/linux/agy-chop-hook.mjs").absolutePath
+        // Fake chop que não reescreve nada (simula chop hook devolvendo vazio para adb logcat).
+        val fakeChop = tmp.newFile("fake-chop-empty")
+        fakeChop.writeText("#!/bin/sh\nexit 0\n")
+        assertTrue(fakeChop.setExecutable(true))
+
+        val filtersFile = tmp.newFile("filters.yml")
+        filtersFile.writeText("filters:\n  \"adb logcat\":\n    tail: 80\n")
+
+        val cases = listOf(
+            "adb logcat -d" to "chop adb logcat -d",
+            "FOO=1 adb logcat -d && echo ok" to "FOO=1 chop adb logcat -d && echo ok",
+            "adb logcat -d | head -n 5" to null,
+            "chop adb logcat -d" to null,
+        )
+        for ((cmd, expected) in cases) {
+            val payload = JSONObject().put(
+                "toolCall",
+                JSONObject()
+                    .put("id", "t1")
+                    .put("name", "run_command")
+                    .put("args", JSONObject().put("CommandLine", cmd)),
+            ).toString()
+            val out = JSONObject(
+                runNode(
+                    script,
+                    emptyList(),
+                    payload,
+                    mapOf(
+                        "JANGADA_CHOP_BIN" to fakeChop.absolutePath,
+                        "JANGADA_CHOP_FILTERS" to filtersFile.absolutePath,
+                    ),
+                ),
+            )
+            assertEquals("allow", out.getString("decision"))
+            val actual = out.optJSONObject("overwrite")?.optString("CommandLine")?.ifEmpty { null }
+            assertEquals("comando com filters: $cmd", expected, actual)
+        }
+
+        // Sem filters.yml, não reescreve adb logcat.
+        val missingPayload = JSONObject().put(
+            "toolCall",
+            JSONObject()
+                .put("id", "t1")
+                .put("name", "run_command")
+                .put("args", JSONObject().put("CommandLine", "adb logcat -d")),
+        ).toString()
+        val outMissing = JSONObject(
+            runNode(
+                script,
+                emptyList(),
+                missingPayload,
+                mapOf(
+                    "JANGADA_CHOP_BIN" to fakeChop.absolutePath,
+                    "JANGADA_CHOP_FILTERS" to File(tmp.root, "nao-existe.yml").absolutePath,
+                ),
+            ),
+        )
+        assertEquals("allow", outMissing.getString("decision"))
+        assertFalse(outMissing.has("overwrite"))
+    }
+
     private fun assumeNodeAvailable() {
         val ok = runCatching {
             val p = ProcessBuilder("node", "--version").start()

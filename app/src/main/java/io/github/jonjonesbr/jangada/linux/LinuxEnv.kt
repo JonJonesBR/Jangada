@@ -420,6 +420,11 @@ class LinuxEnv(context: Context) {
         }
         ensureRealDir(linkInbox)
         runCatching { AgyHooks.ensure(rootfs.toPath()) }.onFailure { Log.w(TAG, "hooks do agy", it) }
+        val chopFilters = chopFiltersCache ?: linuxAsset("chop-filters.yml")?.also { chopFiltersCache = it }
+        if (chopFilters != null) {
+            runCatching { AgyHooks.ensureChopFilters(rootfs.toPath(), chopFilters) }
+                .onFailure { Log.w(TAG, "filtros do chop", it) }
+        }
 
         // Pasta de trabalho dos agentes. Fora da home de propósito: o Claude Code
         // não guarda a confiança na pasta home e perguntaria toda vez.
@@ -609,6 +614,9 @@ class LinuxEnv(context: Context) {
 
         /** Texto do asset linux/agy-chop-hook.mjs, lido uma vez (nulo até a primeira leitura bem-sucedida). */
         @Volatile private var agyChopHookCache: String? = null
+
+        /** Texto do asset linux/chop-filters.yml, lido uma vez (nulo até a primeira leitura bem-sucedida). */
+        @Volatile private var chopFiltersCache: String? = null
 
         /** DNS públicos usados quando a rede do celular não fornece servidores suficientes. */
         private val FALLBACK_DNS = listOf("8.8.8.8", "1.1.1.1")

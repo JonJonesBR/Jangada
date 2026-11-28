@@ -16,6 +16,7 @@ const GIT_LOG_RE = /^git\s+log\b/;
 const GIT_LOG_LIMIT_RE = /(?:^|\s)(?:-n\s*\d+|-\d+|--max-count(?:=\d+|\s+\d+))(?:\s|$)/;
 const GIT_STATUS_RE = /^git\s+status\b/;
 const GIT_STATUS_MACHINE_RE = /(?:^|\s)(?:--porcelain(?:=\S+)?|-z)(?:\s|$)/;
+const ADB_LOGCAT_RE = /^adb\s+logcat\b/;
 
 function allow() {
   process.stdout.write(ALLOW_JSON);
@@ -77,9 +78,9 @@ function hasUnsafeShellSyntax(cmd) {
   return false;
 }
 
-/** Separa o comando em &&, || e ; fora de aspas. */
-function splitLogicalSegments(cmd) {
-  const segments = [];
+/** Separa o comando em partes { seg, sep } preservando &&, || e ; fora de aspas. */
+function splitLogicalParts(cmd) {
+  const parts = [];
   let buf = "";
   let inSingle = false;
   let inDouble = false;
@@ -108,18 +109,18 @@ function splitLogicalSegments(cmd) {
       inDouble = true;
       buf += ch;
     } else if (cmd.startsWith("&&", i) || cmd.startsWith("||", i)) {
-      segments.push(buf);
+      parts.push({ seg: buf, sep: cmd.slice(i, i + 2) });
       buf = "";
       i++;
     } else if (ch === ";") {
-      segments.push(buf);
+      parts.push({ seg: buf, sep: ";" });
       buf = "";
     } else {
       buf += ch;
     }
   }
-  segments.push(buf);
-  return segments;
+  parts.push({ seg: buf, sep: "" });
+  return parts;
 }
 
 function shouldSkipCommand(cmd) {
@@ -128,7 +129,7 @@ function shouldSkipCommand(cmd) {
   if (stripped.startsWith("chop ") || stripped.startsWith(`${CHOP_BIN} `)) return true;
   if (hasUnsafeShellSyntax(stripped)) return true;
 
-  for (const rawSeg of splitLogicalSegments(stripped)) {
+  for (const { seg: rawSeg } of splitLogicalParts(stripped)) {
     let seg = rawSeg.trim();
     if (!seg) continue;
     seg = seg.replace(ENV_ASSIGN_RE, "").trim();
@@ -138,6 +139,41 @@ function shouldSkipCommand(cmd) {
     if (GIT_STATUS_RE.test(seg) && GIT_STATUS_MACHINE_RE.test(seg)) return true;
   }
   return false;
+}
+
+function chopFiltersPath() {
+  if (process.env.JANGADA_CHOP_FILTERS) return process.env.JANGADA_CHOP_FILTERS;
+  const home = process.env.HOME || "/root";
+  return path.join(home, ".config", "chop", "filters.yml");
+}
+
+function hasCustomFiltersFile() {
+  try {
+    return fs.lstatSync(chopFiltersPath()).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function rewriteCustomFallback(cmd) {
+  if (!hasCustomFiltersFile()) return "";
+  let changed = false;
+  let out = "";
+  for (const { seg, sep } of splitLogicalParts(cmd)) {
+    const trimmed = seg.trim();
+    const envMatch = trimmed.match(ENV_ASSIGN_RE);
+    const prefix = envMatch ? envMatch[0] : "";
+    const rest = trimmed.slice(prefix.length).trim();
+    let nextSeg = seg;
+    if (ADB_LOGCAT_RE.test(rest)) {
+      const lead = seg.match(/^\s*/)[0];
+      const trail = seg.match(/\s*$/)[0];
+      nextSeg = `${lead}${prefix}chop ${rest}${trail}`;
+      changed = true;
+    }
+    out += nextSeg + sep;
+  }
+  return changed ? out : "";
 }
 
 function isRegularExecutable(filePath) {
@@ -276,14 +312,18 @@ function runAdapter() {
     allow();
   }
 
-  if (!stdout || !stdout.trim()) allow();
-
   let rewritten = "";
-  try {
-    const hookOut = JSON.parse(stdout);
-    rewritten = hookOut?.hookSpecificOutput?.updatedInput?.command || "";
-  } catch {
-    allow();
+  if (stdout && stdout.trim()) {
+    try {
+      const hookOut = JSON.parse(stdout);
+      rewritten = hookOut?.hookSpecificOutput?.updatedInput?.command || "";
+    } catch {
+      allow();
+    }
+  }
+
+  if (!rewritten || !rewritten.trim()) {
+    rewritten = rewriteCustomFallback(cmd);
   }
 
   if (typeof rewritten === "string" && rewritten.trim() && rewritten !== cmd) {

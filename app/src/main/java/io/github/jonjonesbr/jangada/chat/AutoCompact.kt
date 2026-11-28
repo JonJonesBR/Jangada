@@ -6,11 +6,12 @@ import io.github.jonjonesbr.jangada.R
 /**
  * Compactação automática da conversa. A parte pura (sem Android) fica no objeto, para teste.
  *
- * Valores: "default" (o app não interfere), "off" (desligada; só o Claude deixa), "50".."90"
+ * Valores: "default" (o app não interfere), "off" (desligada; só o Claude deixa), "20".."90"
  * (compacta ao chegar a esse percentual do contexto). No trabalho, "global" usa o ajuste geral.
  *
  * - No Claude, o app passa a variável de ambiente ao iniciar (ver [claudeEnvPrefix]).
- * - Nos agentes ACP, o app manda /compact ao fim do turno (ver AcpChat).
+ * - Nos agentes ACP, o app manda /compact ao fim do turno (ver AcpChat) e, no agy, também
+ *   configura a compactação nativa pela variável de ambiente ([agyEnvPrefix]).
  */
 object AutoCompact {
     const val DEFAULT = "default"
@@ -19,7 +20,7 @@ object AutoCompact {
     const val GLOBAL = "global"
 
     /** Percentuais que o usuário pode escolher. */
-    val PERCENTS = listOf(50, 60, 70, 80, 90)
+    val PERCENTS = listOf(20, 30, 40, 50, 60, 70, 80, 90)
 
     /** Valores do ajuste geral. */
     val GENERAL = listOf(DEFAULT, OFF) + PERCENTS.map { it.toString() }
@@ -63,6 +64,15 @@ object AutoCompact {
      */
     fun claudeEnvSuffix(value: String): String =
         if (claudeEnvPrefix(value).isEmpty()) "" else "; unset DISABLE_AUTO_COMPACT CLAUDE_AUTOCOMPACT_PCT_OVERRIDE"
+
+    /**
+     * Prefixo do Antigravity (agy): quando há percentual escolhido, exporta a variável nativa
+     * para que o próprio agy compacte durante turnos longos (antes mesmo do /compact de fim de turno).
+     */
+    fun agyEnvPrefix(value: String): String {
+        val percent = percentOf(value) ?: return ""
+        return "export AGY_CLI_AUTO_COMPACT_OVERRIDE=${percent}%; "
+    }
 
     /** Depois de um turno: volta a poder compactar quando o contexto está abaixo do percentual (ou não se sabe). */
     fun rearms(percentSetting: Int?, usedPercent: Int?): Boolean =

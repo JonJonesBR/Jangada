@@ -1,0 +1,14 @@
+# Filtros padrão do Jangada para o chop (criado só se ainda não existir; pode editar à vontade).
+filters:
+  "gradlew":
+    drop: ["^> Task .* (UP-TO-DATE|FROM-CACHE|NO-SOURCE)$", "^\\s*$"]
+    tail: 120
+  "./gradlew":
+    drop: ["^> Task .* (UP-TO-DATE|FROM-CACHE|NO-SOURCE)$", "^\\s*$"]
+    tail: 120
+  "adb logcat":
+    keep: ["\\b(E|F|FATAL|AndroidRuntime|Exception|Error|Caused by)\\b"]
+    tail: 80
+  "gh run view":
+    drop: ["^\\s*$", "^##\\[(group|endgroup)\\]"]
+    tail: 120

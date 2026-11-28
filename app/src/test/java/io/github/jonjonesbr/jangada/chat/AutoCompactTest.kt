@@ -45,6 +45,9 @@ class AutoCompactTest {
 
     @Test
     fun percentualSoDosValoresEscolhidos() {
+        assertEquals(20, AutoCompact.percentOf("20"))
+        assertEquals(30, AutoCompact.percentOf("30"))
+        assertEquals(40, AutoCompact.percentOf("40"))
         assertEquals(50, AutoCompact.percentOf("50"))
         assertEquals(90, AutoCompact.percentOf("90"))
         assertNull(AutoCompact.percentOf("55"))
@@ -52,6 +55,16 @@ class AutoCompactTest {
         assertNull(AutoCompact.percentOf("off"))
         assertNull(AutoCompact.percentOf("default"))
         assertNull(AutoCompact.percentOf(""))
+    }
+
+    @Test
+    fun prefixoDoAgyPorValor() {
+        assertEquals("export AGY_CLI_AUTO_COMPACT_OVERRIDE=20%; ", AutoCompact.agyEnvPrefix("20"))
+        assertEquals("export AGY_CLI_AUTO_COMPACT_OVERRIDE=80%; ", AutoCompact.agyEnvPrefix("80"))
+        assertEquals("", AutoCompact.agyEnvPrefix("default"))
+        assertEquals("", AutoCompact.agyEnvPrefix("off"))
+        assertEquals("", AutoCompact.agyEnvPrefix("global"))
+        assertEquals("", AutoCompact.agyEnvPrefix("55"))
     }
 
     @Test

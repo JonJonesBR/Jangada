@@ -47,6 +47,7 @@ import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
+import io.github.jonjonesbr.jangada.chat.ContextUsage
 import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.codeModeText
 import io.github.jonjonesbr.jangada.chat.concisenessText
@@ -1428,12 +1429,12 @@ class ChatActivity : JangadaActivity() {
         chipView.contentDescription = getString(R.string.chat_chip_view_description, viewLabel)
         chipView.visibility = View.VISIBLE
 
-        // Contexto: só quando o agente informa. Com 80% ou mais, o chip fica em destaque.
+        // Contexto: só quando o agente informa. Com 80% ou mais (ou >=180K tokens), o chip fica em destaque.
         val usage = chat.contextUsage
         chipContext.visibility = if (usage == null) View.GONE else View.VISIBLE
         if (usage != null) {
             val percent = usage.percent
-            val high = percent >= COMPACT_PERCENT
+            val high = usage.isHigh(COMPACT_PERCENT, ContextUsage.HIGH_TOKENS)
             chipContext.text = getString(if (high) R.string.chat_chip_context_high else R.string.chat_chip_context, percent)
             chipContext.setTextColor(getColor(if (high) R.color.setup_error_text else R.color.setup_text))
             chipContext.contentDescription = getString(R.string.chat_chip_context_description, percent)
@@ -1511,6 +1512,25 @@ class ChatActivity : JangadaActivity() {
         handoff.start()
     }
 
+    /** Link "Continuar em conversa nova" do aviso de contexto grande; abre resumo editável no mesmo agente. */
+    internal fun startFreshHandoff() {
+        if (!busyBlocks()) handoff.startFresh()
+    }
+
+    /** Fecha a conversa atual e abre uma nova no mesmo agente com o resumo no campo (sem enviar sozinho). */
+    internal fun reopenWithSummary(text: String) {
+        if (busyBlocks()) return
+        val svc = service ?: return
+        reopenChat(svc, after = {
+            val trimmed = text.trim()
+            if (trimmed.isNotEmpty()) {
+                input.setText(trimmed)
+                input.setSelection(input.text.length)
+                drafts.put(chatKey, trimmed)
+            }
+        }) { svc.openChat(agentId, folder = folder, restart = true) }
+    }
+
     internal fun showModelSheet() {
         if (isClaude) {
             Sheet(this)
@@ -1527,10 +1547,16 @@ class ChatActivity : JangadaActivity() {
      * agente aceita). Compactar fica indisponível enquanto há um turno rodando.
      */
     private fun showContextSheet(chat: AgentChat) {
-        val percent = chat.contextUsage?.percent ?: return
+        val usage = chat.contextUsage ?: return
         val canCompact = isClaude || (chat as? AcpChat)?.commands?.any { it.name == "compact" } == true
+        val canFresh = !chat.busy && ChatHandoff.hasConversation(chat.items.toList())
         val rows = mutableListOf<Sheet.Row>()
         if (canCompact) rows += Sheet.Row(title = getString(R.string.chat_compact_now), enabled = !chat.busy) { sendAwake("/compact") }
+        rows += Sheet.Row(
+            title = getString(R.string.chat_handoff_fresh),
+            description = getString(R.string.chat_handoff_fresh_desc),
+            enabled = canFresh,
+        ) { handoff.startFresh() }
         rows += autoCompactRow()
         rows += concisenessRow()
         if (recipe?.id == OpenCodeAuth.AGENT_ID) rows += openCodeEconomyRow()
@@ -1538,7 +1564,7 @@ class ChatActivity : JangadaActivity() {
         if (isClaude) rows += codeModeRow()
         Sheet(this)
             .title(getString(R.string.chat_context_title))
-            .message(getString(R.string.chat_context_explain, percent))
+            .message(getString(R.string.chat_context_explain_tokens, usage.percent, usage.usedK))
             .rows(rows)
             .show()
     }
@@ -1887,10 +1913,13 @@ class ChatActivity : JangadaActivity() {
      * Fecha o chat deste trabalho, espera o agente sair e liga a tela no que [open] abrir.
      * Com o agente parado, reabrir soma um rodando: precisa de vaga.
      */
-    internal fun reopenChat(svc: TerminalService, open: () -> AgentChat) {
+    internal fun reopenChat(svc: TerminalService, after: () -> Unit = {}, open: () -> AgentChat) {
         withRoom(svc) {
             svc.closeChat(agentId, folder) {
-                if (!isDestroyed) attach(open())
+                if (!isDestroyed) {
+                    attach(open())
+                    after()
+                }
             }
         }
     }

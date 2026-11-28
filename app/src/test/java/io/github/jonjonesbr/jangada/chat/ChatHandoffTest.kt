@@ -335,4 +335,22 @@ class ChatHandoffTest {
         assertTrue(text.contains("m6-"))
         assertFalse(text.contains("m5-"))
     }
+
+    @Test
+    fun usoDeContextoDetectaLimitePorPercentualOuTokens() {
+        val low = ContextUsage(100_000, 1_000_000)
+        assertEquals(10, low.percent)
+        assertEquals(100, low.usedK)
+        assertFalse(low.isHigh())
+
+        // Em janela de 1M, 200K é apenas 20%, mas já passa do teto absoluto de 180K.
+        val highTokens = ContextUsage(200_000, 1_000_000)
+        assertEquals(20, highTokens.percent)
+        assertEquals(200, highTokens.usedK)
+        assertTrue(highTokens.isHigh())
+
+        val highPercent = ContextUsage(80_000, 100_000)
+        assertEquals(80, highPercent.percent)
+        assertTrue(highPercent.isHigh())
+    }
 }

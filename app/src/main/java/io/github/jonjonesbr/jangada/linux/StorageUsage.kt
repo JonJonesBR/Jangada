@@ -131,6 +131,22 @@ case "${'$'}cur" in
       rmk "${'$'}old"
     done ;;
 esac
+ctx_db=/root/.context-mode/context.db
+if [ -f "${'$'}ctx_db" ] && [ ! -L "${'$'}ctx_db" ] && command -v sqlite3 >/dev/null 2>&1; then
+  db_before=${'$'}(du -sk "${'$'}ctx_db" 2>/dev/null | cut -f1)
+  sqlite3 "${'$'}ctx_db" ".timeout 2000" \
+    "DELETE FROM sources WHERE created_ts < (strftime('%s','now') - 604800) * 1000;" \
+    "DELETE FROM chunks WHERE path NOT IN (SELECT path FROM sources);" \
+    "DELETE FROM events WHERE created_at < datetime('now', '-7 days');" \
+    "DELETE FROM meta WHERE key LIKE 'informed_config:session:%';" >/dev/null 2>&1 || true
+  sqlite3 "${'$'}ctx_db" ".timeout 2000" \
+    "DELETE FROM chunks_tri WHERE path NOT IN (SELECT path FROM sources);" >/dev/null 2>&1 || true
+  sqlite3 "${'$'}ctx_db" ".timeout 2000" "VACUUM;" >/dev/null 2>&1 || true
+  db_after=${'$'}(du -sk "${'$'}ctx_db" 2>/dev/null | cut -f1)
+  if [ "${'$'}{db_before:-0}" -gt "${'$'}{db_after:-0}" ] 2>/dev/null; then
+    freed=${'$'}((freed + db_before - db_after))
+  fi
+fi
 echo "$CACHE_FREED_PREFIX${'$'}freed"
 true
 """

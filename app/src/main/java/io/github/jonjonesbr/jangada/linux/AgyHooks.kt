@@ -23,6 +23,8 @@ object AgyHooks {
     const val CHOP_FILE = ".local/bin/chop"
     const val CONFIG_DIR = ".gemini/config"
     const val HOOKS_FILE = ".gemini/config/hooks.json"
+    const val CHOP_FILTERS_DIR = ".config/chop"
+    const val CHOP_FILTERS_FILE = ".config/chop/filters.yml"
 
     private const val TAG = "AgyHooks"
     private val NOFOLLOW = LinkOption.NOFOLLOW_LINKS
@@ -58,6 +60,44 @@ object AgyHooks {
         val bytes = (json.toString(2) + "\n").toByteArray(StandardCharsets.UTF_8)
         writeAtomic(configDir, hooksFile, bytes)
         return hooksFile
+    }
+
+    /**
+     * Grava os filtros padrão do `chop` em `/root/.config/chop/filters.yml` quando o `chop` está
+     * instalado e o arquivo ainda não existe. Nunca sobrescreve filtros do usuário nem segue links.
+     */
+    internal fun ensureChopFilters(root: Path, content: String): Path? {
+        if (!Files.isDirectory(root, NOFOLLOW)) return null
+        val home = root.resolve("root")
+        if (!Files.isDirectory(home, NOFOLLOW)) return null
+        if (!isRealFile(home, home.resolve(CHOP_FILE))) return null
+        val filtersDir = ensureRealSubdir(home, CHOP_FILTERS_DIR) ?: return null
+
+        val filtersFile = home.resolve(CHOP_FILTERS_FILE)
+        if (Files.isSymbolicLink(filtersFile)) return null
+        if (Files.exists(filtersFile, NOFOLLOW)) {
+            return if (Files.isRegularFile(filtersFile, NOFOLLOW)) filtersFile else null
+        }
+        writeAtomic(filtersDir, filtersFile, content.toByteArray(StandardCharsets.UTF_8))
+        return filtersFile
+    }
+
+    private fun ensureRealSubdir(home: Path, relative: String): Path? {
+        var dir = home
+        for (part in relative.split('/')) {
+            dir = dir.resolve(part)
+            if (Files.isSymbolicLink(dir)) return null
+            if (!Files.exists(dir, NOFOLLOW)) {
+                try {
+                    Files.createDirectory(dir)
+                } catch (_: IOException) {
+                    if (Files.isSymbolicLink(dir) || !Files.isDirectory(dir, NOFOLLOW)) return null
+                }
+            } else if (!Files.isDirectory(dir, NOFOLLOW)) {
+                return null
+            }
+        }
+        return dir
     }
 
     private fun readHooksJson(hooksFile: Path): JSONObject? {

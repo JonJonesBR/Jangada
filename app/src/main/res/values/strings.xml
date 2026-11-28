@@ -314,6 +314,8 @@
     <string name="chat_model_effort_title">Model and effort</string>
     <string name="chat_context_title">Conversation context</string>
     <string name="chat_context_explain">%1$d%% of the conversation’s memory is in use. Compacting summarizes the conversation so it can keep going with more room.</string>
+    <string name="chat_context_explain_tokens">%1$d%% (~%2$dK tokens) of the conversation’s memory is in use. Compacting summarizes the conversation, or you can continue in a fresh conversation with a short summary.</string>
+    <string name="chat_context_high_tokens">Conversation passed ~%1$dK tokens. Compact or continue in a new conversation to save quota.</string>
     <string name="chat_chip_limits">⏱ %1$s</string>
     <string name="chat_chip_limits_high">⚠ %1$s</string>
     <string name="chat_chip_limits_description">Plan limits: %1$s. Tap for details.</string>
@@ -857,6 +859,8 @@
     <string name="chat_export_empty">Nothing to export yet</string>
     <string name="chat_handoff">Continue with another agent</string>
     <string name="chat_handoff_desc">Pass the request and the changes to another agent in this folder</string>
+    <string name="chat_handoff_fresh">Continue in a new conversation</string>
+    <string name="chat_handoff_fresh_desc">Start fresh on the same agent with a short summary</string>
     <string name="chat_handoff_empty">There is no conversation to pass on yet</string>
     <string name="chat_handoff_none">No other installed agent with chat</string>
     <string name="chat_handoff_open_catalog">Open catalog</string>
@@ -890,9 +894,9 @@
     <string name="auto_compact_percent">At %1$d%%</string>
     <string name="auto_compact_global">Use the general setting (%1$s)</string>
     <string name="auto_compact_from_general">Follows the general setting</string>
-    <string name="auto_compact_acp_note">On this agent, the app sends /compact at the end of a reply when the context reaches the percentage (if the agent has that command). Turning it off is only possible on Claude.</string>
+    <string name="auto_compact_acp_note">On this agent, the app sends /compact at the end of a reply when the context reaches the percentage (if the agent has that command). On agy, it also configures native compaction on startup. Turning it off is only possible on Claude.</string>
     <string name="settings_auto_compact_label">Auto-compact: %1$s</string>
-    <string name="settings_auto_compact_desc">Summarizes the conversation when the context fills up, so the agent can keep going with room. On Claude, the agent itself compacts and the setting applies when it starts again. On the other agents, the app sends /compact at the end of a reply when the context reaches the percentage (if the agent has that command). Each job can have its own, in the chat\'s ⋮ menu.</string>
+    <string name="settings_auto_compact_desc">Summarizes the conversation when the context fills up, so the agent can keep going with room. On Claude, the agent itself compacts and the setting applies when it starts again. On the other agents, the app sends /compact at the end of a reply when the context reaches the percentage (if the agent has that command), and on agy it also configures native compaction on startup. Each job can have its own, in the chat\'s ⋮ menu.</string>
     <string name="code_mode_title">Code Mode (experimental)</string>
     <string name="code_mode_on">On</string>
     <string name="code_mode_off">Off</string>
@@ -945,7 +949,7 @@
     <string name="agy_economy_off">Off</string>
     <string name="agy_economy_global">Follow the general setting (%1$s)</string>
     <string name="agy_economy_from_general">Follows the general setting</string>
-    <string name="agy_economy_note">Applies when the agent starts: stop it and send the message again to apply now. Compaction at 55%, reads of 4 KB/120 lines, and in new conversations the Hydrogen (Medium) model with medium effort (Neon, Carbon, then 3.8 Flash if it is not available).</string>
+    <string name="agy_economy_note">Applies when the agent starts: stop it and send the message again to apply now. Compaction at 180K tokens, reads of 4 KB/120 lines, and in new conversations the Hydrogen (Medium) model with medium effort (Neon, Carbon, then 3.8 Flash if it is not available).</string>
     <string name="chat_auto_compacting">Compacting the conversation automatically (context at %1$d%%).</string>
     <string name="opencode_auth_row">Accounts and keys</string>
     <string name="opencode_auth_row_desc">Connect providers with your own key, or go back to the free plan</string>

@@ -118,4 +118,49 @@ class CacheCleanRunTest {
             ?.removePrefix(CACHE_FREED_PREFIX)?.trim()?.toLongOrNull()
         assertTrue("sem $CACHE_FREED_PREFIX na saída: $out", freed != null && freed >= 20)
     }
+
+    @Test
+    fun limpezaPodaContextDbAntigoEPreservaConfig() {
+        assumeTrue(File("/bin/bash").canExecute())
+        val hasSqlite = runCatching {
+            val p = ProcessBuilder("sqlite3", "--version").start()
+            p.waitFor(5, TimeUnit.SECONDS) && p.exitValue() == 0
+        }.getOrDefault(false)
+        assumeTrue("sqlite3 precisa estar instalado", hasSqlite)
+
+        base = tmp.newFolder("rootfs-ctx")
+        val (setupCode, setupOut) = bash(
+            """
+            set -e
+            cd '${base.absolutePath}'
+            mkdir -p home root/.context-mode tmp var/cache/apt/archives
+            sqlite3 root/.context-mode/context.db \
+              "CREATE TABLE sources (path TEXT PRIMARY KEY, created_ts INTEGER NOT NULL);" \
+              "CREATE TABLE chunks (path TEXT, body TEXT);" \
+              "CREATE TABLE chunks_tri (path TEXT, body TEXT);" \
+              "CREATE TABLE events (seq INTEGER PRIMARY KEY, created_at TEXT, body TEXT);" \
+              "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);" \
+              "INSERT INTO sources VALUES ('velho.log', 1000), ('novo.log', (strftime('%s','now') * 1000));" \
+              "INSERT INTO chunks VALUES ('velho.log', 'x'), ('novo.log', 'y');" \
+              "INSERT INTO chunks_tri VALUES ('velho.log', 'x'), ('novo.log', 'y');" \
+              "INSERT INTO events VALUES (1, datetime('now', '-10 days'), 'e1'), (2, datetime('now'), 'e2');" \
+              "INSERT INTO meta VALUES ('cutoff:global', '4096'), ('informed_config:session:abc', '4096');"
+            """.trimIndent(),
+        )
+        assertEquals(setupOut, 0, setupCode)
+
+        val (code, out) = bash(sandboxed())
+        assertEquals(out, 0, code)
+
+        val db = File(base, "root/.context-mode/context.db").absolutePath
+        val p = ProcessBuilder(
+            "sqlite3",
+            db,
+            "SELECT path FROM sources; SELECT path FROM chunks; SELECT path FROM chunks_tri; SELECT seq FROM events; SELECT key || '=' || value FROM meta ORDER BY key;",
+        ).redirectErrorStream(true).start()
+        val queryOut = p.inputStream.bufferedReader().readText().trim().lines()
+        assertTrue(p.waitFor(5, TimeUnit.SECONDS))
+        assertEquals(0, p.exitValue())
+        assertEquals(listOf("novo.log", "novo.log", "novo.log", "2", "cutoff:global=4096"), queryOut)
+    }
 }

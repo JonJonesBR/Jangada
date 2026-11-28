@@ -1213,6 +1213,7 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
         if (item.continueAgent) action(getString(R.string.chat_stuck_continue)) { activity.continueAgent() }
         if (item.changeModel) action(getString(R.string.chat_change_model)) { activity.showModelSheet() }
         if (item.handoff) action(getString(R.string.chat_handoff)) { activity.startHandoff() }
+        if (item.freshHandoff) action(getString(R.string.chat_handoff_fresh)) { activity.startFreshHandoff() }
         if (details != null) action(getString(R.string.chat_error_details)) { activity.showDetails(R.string.chat_error_details, details) }
         return box
     }

@@ -831,7 +831,7 @@
         body.innerHTML = '<div class="muted">Uso de contexto ainda não informado pelo agente.</div>';
         return;
       }
-      const warn = cu.percent >= 80 ? "warn" : "";
+      const warn = cu.percent >= 80 || cu.used >= 180000 ? "warn" : "";
       const info = document.createElement("div");
       info.className = "modal-field";
       info.innerHTML = `
@@ -1131,7 +1131,7 @@
       ["", "Padrão"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["xhigh", "Muito alto"], ["max", "Máximo"],
     ]);
     addSelect(gChat, "Compactação automática", "autoCompact", cfg.autoCompact, [
-      ["default", "Padrão"], ["off", "Desligada"], ["50", "50%"], ["60", "60%"], ["70", "70%"], ["80", "80%"], ["90", "90%"],
+      ["default", "Padrão"], ["off", "Desligada"], ["20", "20%"], ["30", "30%"], ["40", "40%"], ["50", "50%"], ["60", "60%"], ["70", "70%"], ["80", "80%"], ["90", "90%"],
     ]);
     addSelect(gChat, "Code Mode (Claude, experimental)", "codeMode", cfg.codeMode, [
       ["off", "Desligado"], ["on", "Ligado"],
@@ -1621,7 +1621,7 @@
 
     if (chat.contextUsage) {
       chipContext.textContent = `Contexto ${chat.contextUsage.percent}%`;
-      chipContext.classList.toggle("warn", chat.contextUsage.percent >= 80);
+      chipContext.classList.toggle("warn", chat.contextUsage.percent >= 80 || chat.contextUsage.used >= 180000);
       chipContext.classList.remove("hidden");
     } else {
       chipContext.classList.add("hidden");

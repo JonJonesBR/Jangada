@@ -30,6 +30,7 @@ object AgentInstructions {
         - Prefer headless browsers with a single page, and avoid running heavy builds or test suites in parallel subagents.
         - If a command dies with "Killed" or exit code 137, memory ran out: run it again alone, with less parallelism.
         - Save context and quota: avoid reading whole files over 200 lines at once (use search tools like `ctx_search` or read line ranges), ignore heavy folders (`node_modules/`, `.git/`, `dist/`, `build/`, `.log`), and keep responses concise without repeating unchanged code.
+        - For broad codebase searches, delegate to a lightweight research subagent (flash/flash_lite) when available; avoid unnecessary `| head`/`| tail` pipes on commands already compressed by `chop`, and avoid polling loops inside long conversations.
     """.trimIndent()
 
     /** Seção que só entra com as chamadas entre agentes ligadas (ver AgentRoles/jangada-call). */

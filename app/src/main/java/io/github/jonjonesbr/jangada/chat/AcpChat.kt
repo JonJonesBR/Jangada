@@ -43,6 +43,9 @@ class AcpChat(
     /** Pode compactar sozinho de novo? Some ao compactar e volta quando o contexto cai abaixo do percentual. */
     private var autoCompactArmed = true
 
+    /** O aviso de conversa acima de [ContextUsage.HIGH_TOKENS] já foi mostrado nesta rodada de uso? */
+    private var highContextWarned = false
+
     private val limitsStore by lazy { PlanLimitsStore(context) }
 
     @Volatile override var sessionId: String? = null
@@ -175,6 +178,7 @@ class AcpChat(
     fun start(resume: String? = null, previous: AgentChat? = null) {
         if (running) return
         contextUsage = null
+        highContextWarned = false
         // Processo novo: há agentes que numeram as ações de novo ("call_1"); uma ação nova não pode
         // atualizar a antiga de mesmo id (as antigas já foram encerradas em settleItems).
         tools.clear()
@@ -205,9 +209,11 @@ class AcpChat(
                     .getOrNull()
                     ?.let { "export OPENCODE_CONFIG=${AgentRecipe.q(it)}; " }
                     .orEmpty()
-            } else if (agentId == AGY_ID && runCatching { agyEconomy() }.getOrDefault(false)) {
-                // Economia do agy: só variáveis de ambiente; nada nos ajustes dele é alterado.
-                AgyEconomy.envPrefix()
+            } else if (agentId == AGY_ID) {
+                // Economia do agy e AutoCompact nativo: só variáveis de ambiente; nada nos ajustes dele é alterado.
+                val eco = if (runCatching { agyEconomy() }.getOrDefault(false)) AgyEconomy.envPrefix() else ""
+                val compact = AutoCompact.agyEnvPrefix(runCatching { autoCompact() }.getOrDefault(AutoCompact.DEFAULT))
+                eco + compact
             } else {
                 ""
             }
@@ -1025,6 +1031,7 @@ class AcpChat(
         val waiting = pending.values.toList()
         pending.clear()
         ready = false
+        highContextWarned = false
         restoring = 0
         restoringModel = false
         main.removeCallbacks(restoreTimeout)
@@ -1574,7 +1581,15 @@ class AcpChat(
             "config_option_update" -> parseConfig(update)
             // Janela de contexto: quanto já ocupa e quanto cabe (o agente manda a cada mudança).
             "usage_update" -> {
-                AcpParse.contextUsage(update)?.let { contextUsage = it }
+                AcpParse.contextUsage(update)?.let { usage ->
+                    contextUsage = usage
+                    if (usage.used < ContextUsage.HIGH_TOKENS / 2) {
+                        highContextWarned = false
+                    } else if (!highContextWarned && !loadingHistory && !catchUpActive && usage.used >= ContextUsage.HIGH_TOKENS) {
+                        highContextWarned = true
+                        add(ChatItem.Info(context.getString(R.string.chat_context_high_tokens, usage.usedK), freshHandoff = true))
+                    }
+                }
                 changed()
             }
             "available_commands_update" -> parseCommands(update)

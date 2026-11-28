@@ -135,6 +135,8 @@ sealed class ChatItem {
         val continueAgent: Boolean = false,
         /** Mostra o link "Continuar com outro agente" (cota esgotada; ver [HandoffFlow]). Nunca envia nada sozinho. */
         val handoff: Boolean = false,
+        /** Mostra o link "Continuar em conversa nova" no mesmo agente (ver [HandoffFlow.startFresh]). */
+        val freshHandoff: Boolean = false,
     ) : ChatItem()
     /** Raciocínio do agente: sempre guardado na conversa; a tela decide se mostra (ver [ChatView]). */
     class Thinking(var text: String) : ChatItem()
@@ -242,6 +244,19 @@ class ContextUsage(val used: Long, val size: Long) {
     /** Percentual usado, de 0 a 100 (arredondado; 0 sem tamanho conhecido). */
     val percent: Int
         get() = if (size <= 0) 0 else ((used * 100 + size / 2) / size).toInt().coerceIn(0, 100)
+
+    /** Uso aproximado em milhares de tokens, arredondado. */
+    val usedK: Int
+        get() = ((used + 500L) / 1000L).toInt().coerceAtLeast(0)
+
+    /** Contexto alto pelo percentual ou pelo volume absoluto (janelas grandes, ex.: 1M). */
+    fun isHigh(percentLimit: Int = HIGH_PERCENT, tokenLimit: Long = HIGH_TOKENS): Boolean =
+        percent >= percentLimit || used >= tokenLimit
+
+    companion object {
+        const val HIGH_PERCENT = 80
+        const val HIGH_TOKENS = 180_000L
+    }
 }
 
 /**

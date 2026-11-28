@@ -44,11 +44,12 @@ class AgyEconomyTest {
     @Test
     fun envPrefixExportaAsTresVariaveis() {
         val prefix = AgyEconomy.envPrefix()
-        assertTrue(prefix.contains("export AGY_CLI_AUTO_COMPACT_OVERRIDE=${AgyEconomy.COMPACT_PERCENT};"))
+        assertTrue(prefix.contains("export AGY_CLI_AUTO_COMPACT_OVERRIDE=${AgyEconomy.COMPACT_LIMIT};"))
         assertTrue(prefix.contains("export CONTEXT_MODE_MAX_READ_BYTES=${AgyEconomy.MAX_READ_BYTES};"))
         assertTrue(prefix.contains("export CONTEXT_MODE_MAX_LINE_RANGE=${AgyEconomy.MAX_LINE_RANGE};"))
         assertTrue(prefix.endsWith("; "))
-        assertEquals("55%", AgyEconomy.COMPACT_PERCENT)
+        assertEquals("180K", AgyEconomy.COMPACT_LIMIT)
+        assertEquals(AgyEconomy.ON, AgyEconomy.DEFAULT)
         assertEquals(4096, AgyEconomy.MAX_READ_BYTES)
         assertEquals(120, AgyEconomy.MAX_LINE_RANGE)
         assertEquals("medium", AgyEconomy.EFFORT)
