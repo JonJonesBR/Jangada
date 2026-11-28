@@ -1091,7 +1091,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         val cwd = Workspace.path(folder)
         val hostDir = Workspace.hostPath(linux.rootfs, cwd)
         val branch = if (linux.isReady) Workspace.gitBranch(linux.rootfs, hostDir) else null
-        val isolated = if (linux.isReady) Workspace.worktreeBase(linux.rootfs, hostDir) != null else false
+        val isolated = if (linux.isReady) Workspace.worktreeOf(hostDir) != null else false
         val changedFiles = if (linux.isReady) {
             val res = runCatching { Git.status(linux, cwd) }.getOrNull()
             if (res != null && res.code == 0) {
