@@ -23,7 +23,7 @@ android {
         minSdk = 26
         externalNativeBuild {
             ndkBuild {
-                cFlags += listOf("-std=c11", "-Wall", "-Wextra", "-Os", "-fno-stack-protector", "-Wl,--gc-sections")
+                cFlags += listOf("-std=c11", "-Wall", "-Wextra", "-Os", "-fno-stack-protector", "-Wl,--gc-sections", "-Wl,-z,max-page-size=16384")
             }
         }
         ndk {
