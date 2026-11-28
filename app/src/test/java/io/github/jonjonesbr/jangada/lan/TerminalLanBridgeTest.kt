@@ -2,11 +2,14 @@ package io.github.jonjonesbr.jangada.lan
 
 import io.github.jonjonesbr.jangada.linux.Workspace
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class TerminalLanBridgeTest {
 
@@ -71,5 +74,29 @@ class TerminalLanBridgeTest {
         assertEquals("same_name", TerminalLanBridge.validateCopyProject("app", "app", listing)?.getString("error"))
         assertEquals("exists", TerminalLanBridge.validateCopyProject("app", "NOTAS", listing)?.getString("error"))
         assertNull(TerminalLanBridge.validateCopyProject("app", "app-copia", listing))
+    }
+
+    @Test
+    fun mapeiaTodosOsMotivosDeRecusaDeProjeto() {
+        assertEquals("not_found", TerminalLanBridge.refusalError(io.github.jonjonesbr.jangada.linux.ProjectOps.Refusal.NOT_PROJECT))
+        assertEquals("has_worktrees", TerminalLanBridge.refusalError(io.github.jonjonesbr.jangada.linux.ProjectOps.Refusal.HAS_WORKTREES))
+        assertEquals("is_worktree", TerminalLanBridge.refusalError(io.github.jonjonesbr.jangada.linux.ProjectOps.Refusal.IS_WORKTREE))
+        assertEquals("invalid_name", TerminalLanBridge.refusalError(io.github.jonjonesbr.jangada.linux.ProjectOps.Refusal.INVALID_NAME))
+        assertEquals("same_name", TerminalLanBridge.refusalError(io.github.jonjonesbr.jangada.linux.ProjectOps.Refusal.SAME_NAME))
+        assertEquals("exists", TerminalLanBridge.refusalError(io.github.jonjonesbr.jangada.linux.ProjectOps.Refusal.EXISTS))
+    }
+
+    @Test
+    fun travaDeBackupBloqueiaSegundaOperacaoAteLiberar() {
+        val flag = AtomicBoolean(false)
+        assertNull(TerminalLanBridge.backupBusyError(flag))
+        assertTrue(TerminalLanBridge.tryBeginBackup(flag))
+        assertFalse(TerminalLanBridge.tryBeginBackup(flag))
+        val busy = TerminalLanBridge.backupBusyError(flag)
+        assertEquals(false, busy?.getBoolean("ok"))
+        assertEquals("backup_busy", busy?.getString("error"))
+        flag.set(false)
+        assertNull(TerminalLanBridge.backupBusyError(flag))
+        assertTrue(TerminalLanBridge.tryBeginBackup(flag))
     }
 }

@@ -122,6 +122,34 @@ class CallServerTest {
     }
 
     @Test
+    fun segundaChamadaConcorrenteRecebe429ELiberaDepois() {
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val created = start {
+            entered.countDown()
+            release.await(5, TimeUnit.SECONDS)
+            CallServer.Reply(200, "ok")
+        }
+        val headers = mapOf("X-Jangada-Token" to conf(root)["token"]!!)
+        var firstCode = 0
+        val t1 = thread(isDaemon = true) {
+            firstCode = request(created.port, "POST", "/call?agent=opencode&role=revisor", headers, "1").first
+        }
+        assertTrue(entered.await(5, TimeUnit.SECONDS))
+
+        val (secondCode, secondText) = request(created.port, "POST", "/call?agent=opencode&role=revisor", headers, "2")
+        assertEquals(429, secondCode)
+        assertTrue(secondText.contains("andamento"))
+
+        release.countDown()
+        t1.join(5_000)
+        assertEquals(200, firstCode)
+
+        val (thirdCode, _) = request(created.port, "POST", "/call?agent=opencode&role=revisor", headers, "3")
+        assertEquals(200, thirdCode)
+    }
+
+    @Test
     fun pararApagaOArquivoDeAcesso() {
         val created = start { CallServer.Reply(200, "ok") }
         assertTrue(created.host.isNotEmpty())

@@ -92,7 +92,7 @@ agent=$$
     done
     # Quem saiu deixa de ser parte do agente (o número pode voltar como outro processo).
     core=$newcore
-    [ -n "$job" ] && { printf '%s %s\n' "$rss" "$procs" > "$dir/$job"; } 2>/dev/null
+    [ -n "$job" ] && { printf '%s %s\n' "$rss" "$procs" > "$dir/.$job.tmp" && mv -f "$dir/.$job.tmp" "$dir/$job"; } 2>/dev/null
     # Espera 5 s, mas acorda logo (≈1 s) se o agente terminar: o proot só termina quando
     # este processo sai, e o app espera o proot para dar o chat por encerrado.
     # Se o tail não puder ser usado (saiu antes sem o agente ter terminado), espera com sleep.

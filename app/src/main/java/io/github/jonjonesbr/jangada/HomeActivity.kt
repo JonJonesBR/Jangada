@@ -749,7 +749,9 @@ class HomeActivity : JangadaActivity() {
                 }
             }
             if (fetched > 0) LatestVersionCache.checkedAt = SystemClock.elapsedRealtime()
-            runOnUiThread { scheduleRender() }
+            runOnUiThread {
+                if (!isDestroyed && !isFinishing) scheduleRender()
+            }
         }
     }
 
@@ -1771,6 +1773,9 @@ class HomeActivity : JangadaActivity() {
             getString(R.string.lan_connected_count, status.connectedClients)
         }
         lanStatusText.text = lines.joinToString("\n")
+        val hasUrl = status.url != null
+        findViewById<View>(R.id.lan_status_share).visibility = if (hasUrl) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.lan_status_copy).visibility = if (hasUrl) View.VISIBLE else View.GONE
         lanStatusCard.visibility = View.VISIBLE
     }
 

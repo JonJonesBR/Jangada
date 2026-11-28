@@ -59,6 +59,7 @@ import io.github.jonjonesbr.jangada.linux.Projects
 import io.github.jonjonesbr.jangada.linux.Setup
 import io.github.jonjonesbr.jangada.linux.Workspace
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.util.concurrent.ConcurrentHashMap
@@ -138,7 +139,12 @@ class TerminalService : Service() {
             bridge = TerminalLanBridge(this),
             onClientsChanged = { main.post { sessionsChanged() } },
         )
-        srv.start()
+        try {
+            srv.start()
+        } catch (e: IOException) {
+            Log.w(TAG, "não foi possível iniciar o servidor LAN", e)
+            return lanStatus()
+        }
         lanServer = srv
         goForeground()
         sessionsChanged()
@@ -459,10 +465,14 @@ class TerminalService : Service() {
             )
         } else {
             // O catálogo já é guardado pelo AgentCatalog (uma leitura por processo).
-            val recipe = AgentCatalog.load(this).first { it.id == agentId }
+            val recipe = AgentCatalog.load(this).firstOrNull { it.id == agentId && it.acp != null }
+            val acpCommand = recipe?.acp?.command
+            if (recipe == null || acpCommand == null) {
+                return openChat(CLAUDE, folder, continueLast, resume, restart)
+            }
             // Nos agentes ACP, o valor é lido a cada fim de turno (vale na hora).
             AcpChat(
-                linux, recipe.acp!!.command, appVersion, Workspace.path(folder), agentId = recipe.id,
+                linux, acpCommand, appVersion, Workspace.path(folder), agentId = recipe.id,
                 autoCompact = { settings.autoCompactFor(key) },
                 // Sem system prompt por sessão no ACP: a instrução é prefixada na primeira mensagem.
                 concisionPrefix = { Conciseness.promptPrefix(settings.conciseness, settings.concisenessOfJob(key)) },
@@ -1429,7 +1439,7 @@ class TerminalService : Service() {
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
-        notifications().notify(NOTIFICATION_LINK, notification)
+        notifications().notify(url, NOTIFICATION_LINK, notification)
     }
 
     /** Tira os mapas por sessão de uma sessão que saiu. */
@@ -1545,7 +1555,12 @@ class TerminalService : Service() {
             runCatching {
                 val wifi = applicationContext.getSystemService(android.net.wifi.WifiManager::class.java)
                 @Suppress("DEPRECATION")
-                wifiLock = wifi?.createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "jangada:wifi")?.apply {
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                }
+                wifiLock = wifi?.createWifiLock(mode, "jangada:wifi")?.apply {
                     setReferenceCounted(false)
                     acquire()
                 }

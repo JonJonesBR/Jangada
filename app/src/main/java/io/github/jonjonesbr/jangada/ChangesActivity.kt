@@ -61,6 +61,8 @@ class ChangesActivity : JangadaActivity() {
         val hasUpstream: Boolean = false,
         /** O git status passou do tempo limite (ver Git.run): é repositório, mas não deu para ler. */
         val timedOut: Boolean = false,
+        /** O git status falhou (ex.: índice bloqueado ou corrompido): mensagem de erro real. */
+        val errorMessage: String? = null,
     )
 
     private lateinit var linux: LinuxEnv
@@ -191,7 +193,10 @@ class ChangesActivity : JangadaActivity() {
         val branch = Workspace.gitBranch(linux.rootfs, hostDir)
         val status = Git.status(linux, cwd)
         if (status.code == Git.TIMED_OUT) return State(false, branch, false, emptyList(), null, timedOut = true)
-        if (status.code != 0) return State(false, branch, false, emptyList(), null)
+        if (status.code != 0) {
+            val detail = status.output.trim().takeIf { it.isNotEmpty() }
+            return State(false, branch, false, emptyList(), null, errorMessage = detail ?: getString(R.string.git_failed_title))
+        }
         // Saída cortada: a última entrada pode ter vindo pela metade.
         val parsed = Git.parseStatus(status.output).let { if (status.cut) it.dropLast(1) else it }
         val hasHead = Git.run(linux, cwd, "rev-parse", "--verify", "-q", "HEAD").code == 0
@@ -229,7 +234,11 @@ class ChangesActivity : JangadaActivity() {
             remoteRow.visibility = View.GONE
             list.visibility = View.GONE
             commitBar.visibility = View.GONE
-            empty.text = getString(if (read.timedOut) R.string.changes_status_timeout else R.string.changes_not_repo)
+            empty.text = when {
+                read.timedOut -> getString(R.string.changes_status_timeout)
+                read.errorMessage != null -> read.errorMessage
+                else -> getString(R.string.changes_not_repo)
+            }
             empty.visibility = View.VISIBLE
             adapter.notifyDataSetChanged()
             updateCommit()

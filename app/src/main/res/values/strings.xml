@@ -1117,7 +1117,6 @@
     <string name="chat_auto_approved">Approved without asking: %1$s.</string>
     <string name="home_lan_access">Computer access (LAN)</string>
     <string name="lan_status_title">Computer access active</string>
-    <string name="lan_status_summary">%1$s · PIN %2$s</string>
     <string name="lan_status_no_ip">Port %1$d (connect to Wi-Fi) · PIN %2$s</string>
     <string name="lan_copy_link">Copy link</string>
     <string name="lan_copied">Link copied</string>
@@ -1126,8 +1125,6 @@
     <string name="lan_new_pin">New PIN</string>
     <string name="lan_dialog_title">Computer access (LAN)</string>
     <string name="lan_dialog_off">Turn on to use Jangada from a browser on the same Wi-Fi network, synced in real time with your phone.</string>
-    <string name="lan_dialog_on">Open in your computer browser:\n%1$s\n\nPIN: %2$s\n\nUse only on trusted Wi-Fi networks.</string>
-    <string name="lan_dialog_on_no_ip">Server running on port %1$d, but no local Wi-Fi IPv4 address was found.\n\nPIN: %2$s\n\nConnect to Wi-Fi and reopen this dialog.</string>
     <string name="service_lan_active">Computer access active on local network</string>
     <string name="service_sessions_with_lan">%1$s · Computer access active</string>
     <string name="lan_share_link">Share access</string>

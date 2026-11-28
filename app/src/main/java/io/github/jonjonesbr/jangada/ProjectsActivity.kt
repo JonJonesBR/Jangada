@@ -140,6 +140,7 @@ class ProjectsActivity : JangadaActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(getColor(R.color.bar_bg))
+            minimumHeight = dp(48)
             addView(back)
             addView(title)
         }
@@ -147,7 +148,7 @@ class ProjectsActivity : JangadaActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(getColor(R.color.setup_bg))
         }
-        root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(
             ScrollView(this).apply { addView(content) },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f),

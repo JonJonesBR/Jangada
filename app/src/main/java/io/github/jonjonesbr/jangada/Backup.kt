@@ -18,10 +18,10 @@ object Backup {
 
     private const val PROJECTS = "cd /root && tar -czf - ${LinuxEnv.WORKSPACE}"
 
-    /** Tudo da pasta pessoal, menos programas e caches (que voltam pelo catálogo). */
+    /** Tudo da pasta pessoal, menos programas, caches e o token efêmero da ponte (call.conf). */
     private val EVERYTHING = "cd /root && tar -czf - " + listOf(
         "./.cache", "./.npm", "./.bun", "./.local/share/claude", "./.local/bin", "./.opencode/bin",
-        "./.local/share/uv", "./celular", "*/node_modules",
+        "./.local/share/uv", "./celular", "./.config/jangada/call.conf", "*/node_modules",
     ).joinToString(" ") { "--exclude='$it'" } + " ."
 
     /** Grava o backup em [uri] (escolhido pelo usuário). Devolve o tamanho em bytes. */

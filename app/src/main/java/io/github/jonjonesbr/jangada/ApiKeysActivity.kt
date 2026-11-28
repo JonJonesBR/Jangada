@@ -52,6 +52,7 @@ class ApiKeysActivity : JangadaActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(getColor(R.color.bar_bg))
+            minimumHeight = dp(48)
         }
         bar.addView(TextView(this).apply {
             setText(R.string.terminal_home_arrow)
@@ -66,7 +67,7 @@ class ApiKeysActivity : JangadaActivity() {
             setTextColor(getColor(R.color.setup_text))
             textSize = 16f
         })
-        root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         // Erro de salvar ou validar: texto fixo no topo, que fica na tela até a próxima tentativa dar certo (não some como um Toast).
         errorView = TextView(this).apply {

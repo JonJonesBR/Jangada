@@ -11,6 +11,7 @@ import io.github.jonjonesbr.jangada.AgentPrefs
 import io.github.jonjonesbr.jangada.AppSettings
 import io.github.jonjonesbr.jangada.Backup
 import io.github.jonjonesbr.jangada.MemoryReport
+import io.github.jonjonesbr.jangada.R
 import io.github.jonjonesbr.jangada.SecretStore
 import io.github.jonjonesbr.jangada.SetupActivity
 import io.github.jonjonesbr.jangada.TerminalService
@@ -22,12 +23,14 @@ import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import io.github.jonjonesbr.jangada.chat.AutoCompact
 import io.github.jonjonesbr.jangada.chat.ChatEngine
 import io.github.jonjonesbr.jangada.chat.ChatExport
+import io.github.jonjonesbr.jangada.chat.ChatHandoff
 import io.github.jonjonesbr.jangada.chat.ChatHistory
 import io.github.jonjonesbr.jangada.chat.ChatItem
 import io.github.jonjonesbr.jangada.chat.CodeMode
 import io.github.jonjonesbr.jangada.chat.Conciseness
 import io.github.jonjonesbr.jangada.chat.OpenCodeEconomy
 import io.github.jonjonesbr.jangada.chat.PlanLimitsStore
+import io.github.jonjonesbr.jangada.chat.SecretScan
 import io.github.jonjonesbr.jangada.linux.Fs
 import io.github.jonjonesbr.jangada.linux.Git
 import io.github.jonjonesbr.jangada.linux.HeadlessAgent
@@ -96,37 +99,52 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         else -> emptyList()
     }
 
-    override fun snapshot(): JSONObject = onMain {
+    private class ChatEntry(
+        val key: String,
+        val agentId: String,
+        val agentName: String,
+        val folder: String,
+        val chat: AgentChat,
+        val configOptions: List<LanJson.ConfigOptionDto>,
+    )
+
+    override fun snapshot(): JSONObject {
         val now = SystemClock.elapsedRealtime()
+        val (chatEntries, termsArr) = onMain {
+            val entries = service.chats.map { (key, slot) ->
+                val name = agentNames[slot.agentId] ?: slot.agentId
+                ChatEntry(key, slot.agentId, name, slot.folder, slot.chat, configOptionsFor(slot.chat))
+            }
+            val terms = JSONArray()
+            for (s in service.sessions) {
+                val handle = s.mHandle
+                terms.put(
+                    JSONObject()
+                        .put("handle", handle)
+                        .put("title", s.title ?: TerminalService.DEFAULT_TITLE)
+                        .put("folder", service.sessionFolder[handle].orEmpty())
+                        .put("running", s.isRunning),
+                )
+            }
+            entries to terms
+        }
         val chatsArr = JSONArray()
-        for ((key, slot) in service.chats) {
-            val name = agentNames[slot.agentId] ?: slot.agentId
+        for (entry in chatEntries) {
             chatsArr.put(
                 LanJson.chatToJson(
-                    key = key,
-                    agentId = slot.agentId,
-                    agentName = name,
-                    folder = slot.folder,
-                    chat = slot.chat,
+                    key = entry.key,
+                    agentId = entry.agentId,
+                    agentName = entry.agentName,
+                    folder = entry.folder,
+                    chat = entry.chat,
                     includeItems = true,
-                    configOptions = configOptionsFor(slot.chat),
-                    limits = limitsStore.load(slot.agentId),
+                    configOptions = entry.configOptions,
+                    limits = limitsStore.load(entry.agentId),
                     nowElapsedMs = now,
                 ),
             )
         }
-        val termsArr = JSONArray()
-        for (s in service.sessions) {
-            val handle = s.mHandle
-            termsArr.put(
-                JSONObject()
-                    .put("handle", handle)
-                    .put("title", s.title ?: TerminalService.DEFAULT_TITLE)
-                    .put("folder", service.sessionFolder[handle].orEmpty())
-                    .put("running", s.isRunning),
-            )
-        }
-        JSONObject()
+        return JSONObject()
             .put("chats", chatsArr)
             .put("terminals", termsArr)
     }
@@ -263,36 +281,41 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         if (!validAgent) {
             return JSONObject().put("ok", false).put("error", "invalid_agent")
         }
-        return onMain {
+        val limits = limitsStore.load(agentId)
+        val (chat, opts) = onMain {
             if (!service.makeRoomFor(agentId, cleanFolder)) {
-                return@onMain JSONObject().put("ok", false).put("error", "max_chats_reached")
+                return@onMain null to emptyList()
             }
-            val chat = service.openChat(
+            val opened = service.openChat(
                 agentId = agentId,
                 folder = cleanFolder,
                 resume = resume,
                 restart = restart,
             )
-            val key = TerminalService.chatKey(agentId, cleanFolder)
-            val name = agentNames[agentId] ?: agentId
-            JSONObject()
-                .put("ok", true)
-                .put("key", key)
-                .put(
-                    "chat",
-                    LanJson.chatToJson(
-                        key = key,
-                        agentId = agentId,
-                        agentName = name,
-                        folder = cleanFolder,
-                        chat = chat,
-                        includeItems = true,
-                        configOptions = configOptionsFor(chat),
-                        limits = limitsStore.load(agentId),
-                        nowElapsedMs = SystemClock.elapsedRealtime(),
-                    ),
-                )
+            opened to configOptionsFor(opened)
         }
+        if (chat == null) {
+            return JSONObject().put("ok", false).put("error", "max_chats_reached")
+        }
+        val key = TerminalService.chatKey(agentId, cleanFolder)
+        val name = agentNames[agentId] ?: agentId
+        return JSONObject()
+            .put("ok", true)
+            .put("key", key)
+            .put(
+                "chat",
+                LanJson.chatToJson(
+                    key = key,
+                    agentId = agentId,
+                    agentName = name,
+                    folder = cleanFolder,
+                    chat = chat,
+                    includeItems = true,
+                    configOptions = opts,
+                    limits = limits,
+                    nowElapsedMs = SystemClock.elapsedRealtime(),
+                ),
+            )
     }
 
     override fun uploadAttachment(name: String, mimeType: String, bytes: ByteArray): JSONObject {
@@ -479,15 +502,14 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         LinuxEnv(service).isReady && !backupRunning.get()
 
     /** Toma a posse do slot de backup (CAS). Quem consegue deve chamar [endBackup] no fim. */
-    override fun beginBackup(): Boolean = backupRunning.compareAndSet(false, true)
+    override fun beginBackup(): Boolean = tryBeginBackup(backupRunning)
 
     override fun endBackup() {
         backupRunning.set(false)
     }
 
     /** JSON de recusa para as mudanças de estado durante backup ou restauração. */
-    private fun backupBusy(): JSONObject? =
-        if (backupRunning.get()) JSONObject().put("ok", false).put("error", "backup_busy") else null
+    private fun backupBusy(): JSONObject? = backupBusyError(backupRunning)
 
     override fun exportBackup(out: OutputStream, everything: Boolean) {
         // A posse do slot já foi tomada por beginBackup (LanServer).
@@ -677,21 +699,31 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         true
     }
 
-    override fun terminalScreen(handle: String): JSONObject? = onMain {
-        val s = service.session(handle) ?: return@onMain null
-        if (s.emulator == null) {
-            s.initializeEmulator(100, 32, 0, 0)
-        }
-        val raw = s.emulator?.screen?.transcriptTextWithoutJoinedLines.orEmpty()
+    override fun terminalScreen(handle: String): JSONObject? {
+        val (title, folder, running, raw) = onMain {
+            val s = service.session(handle) ?: return@onMain null
+            if (s.emulator == null) {
+                s.initializeEmulator(100, 32, 0, 0)
+            }
+            val text = s.emulator?.screen?.transcriptTextWithoutJoinedLines.orEmpty()
+            Quad(
+                s.title ?: TerminalService.DEFAULT_TITLE,
+                service.sessionFolder[handle].orEmpty(),
+                s.isRunning,
+                text,
+            )
+        } ?: return null
         val lines = raw.split('\n')
         val clipped = if (lines.size > 300) lines.takeLast(300).joinToString("\n") else raw
-        JSONObject()
+        return JSONObject()
             .put("handle", handle)
-            .put("title", s.title ?: TerminalService.DEFAULT_TITLE)
-            .put("folder", service.sessionFolder[handle].orEmpty())
-            .put("running", s.isRunning)
+            .put("title", title)
+            .put("folder", folder)
+            .put("running", running)
             .put("text", clipped)
     }
+
+    private data class Quad(val title: String, val folder: String, val running: Boolean, val raw: String)
 
     override fun terminalInput(handle: String, data: String): Boolean = onMain {
         val s = service.session(handle) ?: return@onMain false
@@ -857,8 +889,12 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         if (!SecretStore.VALID_NAME.matches(clean) || SecretStore.isReserved(clean)) {
             return JSONObject().put("ok", false).put("error", "invalid_name")
         }
-        secretStore.put(clean, value)
-        return JSONObject().put("ok", true).put("name", clean)
+        return runCatching {
+            secretStore.put(clean, value)
+            JSONObject().put("ok", true).put("name", clean)
+        }.getOrElse {
+            JSONObject().put("ok", false).put("error", "keystore_error")
+        }
     }
 
     override fun deleteSecret(name: String): Boolean {
@@ -1042,18 +1078,86 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         }
     }
 
-    override fun handoffSummary(key: String): JSONObject = onMain {
-        val slot = service.chats[key] ?: return@onMain JSONObject().put("ok", false).put("error", "not_found")
-        val agentName = agentNames[slot.agentId] ?: slot.agentId
-        val folderName = slot.folder.ifEmpty { "raiz" }
-        val md = ChatExport.markdown("$agentName · $folderName", slot.chat.items.toList(), "Você", agentName)
-        val clipped = if (md.length > 4000) "...\n" + md.takeLast(4000) else md
-        val prompt = "Estou continuando esta conversa iniciada com $agentName na pasta $folderName.\n\n" +
-            "Resumo do contexto anterior:\n$clipped\n\nPor favor, confira o estado atual dos arquivos/git e continue daqui."
-        JSONObject()
+    override fun handoffSummary(key: String): JSONObject {
+        val (agentId, folder, items) = onMain {
+            val slot = service.chats[key] ?: return@onMain null
+            Triple(slot.agentId, slot.folder, slot.chat.items.toList())
+        } ?: return JSONObject().put("ok", false).put("error", "not_found")
+        if (!ChatHandoff.hasConversation(items)) {
+            return JSONObject().put("ok", false).put("error", "empty_conversation")
+        }
+        val agentName = agentNames[agentId] ?: agentId
+        val linux = LinuxEnv(service)
+        val cwd = Workspace.path(folder)
+        val hostDir = Workspace.hostPath(linux.rootfs, cwd)
+        val branch = if (linux.isReady) Workspace.gitBranch(linux.rootfs, hostDir) else null
+        val isolated = if (linux.isReady) Workspace.worktreeBase(linux.rootfs, hostDir) != null else false
+        val changedFiles = if (linux.isReady) {
+            val res = runCatching { Git.status(linux, cwd) }.getOrNull()
+            if (res != null && res.code == 0) {
+                val entries = Git.parseStatus(res.output)
+                (if (res.cut) entries.dropLast(1) else entries).map { it.path }
+            } else {
+                emptyList()
+            }
+        } else {
+            emptyList()
+        }
+        val diffStat = if (linux.isReady) {
+            val withHead = Git.run(linux, cwd, "--no-optional-locks", "diff", "HEAD", "--stat")
+            if (withHead.code == 0) withHead.output else {
+                val plain = Git.run(linux, cwd, "--no-optional-locks", "diff", "--stat")
+                if (plain.code == 0) plain.output else ""
+            }
+        } else {
+            ""
+        }
+        val labels = ChatHandoff.Labels(
+            header = service.getString(R.string.chat_handoff_header, agentName),
+            originalTitle = service.getString(R.string.chat_handoff_original),
+            recentTitle = service.getString(R.string.chat_handoff_recent),
+            filesTitle = service.getString(R.string.chat_handoff_files),
+            moreFiles = service.getString(R.string.chat_handoff_more),
+            closing = service.getString(R.string.chat_handoff_closing),
+            branchLine = service.getString(R.string.chat_handoff_branch),
+            isolatedNote = service.getString(R.string.chat_handoff_isolated),
+            errorTitle = service.getString(R.string.chat_handoff_error),
+            planTitle = service.getString(R.string.chat_handoff_plan),
+            diffTitle = service.getString(R.string.chat_handoff_diff),
+        )
+        val prompt = ChatHandoff.summary(
+            items = items,
+            userLabel = service.getString(R.string.chat_export_you),
+            fromAgent = agentName,
+            changedFiles = changedFiles,
+            labels = labels,
+            plan = ChatHandoff.lastPlan(items),
+            pendingError = ChatHandoff.lastFailure(items),
+            diffStat = diffStat,
+            branch = branch,
+            isolated = isolated,
+        )
+        val foundSecrets = SecretScan.find(prompt)
+        val secretWarning = if (foundSecrets.isEmpty()) null else {
+            val listed = foundSecrets.joinToString(", ") { f ->
+                val kindLabel = service.getString(
+                    when (f.kind) {
+                        SecretScan.Kind.API_KEY -> R.string.chat_handoff_secret_api_key
+                        SecretScan.Kind.TOKEN -> R.string.chat_handoff_secret_token
+                        SecretScan.Kind.PRIVATE_KEY -> R.string.chat_handoff_secret_private_key
+                        SecretScan.Kind.PASSWORD -> R.string.chat_handoff_secret_password
+                        SecretScan.Kind.SECRET -> R.string.chat_handoff_secret_secret
+                    },
+                )
+                service.getString(R.string.chat_handoff_secret_item, kindLabel, f.snippet)
+            }
+            service.getString(R.string.chat_handoff_secret, listed)
+        }
+        return JSONObject()
             .put("ok", true)
-            .put("folder", slot.folder)
+            .put("folder", folder)
             .put("prompt", prompt)
+            .put("secretWarning", secretWarning ?: JSONObject.NULL)
     }
 
     override fun readAsset(path: String): ByteArray? = runCatching {
@@ -1116,6 +1220,11 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     }
 
     companion object {
+        internal fun tryBeginBackup(flag: AtomicBoolean): Boolean = flag.compareAndSet(false, true)
+
+        internal fun backupBusyError(flag: AtomicBoolean): JSONObject? =
+            if (flag.get()) fail("backup_busy") else null
+
         internal fun refusalError(refusal: ProjectOps.Refusal): String = when (refusal) {
             ProjectOps.Refusal.NOT_PROJECT -> "not_found"
             ProjectOps.Refusal.HAS_WORKTREES -> "has_worktrees"

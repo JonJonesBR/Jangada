@@ -180,7 +180,10 @@ class AgyHooksTest {
             "cat CLAUDE.md" to null,
             "curl https://example.com" to null,
             "git status --porcelain" to null,
+            "git status -z" to null,
             "git status | head -n 5" to null,
+            "git status > out.txt" to null,
+            "git status 2>&1" to "chop git status 2>&1",
             "chop git status" to null,
         )
         for ((cmd, expected) in cases) {
@@ -211,6 +214,20 @@ class AgyHooksTest {
         )
         assertEquals("allow", outMissing.getString("decision"))
         assertFalse(outMissing.has("overwrite"))
+
+        // Aceita também commandLine e command nos argumentos do toolCall.
+        for (altKey in listOf("commandLine", "command")) {
+            val altPayload = JSONObject().put(
+                "toolCall",
+                JSONObject()
+                    .put("id", "t2")
+                    .put("name", "run_command")
+                    .put("args", JSONObject().put(altKey, "git status")),
+            ).toString()
+            val altOut = JSONObject(runNode(script, emptyList(), altPayload, mapOf("JANGADA_CHOP_BIN" to fakeChop.absolutePath)))
+            assertEquals("allow", altOut.getString("decision"))
+            assertEquals("chop git status", altOut.getJSONObject("overwrite").getString(altKey))
+        }
     }
 
     @Test

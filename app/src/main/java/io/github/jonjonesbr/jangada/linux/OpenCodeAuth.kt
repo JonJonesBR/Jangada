@@ -201,15 +201,20 @@ object OpenCodeAuth {
         if (!isValidIntegration(id) || !isValidKey(key)) return false
         var process: Process? = null
         val exited = try {
-            process = linux.startProcess(loginScript(id), secrets = false)
-            process.outputStream.use { it.write("$key\n".toByteArray(Charsets.UTF_8)) }
+            val started = linux.startProcess(loginScript(id), secrets = false)
+            process = started
+            started.outputStream.use { it.write("$key\n".toByteArray(Charsets.UTF_8)) }
             // Saída descartada: o terminal do login mostra a chave mascarada e o resultado; não é guardada.
-            process.inputStream.bufferedReader().use { it.readText() }
-            process.waitFor() == 0
+            started.inputStream.bufferedReader().use { it.readText() }
+            started.waitFor() == 0
         } catch (e: IOException) {
-            // O script morreu cedo (a escrita falhou): não fica processo para trás.
-            process?.destroy()
             false
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
+        } finally {
+            // Sempre encerra o processo (ex.: se a escrita/leitura falhou ou a espera foi interrompida).
+            process?.destroy()
         }
         if (!exited) return false
         // Saiu com 0, mas a chave pode não ter chegado (o campo abriu depois da digitação): confere no SQLite,

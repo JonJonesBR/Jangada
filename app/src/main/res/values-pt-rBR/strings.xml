@@ -651,7 +651,7 @@
     <string name="theme_dracula">Dracula</string>
     <string name="theme_solarized_dark">Solarized escuro</string>
     <string name="theme_solarized_light">Solarized claro</string>
-    <string name="about_back">‹  Ajustes</string>
+    <string name="about_back">‹  Configurações</string>
     <string name="tab_close">Fechar %1$s</string>
     <string name="login_banner">Já entrou? Toque em Chat no topo para voltar.</string>
     <string name="login_banner_close">Fechar</string>
@@ -1113,7 +1113,6 @@
     <string name="chat_auto_approved">Aprovado sem perguntar: %1$s.</string>
     <string name="home_lan_access">Acesso pelo computador (LAN)</string>
     <string name="lan_status_title">Acesso pelo computador ativo</string>
-    <string name="lan_status_summary">%1$s · PIN %2$s</string>
     <string name="lan_status_no_ip">Porta %1$d (conecte ao Wi-Fi) · PIN %2$s</string>
     <string name="lan_copy_link">Copiar link</string>
     <string name="lan_copied">Link copiado</string>
@@ -1122,8 +1121,6 @@
     <string name="lan_new_pin">Novo PIN</string>
     <string name="lan_dialog_title">Acesso pelo computador (LAN)</string>
     <string name="lan_dialog_off">Ligue para usar o Jangada no navegador do computador na mesma rede Wi-Fi, sincronizado em tempo real com o celular.</string>
-    <string name="lan_dialog_on">Abra no navegador do computador:\n%1$s\n\nPIN: %2$s\n\nUse apenas em redes Wi-Fi confiáveis.</string>
-    <string name="lan_dialog_on_no_ip">Servidor ativo na porta %1$d, mas nenhum endereço IPv4 local (Wi-Fi) foi encontrado.\n\nPIN: %2$s\n\nConecte ao Wi-Fi e reabra esta janela.</string>
     <string name="service_lan_active">Acesso pelo computador ativo na rede local</string>
     <string name="service_sessions_with_lan">%1$s · Acesso pelo computador ativo</string>
     <string name="lan_share_link">Compartilhar acesso</string>

@@ -44,8 +44,9 @@ class AboutActivity : JangadaActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(LinearLayout(this).apply {
             setBackgroundColor(getColor(R.color.bar_bg))
+            minimumHeight = dp(48)
             addView(back)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(ScrollView(this).apply { addView(content) })
         setContentView(root)
     }

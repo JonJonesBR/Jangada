@@ -114,6 +114,22 @@
       eventSource.close();
       eventSource = null;
     }
+    if (termEventSource) {
+      termEventSource.close();
+      termEventSource = null;
+    }
+    if (busyTimer) {
+      clearInterval(busyTimer);
+      busyTimer = null;
+    }
+    if (catalogTimer) {
+      clearTimeout(catalogTimer);
+      catalogTimer = null;
+    }
+    if (historySearchTimer) {
+      clearTimeout(historySearchTimer);
+      historySearchTimer = null;
+    }
     appScreen.classList.add("hidden");
     authScreen.classList.remove("hidden");
     if (msg) {
@@ -123,6 +139,33 @@
       authError.classList.add("hidden");
     }
     pinInput.focus();
+  }
+
+  function copyToClipboard(text) {
+    const str = String(text || "");
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(str).then(() => true).catch(() => fallbackCopyText(str));
+    }
+    return Promise.resolve(fallbackCopyText(str));
+  }
+
+  function fallbackCopyText(str) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = str;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return !!ok;
+    } catch {
+      return false;
+    }
   }
 
   function showApp() {
@@ -152,13 +195,18 @@
       .replace(/'/g, "&#39;");
   }
 
+  let codeTokenCounter = 0;
   function renderMarkdown(raw) {
     const text = String(raw || "");
     const codeBlocks = [];
+    let token = `\u0000JANGADA_CB_${++codeTokenCounter}_`;
+    while (text.includes(token)) {
+      token = `\u0000JANGADA_CB_${++codeTokenCounter}_`;
+    }
     const withPlaceholders = text.replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const idx = codeBlocks.length;
       codeBlocks.push({ lang: lang || "", code });
-      return `\u0000CODEBLOCK_${idx}\u0000`;
+      return `${token}${idx}\u0000`;
     });
 
     let html = escapeHtml(withPlaceholders);
@@ -169,6 +217,7 @@
     html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
     html = html.replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
     html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    html = html.replace(/\[([^\]]+)\]\(file:\/\/[^\s)]+\)/gi, "$1");
 
     const lines = html.split("\n");
     const out = [];
@@ -192,8 +241,10 @@
     if (inList) out.push("</ul>");
     html = out.join("\n");
 
-    html = html.replace(/\u0000CODEBLOCK_(\d+)\u0000/g, (_, idxStr) => {
+    const tokenRe = new RegExp(`${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d+)\u0000`, "g");
+    html = html.replace(tokenRe, (_, idxStr) => {
       const block = codeBlocks[Number(idxStr)];
+      if (!block) return _;
       const safeLang = escapeHtml(block.lang || "código");
       const safeCode = escapeHtml(block.code);
       return `<div class="code-wrap"><div class="code-bar"><span>${safeLang}</span><button type="button" class="btn ghost tiny copy-code-btn">Copiar</button></div><pre><code>${safeCode}</code></pre></div>`;
@@ -659,18 +710,27 @@
     if (!file) return;
     const name = file.name || (file.type && file.type.startsWith("image/") ? "print.png" : "anexo");
     const qs = new URLSearchParams({ name });
-    const res = await fetch(`/api/attachments?${qs.toString()}`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": file.type || "application/octet-stream" },
-      body: file,
-    });
+    let res;
+    try {
+      res = await fetch(`/api/attachments?${qs.toString()}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+    } catch {
+      alert(`Não foi possível enviar o anexo "${name}". Confira a conexão e tente de novo.`);
+      return;
+    }
     if (res.status === 401) {
       showAuth();
       return;
     }
     const data = await res.json().catch(() => ({}));
-    if (!res.ok || !data.ok) return;
+    if (!res.ok || !data.ok) {
+      alert(`Não foi possível anexar "${name}": ${data.error || `erro ${res.status}`}.`);
+      return;
+    }
     const previewUrl = data.isImage ? URL.createObjectURL(file) : null;
     pendingAttachments.push({
       name: data.name,
@@ -912,6 +972,9 @@
         b.className = cls;
         b.textContent = label;
         b.onclick = async () => {
+          if (action === "uninstall" && !confirm(`Desinstalar ${a.name}? Os chats abertos dele serão fechados; suas pastas e conversas continuam salvas.`)) {
+            return;
+          }
           await api("/api/agents/task", {
             method: "POST",
             body: JSON.stringify({ agentId: a.id, action }),
@@ -1337,6 +1400,7 @@
         del.className = "btn danger small";
         del.textContent = "Remover";
         del.onclick = async () => {
+          if (!confirm(`Remover a chave "${sName}"?`)) return;
           await api("/api/secrets/delete", { method: "POST", body: JSON.stringify({ name: sName }) });
           showSettingsModal();
         };
@@ -1660,11 +1724,38 @@
     renderStatusStrip(chat);
 
     const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+    const openDetailsKeys = new Set();
+    messagesEl.querySelectorAll("[data-details-key]").forEach((cardEl) => {
+      const det = cardEl.querySelector("details");
+      if (det && det.open) openDetailsKeys.add(cardEl.dataset.detailsKey);
+    });
+    const questionDrafts = new Map();
+    messagesEl.querySelectorAll("[data-perm-id]").forEach((cardEl) => {
+      const reqId = cardEl.dataset.permId;
+      const checkedByQ = {};
+      const otherByQ = {};
+      cardEl.querySelectorAll("input.question-other[data-qi]").forEach((inp) => {
+        const qi = inp.dataset.qi;
+        if (inp.value) otherByQ[qi] = inp.value;
+      });
+      cardEl.querySelectorAll('input[type="radio"]:checked, input[type="checkbox"]:checked').forEach((inp) => {
+        const qi = inp.dataset.qi;
+        if (qi !== undefined) {
+          if (!checkedByQ[qi]) checkedByQ[qi] = new Set();
+          checkedByQ[qi].add(inp.value);
+        }
+      });
+      if (Object.keys(checkedByQ).length > 0 || Object.keys(otherByQ).length > 0) {
+        questionDrafts.set(reqId, { checkedByQ, otherByQ });
+      }
+    });
     messagesEl.innerHTML = "";
 
     const visibleItems = arrangeVisibleItems(chat.items || []);
-    for (const item of visibleItems) {
+    for (let itemIdx = 0; itemIdx < visibleItems.length; itemIdx++) {
+      const item = visibleItems[itemIdx];
       const card = document.createElement("div");
+      const detailsKey = `${chat.key}:${item.type}:${item.id || item.requestId || item.index || itemIdx}`;
       if (item.type === "user") {
         card.className = "msg msg-user";
         const suffix = item.queued ? " · na fila" : item.dropped ? " · descartada" : "";
@@ -1679,15 +1770,21 @@
       } else if (item.type === "tool") {
         if (item.hiddenByChild) continue;
         card.className = "msg msg-tool";
+        card.dataset.detailsKey = detailsKey;
+        const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
         const summary = item.summary ? ` — <span class="muted">${escapeHtml(item.summary)}</span>` : "";
         const outHtml = item.output ? `<pre class="tool-output">${escapeHtml(item.output)}</pre>` : "";
-        card.innerHTML = `<details><summary>[${escapeHtml(item.state)}] ${escapeHtml(item.name)}${summary}</summary>${outHtml}</details>`;
+        card.innerHTML = `<details${openAttr}><summary>[${escapeHtml(item.state)}] ${escapeHtml(item.name)}${summary}</summary>${outHtml}</details>`;
       } else if (item.type === "tool_group") {
         card.className = "msg msg-tool";
+        const groupKey = `${chat.key}:tool_group:${item.tools[0]?.id || item.tools[0]?.index || itemIdx}`;
+        card.dataset.detailsKey = groupKey;
+        const openAttr = openDetailsKeys.has(groupKey) ? " open" : "";
         const rows = item.tools.map((t) => `<li>[${escapeHtml(t.state)}] ${escapeHtml(t.name)} ${t.summary ? `— ${escapeHtml(t.summary)}` : ""}</li>`).join("");
-        card.innerHTML = `<details><summary>${item.tools.length} ações executadas</summary><ul>${rows}</ul></details>`;
+        card.innerHTML = `<details${openAttr}><summary>${item.tools.length} ações executadas</summary><ul>${rows}</ul></details>`;
       } else if (item.type === "permission") {
         card.className = "msg msg-permission";
+        card.dataset.permId = String(item.requestId);
         const header = `<div class="msg-meta">Permissão · ${escapeHtml(item.title)}</div>`;
         const body = item.markdown
           ? `<div class="md">${renderMarkdown(item.summary)}</div>`
@@ -1703,8 +1800,11 @@
           chosenInfo.textContent = `Respondido: ${item.chosen.label || "ok"}`;
           card.appendChild(chosenInfo);
         } else if (item.questions && item.questions.length > 0) {
+          const draft = questionDrafts.get(String(item.requestId));
           const qForm = document.createElement("div");
           item.questions.forEach((q, qi) => {
+            const qiKey = String(qi);
+            const savedSet = draft?.checkedByQ?.[qiKey];
             const block = document.createElement("div");
             block.className = "question-block";
             block.innerHTML = `<div><strong>${escapeHtml(q.header || `Pergunta ${qi + 1}`)}</strong>: ${escapeHtml(q.text)}</div>`;
@@ -1716,7 +1816,9 @@
               const inp = document.createElement("input");
               inp.type = q.multiSelect ? "checkbox" : "radio";
               inp.name = `q_${item.requestId}_${qi}`;
+              inp.dataset.qi = qiKey;
               inp.value = qo.label;
+              if (savedSet && savedSet.has(qo.label)) inp.checked = true;
               lbl.appendChild(inp);
               const span = document.createElement("span");
               span.innerHTML = `<strong>${escapeHtml(qo.label)}</strong>${qo.description ? ` — <span class="muted">${escapeHtml(qo.description)}</span>` : ""}`;
@@ -1727,11 +1829,16 @@
             other.type = "text";
             other.className = "question-other";
             other.placeholder = "Outra resposta (opcional)";
-            other.dataset.qi = String(qi);
+            other.dataset.qi = qiKey;
+            if (draft?.otherByQ?.[qiKey]) other.value = draft.otherByQ[qiKey];
             block.appendChild(optsDiv);
             block.appendChild(other);
             qForm.appendChild(block);
           });
+          const qErr = document.createElement("div");
+          qErr.className = "auth-error hidden";
+          qErr.style.marginTop = "8px";
+          qForm.appendChild(qErr);
           const sendQ = document.createElement("button");
           sendQ.type = "button";
           sendQ.className = "btn primary small";
@@ -1739,12 +1846,20 @@
           sendQ.textContent = "Enviar respostas";
           sendQ.onclick = async () => {
             const answers = {};
+            let missing = false;
             item.questions.forEach((q, qi) => {
               const checked = [...qForm.querySelectorAll(`input[name="q_${item.requestId}_${qi}"]:checked`)].map((el) => el.value);
               const otherVal = qForm.querySelector(`input.question-other[data-qi="${qi}"]`)?.value?.trim();
               if (otherVal) checked.push(otherVal);
+              if (checked.length === 0) missing = true;
               answers[q.text] = checked.join(", ");
             });
+            if (missing) {
+              qErr.textContent = "Responda todas as perguntas antes de enviar.";
+              qErr.classList.remove("hidden");
+              return;
+            }
+            qErr.classList.add("hidden");
             await api("/api/chats/permission", {
               method: "POST",
               body: JSON.stringify({ key: chat.key, requestId: item.requestId, answers }),
@@ -1776,16 +1891,22 @@
         card.innerHTML = `<div class="msg-meta">Plano</div><ul>${rows}</ul>`;
       } else if (item.type === "thinking") {
         card.className = "msg msg-thinking";
-        card.innerHTML = `<details><summary>Raciocínio</summary><div class="md" style="margin-top:6px">${renderMarkdown(item.text)}</div></details>`;
+        card.dataset.detailsKey = detailsKey;
+        const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
+        card.innerHTML = `<details${openAttr}><summary>Raciocínio</summary><div class="md" style="margin-top:6px">${renderMarkdown(item.text)}</div></details>`;
       } else if (item.type === "child") {
         card.className = "msg msg-child";
-        card.innerHTML = `<details><summary>Subagente ${escapeHtml(item.agent || item.title)} [${escapeHtml(item.state)}]</summary><div class="muted">${escapeHtml(item.description || "")}</div>${item.result ? `<div class="md" style="margin-top:6px">${renderMarkdown(item.result)}</div>` : ""}</details>`;
+        card.dataset.detailsKey = detailsKey;
+        const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
+        card.innerHTML = `<details${openAttr}><summary>Subagente ${escapeHtml(item.agent || item.title)} [${escapeHtml(item.state)}]</summary><div class="muted">${escapeHtml(item.description || "")}</div>${item.result ? `<div class="md" style="margin-top:6px">${renderMarkdown(item.result)}</div>` : ""}</details>`;
       } else if (item.type === "login") {
         card.className = "msg msg-info";
         card.innerHTML = `<strong>Login necessário</strong><div class="muted">Conclua o login deste agente diretamente no celular.</div>`;
       } else if (item.type === "info") {
         card.className = `msg msg-info ${item.isError ? "error" : ""}`;
-        card.innerHTML = `<div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>${item.details ? `<details style="margin-top:6px"><summary>Detalhes</summary><pre class="tool-output">${escapeHtml(item.details)}</pre></details>` : ""}`;
+        card.dataset.detailsKey = detailsKey;
+        const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
+        card.innerHTML = `<div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>${item.details ? `<details style="margin-top:6px"${openAttr}><summary>Detalhes</summary><pre class="tool-output">${escapeHtml(item.details)}</pre></details>` : ""}`;
       } else {
         continue;
       }
@@ -1793,10 +1914,10 @@
     }
 
     messagesEl.querySelectorAll(".copy-code-btn").forEach((btn) => {
-      btn.onclick = () => {
+      btn.onclick = async () => {
         const code = btn.closest(".code-wrap").querySelector("pre").textContent;
-        navigator.clipboard?.writeText(code);
-        btn.textContent = "Copiado!";
+        const ok = await copyToClipboard(code);
+        btn.textContent = ok ? "Copiado!" : "Falhou";
         setTimeout(() => { btn.textContent = "Copiar"; }, 1200);
       };
     });
@@ -2121,6 +2242,13 @@
       note.className = "muted small-text";
       note.textContent = "Escolha o agente de destino. O resumo será colocado na caixa de mensagem para você revisar antes de enviar:";
       body.appendChild(note);
+      if (sumData.secretWarning) {
+        const warn = document.createElement("div");
+        warn.className = "auth-error";
+        warn.style.marginTop = "8px";
+        warn.textContent = sumData.secretWarning;
+        body.appendChild(warn);
+      }
       for (const a of others) {
         const b = document.createElement("button");
         b.type = "button";

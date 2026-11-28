@@ -147,7 +147,7 @@ object ChopHooks {
         return false
     }
 
-    private fun validHomeWithChop(root: Path): Path? {
+    internal fun validHomeWithChop(root: Path): Path? {
         if (!Files.isDirectory(root, NOFOLLOW)) return null
         val home = root.resolve("root")
         if (!Files.isDirectory(home, NOFOLLOW)) return null
@@ -155,7 +155,7 @@ object ChopHooks {
         return home
     }
 
-    private fun readJson(file: Path): JSONObject? {
+    internal fun readJson(file: Path): JSONObject? {
         if (!Files.exists(file, NOFOLLOW)) return JSONObject()
         if (!Files.isRegularFile(file, NOFOLLOW)) return null
         val raw = try {
@@ -171,7 +171,7 @@ object ChopHooks {
         }
     }
 
-    private fun ensureRealSubdir(home: Path, relative: String): Path? {
+    internal fun ensureRealSubdir(home: Path, relative: String): Path? {
         var dir = home
         for (part in relative.split('/')) {
             dir = dir.resolve(part)
@@ -189,17 +189,17 @@ object ChopHooks {
         return dir
     }
 
-    private fun isRealFile(home: Path, target: Path): Boolean {
+    internal fun isRealFile(home: Path, target: Path): Boolean {
         if (Files.isSymbolicLink(target) || !Files.isRegularFile(target, NOFOLLOW)) return false
         return ancestorsAreRealDirs(home, target.parent)
     }
 
-    private fun isRealDir(home: Path, target: Path): Boolean {
+    internal fun isRealDir(home: Path, target: Path): Boolean {
         if (Files.isSymbolicLink(target) || !Files.isDirectory(target, NOFOLLOW)) return false
         return ancestorsAreRealDirs(home, target.parent)
     }
 
-    private fun ancestorsAreRealDirs(home: Path, start: Path?): Boolean {
+    internal fun ancestorsAreRealDirs(home: Path, start: Path?): Boolean {
         var dir: Path? = start
         while (dir != null && dir != home) {
             if (Files.isSymbolicLink(dir) || !Files.isDirectory(dir, NOFOLLOW)) return false
@@ -208,7 +208,7 @@ object ChopHooks {
         return dir == home
     }
 
-    private fun writeAtomic(dir: Path, target: Path, bytes: ByteArray) {
+    internal fun writeAtomic(dir: Path, target: Path, bytes: ByteArray) {
         val tmp = Files.createTempFile(dir, ".jangada-", ".tmp")
         try {
             Files.write(tmp, bytes)

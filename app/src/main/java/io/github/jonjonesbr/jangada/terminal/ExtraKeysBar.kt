@@ -113,7 +113,7 @@ class ExtraKeysBar @JvmOverloads constructor(
         val view = terminalView ?: return
         var meta = 0
         if (shift) meta = meta or KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON
-        view.onKeyDown(keyCode, KeyEvent(0, 0, KeyEvent.ACTION_UP, keyCode, 0, meta))
+        view.onKeyDown(keyCode, KeyEvent(0, 0, KeyEvent.ACTION_DOWN, keyCode, 0, meta))
     }
 
     private fun sendText(text: String) {

@@ -16,10 +16,11 @@ object LanNetwork {
         if (cm != null) {
             val active = cm.activeNetwork
             val caps = active?.let { cm.getNetworkCapabilities(it) }
-            val preferLink = caps != null && (
-                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                    caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
-                )
+            val preferLink = caps != null &&
+                !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && (
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    )
             if (preferLink && active != null) {
                 val props = cm.getLinkProperties(active)
                 val ip = props?.linkAddresses
@@ -35,6 +36,9 @@ object LanNetwork {
             val up = runCatching { iface.isUp && !iface.isLoopback }.getOrDefault(false)
             if (!up) continue
             val name = iface.name.lowercase()
+            if (name.startsWith("tun") || name.startsWith("tap") || name.startsWith("ppp") || name.startsWith("wg") || name.startsWith("tailscale")) {
+                continue
+            }
             val priority = when {
                 name.startsWith("wlan") || name.startsWith("eth") -> 0
                 name.startsWith("ap") || name.startsWith("swlan") -> 1
