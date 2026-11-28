@@ -417,9 +417,16 @@ class LinuxEnv(context: Context) {
                 writeReplacing(file, chopHook)
                 Fs.setMode(file.toPath(), "755".toInt(8))
             }
+            val ensureChop = ensureChopCache ?: linuxAsset("ensure-chop.sh")?.also { ensureChopCache = it }
+            if (ensureChop != null) {
+                val file = File(jangadaLib, "ensure-chop.sh")
+                writeReplacing(file, ensureChop)
+                Fs.setMode(file.toPath(), "755".toInt(8))
+            }
         }
         ensureRealDir(linkInbox)
         runCatching { AgyHooks.ensure(rootfs.toPath()) }.onFailure { Log.w(TAG, "hooks do agy", it) }
+        runCatching { ChopHooks.ensureAll(rootfs.toPath()) }.onFailure { Log.w(TAG, "hooks do chop", it) }
         val chopFilters = chopFiltersCache ?: linuxAsset("chop-filters.yml")?.also { chopFiltersCache = it }
         if (chopFilters != null) {
             runCatching { AgyHooks.ensureChopFilters(rootfs.toPath(), chopFilters) }
@@ -614,6 +621,9 @@ class LinuxEnv(context: Context) {
 
         /** Texto do asset linux/agy-chop-hook.mjs, lido uma vez (nulo até a primeira leitura bem-sucedida). */
         @Volatile private var agyChopHookCache: String? = null
+
+        /** Texto do asset linux/ensure-chop.sh, lido uma vez (nulo até a primeira leitura bem-sucedida). */
+        @Volatile private var ensureChopCache: String? = null
 
         /** Texto do asset linux/chop-filters.yml, lido uma vez (nulo até a primeira leitura bem-sucedida). */
         @Volatile private var chopFiltersCache: String? = null

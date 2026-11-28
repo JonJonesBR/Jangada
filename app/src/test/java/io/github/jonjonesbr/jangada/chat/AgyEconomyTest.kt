@@ -65,6 +65,17 @@ class AgyEconomyTest {
     }
 
     @Test
+    fun sessionEnvMantem180KQuandoEconomiaLigada() {
+        // Com economia ligada, 180K vence o percentual do AutoCompact (mesmo 50% seria ~500K em 1M).
+        val onWithPct = AgyEconomy.sessionEnv(economyOn = true, autoCompactSetting = "50")
+        assertEquals(AgyEconomy.envPrefix(), onWithPct)
+        assertFalse(onWithPct.contains("50%"))
+        // Com economia desligada, vale o percentual do AutoCompact.
+        assertEquals("export AGY_CLI_AUTO_COMPACT_OVERRIDE=50%; ", AgyEconomy.sessionEnv(economyOn = false, autoCompactSetting = "50"))
+        assertEquals("", AgyEconomy.sessionEnv(economyOn = false, autoCompactSetting = AutoCompact.DEFAULT))
+    }
+
+    @Test
     fun prefereOHydrogen() {
         val choices = listOf(
             "gemini-4-neon-medium" to "Neon (Medium)",

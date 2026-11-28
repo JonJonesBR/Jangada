@@ -211,9 +211,10 @@ class AcpChat(
                     .orEmpty()
             } else if (agentId == AGY_ID) {
                 // Economia do agy e AutoCompact nativo: só variáveis de ambiente; nada nos ajustes dele é alterado.
-                val eco = if (runCatching { agyEconomy() }.getOrDefault(false)) AgyEconomy.envPrefix() else ""
-                val compact = AutoCompact.agyEnvPrefix(runCatching { autoCompact() }.getOrDefault(AutoCompact.DEFAULT))
-                eco + compact
+                AgyEconomy.sessionEnv(
+                    economyOn = runCatching { agyEconomy() }.getOrDefault(false),
+                    autoCompactSetting = runCatching { autoCompact() }.getOrDefault(AutoCompact.DEFAULT),
+                )
             } else {
                 ""
             }

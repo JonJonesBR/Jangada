@@ -48,12 +48,14 @@ class HeadlessAgentTest {
     }
 
     @Test
-    fun agyComEconomiaUsaEsforcoMedio() {
+    fun agyComEconomiaUsaEsforcoMedioEVariaveisDeCorte() {
         val read = HeadlessAgent.command("antigravity", role(AgentRoles.REVISOR), "revise", null, agyEconomy = true)!!
-        assertEquals("timeout -k 5 300 agy --mode plan --effort medium -p 'revise'", read)
+        assertTrue(read.startsWith(io.github.jonjonesbr.jangada.chat.AgyEconomy.envPrefix()))
+        assertTrue(read.endsWith("timeout -k 5 300 agy --mode plan --effort medium -p 'revise'"))
         // Sem economia, o comando fica igual ao de sempre.
         val plain = HeadlessAgent.command("antigravity", role(AgentRoles.REVISOR), "revise", null)!!
         assertTrue(!plain.contains("--effort"))
+        assertTrue(!plain.contains("AGY_CLI_AUTO_COMPACT_OVERRIDE"))
     }
 
     @Test

@@ -64,6 +64,14 @@ object AgyEconomy {
             "export CONTEXT_MODE_MAX_READ_BYTES=$MAX_READ_BYTES; " +
             "export CONTEXT_MODE_MAX_LINE_RANGE=$MAX_LINE_RANGE; "
 
+    /**
+     * Prefixo de ambiente da sessão do agy: com o preset ligado, o teto absoluto (180K) prevalece
+     * sobre o percentual do AutoCompact (em janelas de 1M, mesmo 20% = 200K passaria de 180K).
+     * Com o preset desligado, vale o percentual escolhido no AutoCompact.
+     */
+    fun sessionEnv(economyOn: Boolean, autoCompactSetting: String): String =
+        if (economyOn) envPrefix() else AutoCompact.agyEnvPrefix(autoCompactSetting)
+
     /** Exports para o /etc/profile.d/jangada.sh (terminal): uma variável por linha. */
     fun profileExports(): String =
         "export AGY_CLI_AUTO_COMPACT_OVERRIDE=$COMPACT_LIMIT\n" +
