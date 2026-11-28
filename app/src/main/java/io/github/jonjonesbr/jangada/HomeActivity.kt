@@ -109,6 +109,7 @@ class HomeActivity : JangadaActivity() {
     private var jobFilter: JobFilter = JobFilter.All
     /** Cartão de boas-vindas; null depois de tirado da tela. */
     private var welcomeCard: View? = null
+    private var welcomeStep = 0
     /** Aviso quando as notificações do app estão desligadas no Android. */
     private lateinit var notificationsCard: View
     private lateinit var lanStatusCard: View
@@ -255,13 +256,22 @@ class HomeActivity : JangadaActivity() {
         findViewById<View>(R.id.open_settings).setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
-        // Boas-vindas: só depois de instalar o Linux e até o usuário tocar em "Entendi".
+        // Tour de boas-vindas (3 cartões): só depois de instalar o Linux e até o usuário dispensar.
         welcomeCard = findViewById<View>(R.id.welcome_card)
         findViewById<Button>(R.id.welcome_dismiss).setOnClickListener {
             AppSettings(this).welcomeDismissed = true
             removeWelcome()
         }
-        if (!linux.isReady || AppSettings(this).welcomeDismissed) removeWelcome()
+        findViewById<Button>(R.id.welcome_next).setOnClickListener {
+            if (welcomeStep + 1 < WELCOME_STEPS.size) {
+                welcomeStep++
+                renderWelcome()
+            } else {
+                AppSettings(this).welcomeDismissed = true
+                removeWelcome()
+            }
+        }
+        if (!linux.isReady || AppSettings(this).welcomeDismissed) removeWelcome() else renderWelcome()
         if (!linux.isDeviceSupported) findViewById<View>(R.id.unsupported).visibility = View.VISIBLE
         renderAgents()
         fetchLatestVersions()
@@ -290,6 +300,18 @@ class HomeActivity : JangadaActivity() {
         val card = welcomeCard ?: return
         (card.parent as? ViewGroup)?.removeView(card)
         welcomeCard = null
+    }
+
+    /** Atualiza título, texto, passo (1/3..3/3) e botões do tour de boas-vindas. */
+    private fun renderWelcome() {
+        if (welcomeCard == null) return
+        val idx = welcomeStep.coerceIn(0, WELCOME_STEPS.lastIndex)
+        val (titleRes, bodyRes) = WELCOME_STEPS[idx]
+        findViewById<TextView>(R.id.welcome_title).setText(titleRes)
+        findViewById<TextView>(R.id.welcome_body).setText(bodyRes)
+        findViewById<TextView>(R.id.welcome_step).text = getString(R.string.home_welcome_step, idx + 1, WELCOME_STEPS.size)
+        val last = idx == WELCOME_STEPS.lastIndex
+        findViewById<Button>(R.id.welcome_next).visibility = if (last) View.GONE else View.VISIBLE
     }
 
     /** Se o app fechou sozinho da última vez, mostra os detalhes para copiar. */
@@ -1834,6 +1856,12 @@ class HomeActivity : JangadaActivity() {
         private const val SYSTEM_EXPANDED_KEY = "home_system_expanded"
         /** Intervalo em que a lista de trabalhos se redesenha enquanto há chat aberto. */
         private const val JOBS_REFRESH_MS = 2_000L
+        /** Os 3 cartões do tour de boas-vindas (título e corpo), exibidos uma vez após o Setup. */
+        private val WELCOME_STEPS = listOf(
+            R.string.home_welcome_title to R.string.home_welcome_body,
+            R.string.home_welcome_title_2 to R.string.home_welcome_body_2,
+            R.string.home_welcome_title_3 to R.string.home_welcome_body_3,
+        )
     }
 }
 

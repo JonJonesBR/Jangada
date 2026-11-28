@@ -62,6 +62,12 @@
     <string name="home_system_alert_storage">Pouco espaço no celular ou sem acesso aos arquivos.</string>
     <string name="home_welcome_title">Bem-vindo ao Jangada</string>
     <string name="home_welcome_body">Instale um agente abaixo. Cada um usa a sua própria conta ou chave de API. No modo Simples o agente abre no chat; no Pro, no terminal (troque em Configurações).</string>
+    <string name="home_welcome_title_2">Projetos e cópias isoladas</string>
+    <string name="home_welcome_body_2">Seus projetos ficam em ~/projetos. Você pode criar uma pasta nova, clonar do GitHub ou abrir uma cópia isolada (worktree) para dois agentes trabalharem no mesmo repositório sem conflito.</string>
+    <string name="home_welcome_title_3">Permissões e acesso pelo PC</string>
+    <string name="home_welcome_body_3">No chat, o agente pede permissão antes de rodar comandos ou editar arquivos (ou ligue Aprovar tudo naquela conversa). Toque no ícone de computador no topo para usar o Jangada pelo PC no Wi-Fi local.</string>
+    <string name="home_welcome_step">%1$d/%2$d</string>
+    <string name="home_welcome_next">Próximo</string>
     <string name="home_welcome_ok">Entendi</string>
     <string name="agent_install">Instalar</string>
     <string name="agent_open">Abrir</string>
