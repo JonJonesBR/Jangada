@@ -181,7 +181,14 @@ class CallServerTest {
         var proc: Process? = null
         val created = start { call ->
             enteredHandler.countDown()
-            proceed.await(5, TimeUnit.SECONDS)
+            val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+            while (proceed.count > 0 && System.nanoTime() < deadline) {
+                try {
+                    proceed.await(100, TimeUnit.MILLISECONDS)
+                } catch (_: InterruptedException) {
+                    // Interrupção esperada vinda de created.stop(); segue até o teste liberar.
+                }
+            }
             val p = ProcessBuilder("/bin/sh", "-c", "sleep 30").start()
             proc = p
             call.registerProcess(p)
