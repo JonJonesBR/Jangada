@@ -11,6 +11,10 @@ import io.github.jonjonesbr.jangada.agents.AgentCatalog
 import io.github.jonjonesbr.jangada.chat.AgyEconomy
 import java.io.File
 import java.io.IOException
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
 import kotlin.concurrent.thread
 
 /**
@@ -291,17 +295,21 @@ class LinuxEnv(context: Context) {
 
     /** Ajustes no Debian recém-extraído para ele funcionar dentro do Android. */
     fun applyFixups() {
-        val etc = File(rootfs, "etc").apply { mkdirs() }
-        writeReplacing(File(etc, "resolv.conf"), "nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
-        writeReplacing(
-            File(etc, "hosts"),
-            "127.0.0.1   localhost.localdomain localhost\n" +
-                "::1         localhost.localdomain localhost ip6-localhost ip6-loopback\n",
-        )
-        writeReplacing(File(etc, "hostname"), "localhost\n")
-        // O apt tenta trocar para o usuário _apt, o que o proot não emula bem.
-        val aptConf = File(etc, "apt/apt.conf.d").apply { mkdirs() }
-        writeReplacing(File(aptConf, "99jangada"), "APT::Sandbox::User \"root\";\n")
+        val etc = File(rootfs, "etc")
+        if (ensureRealDir(etc)) {
+            writeReplacing(File(etc, "resolv.conf"), "nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
+            writeReplacing(
+                File(etc, "hosts"),
+                "127.0.0.1   localhost.localdomain localhost\n" +
+                    "::1         localhost.localdomain localhost ip6-localhost ip6-loopback\n",
+            )
+            writeReplacing(File(etc, "hostname"), "localhost\n")
+            // O apt tenta trocar para o usuário _apt, o que o proot não emula bem.
+            val aptConf = File(etc, "apt/apt.conf.d")
+            if (ensureRealDir(aptConf)) {
+                writeReplacing(File(aptConf, "99jangada"), "APT::Sandbox::User \"root\";\n")
+            }
+        }
         refreshIntegration()
     }
 
@@ -440,8 +448,10 @@ class LinuxEnv(context: Context) {
 
         // Pasta de trabalho dos agentes. Fora da home de propósito: o Claude Code
         // não guarda a confiança na pasta home e perguntaria toda vez.
-        File(rootfs, "root/$WORKSPACE").mkdirs()
-        if (hasStorageAccess) linkPhoneDir(File(rootfs, "root/celular").toPath())
+        ensureRealDir(File(rootfs, "root/$WORKSPACE"))
+        if (hasStorageAccess && ensureRealDir(File(rootfs, "root"))) {
+            linkPhoneDir(File(rootfs, "root/celular").toPath())
+        }
 
         // DNS da rede ativa (Wi-Fi, dados ou VPN). Sem rede conhecida, fica o que já estava gravado.
         val servers = runCatching {
@@ -452,19 +462,24 @@ class LinuxEnv(context: Context) {
         servers?.let { updateDns(it) }
 
         // /tmp precisa do "sticky bit" (1777); sem ele o Claude Code desliga recursos.
-        for (tmp in listOf(File(rootfs, "tmp"), File(rootfs, "var/tmp"))) {
-            tmp.mkdirs()
-            runCatching { android.system.Os.chmod(tmp.absolutePath, "1777".toInt(8)) }
+        for (rel in listOf("tmp", "var/tmp")) {
+            if (!prepareTmpDir(rootfs.toPath(), rel) { path, mode ->
+                    android.system.Os.chmod(path.toAbsolutePath().toString(), mode)
+                }
+            ) {
+                Log.w(TAG, "pasta $rel ou ancestral é link/inválido; não ajusto permissões")
+            }
         }
     }
 
     /**
      * Regrava o DNS do Debian com os servidores [servers] da rede do celular
-     * (ver [resolvConf]). Só escreve se o conteúdo mudou.
+     * (ver [resolvConf]). Só escreve se o conteúdo mudou e se a cadeia de pastas é real.
      */
     fun updateDns(servers: List<java.net.InetAddress>): Unit = synchronized(LOCK) {
-        val etc = File(rootfs, "etc").apply { mkdirs() }
-        writeReplacing(File(etc, "resolv.conf"), resolvConf(servers))
+        if (!writeDnsConf(rootfs.toPath(), servers)) {
+            Log.w(TAG, "etc ou ancestral é link/inválido; não gravo resolv.conf")
+        }
     }
 
     /**
@@ -511,16 +526,13 @@ class LinuxEnv(context: Context) {
     }.onFailure { Log.w(TAG, "não consegui ler o asset $name", it) }.getOrNull()
 
     /**
-     * Cria a pasta (com mkdirs) só se ela não for link simbólico. Se for, devolve
-     * false e registra aviso: quem chama pula a parte, sem gravar através do link.
+     * Garante que [dir] e toda a cadeia até ele dentro do rootfs são pastas reais (sem links
+     * simbólicos). Se houver link ou entrada não-diretório, devolve false e registra aviso.
      */
     private fun ensureRealDir(dir: File): Boolean {
-        if (java.nio.file.Files.isSymbolicLink(dir.toPath())) {
-            Log.w(TAG, "pasta ${dir.name} é link simbólico; não gravo nela")
-            return false
-        }
-        dir.mkdirs()
-        return true
+        val ok = ensureRealDir(rootfs.toPath(), dir.toPath())
+        if (!ok) Log.w(TAG, "pasta ${dir.name} ou ancestral é link/inválido; não gravo nela")
+        return ok
     }
 
     /**
@@ -569,27 +581,76 @@ class LinuxEnv(context: Context) {
         }
     }
 
-    /**
-     * Grava [content] em [file]. Se ele já é um arquivo comum com exatamente
-     * esse conteúdo, não mexe. Senão, apaga (sem seguir links) e escreve de novo,
-     * para nunca escrever "através" de um link.
-     */
-    private fun writeReplacing(file: File, content: String) {
-        val path = file.toPath()
-        val bytes = content.toByteArray()
-        // Confere o tamanho antes de ler: um arquivo grande no lugar nunca é o esperado.
-        if (java.nio.file.Files.isRegularFile(path, java.nio.file.LinkOption.NOFOLLOW_LINKS) &&
-            runCatching {
-                java.nio.file.Files.size(path) == bytes.size.toLong() &&
-                    java.nio.file.Files.readAllBytes(path).contentEquals(bytes)
-            }.getOrDefault(false)
-        ) return
-        Fs.deleteTree(path)
-        file.writeText(content)
-    }
-
     companion object {
         private const val TAG = "LinuxEnv"
+
+        /**
+         * Garante que [dir] (dentro de [root]) existe como pasta real e toda a cadeia de ancestrais
+         * dentro de [root] é de pastas reais, sem seguir nem criar através de links simbólicos.
+         */
+        internal fun ensureRealDir(root: Path, dir: Path): Boolean {
+            val normRoot = root.toAbsolutePath().normalize()
+            val normDir = dir.toAbsolutePath().normalize()
+            if (!Fs.isDir(normRoot)) return false
+            if (normDir == normRoot) return true
+            if (!normDir.startsWith(normRoot)) return false
+            var current = normRoot
+            for (part in normRoot.relativize(normDir)) {
+                current = current.resolve(part)
+                if (Files.isSymbolicLink(current)) return false
+                if (!Fs.exists(current)) {
+                    try {
+                        Files.createDirectory(current)
+                    } catch (_: FileAlreadyExistsException) {
+                        // Outra thread criou no intervalo: a checagem de Fs.isDir abaixo decide.
+                    } catch (_: IOException) {
+                        return false
+                    }
+                }
+                if (!Fs.isDir(current)) return false
+            }
+            return Fs.isDir(normDir)
+        }
+
+        /**
+         * Grava [content] em [file]. Se ele já é um arquivo comum com exatamente
+         * esse conteúdo, não mexe. Senão, apaga (sem seguir links) e escreve de novo,
+         * para nunca escrever "através" de um link.
+         */
+        internal fun writeReplacing(file: File, content: String) {
+            val path = file.toPath()
+            val bytes = content.toByteArray()
+            // Confere o tamanho antes de ler: um arquivo grande no lugar nunca é o esperado.
+            if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) &&
+                runCatching {
+                    Files.size(path) == bytes.size.toLong() &&
+                        Files.readAllBytes(path).contentEquals(bytes)
+                }.getOrDefault(false)
+            ) return
+            Fs.deleteTree(path)
+            file.writeText(content)
+        }
+
+        /** Atualiza `[root]/etc/resolv.conf` só quando toda a cadeia até `etc` é real. */
+        internal fun writeDnsConf(root: Path, servers: List<java.net.InetAddress>): Boolean {
+            val etc = root.resolve("etc")
+            if (!ensureRealDir(root, etc)) return false
+            writeReplacing(etc.resolve("resolv.conf").toFile(), resolvConf(servers))
+            return true
+        }
+
+        /** Cria e aplica 1777 em `[root]/[relative]` só se toda a cadeia for de pastas reais. */
+        internal fun prepareTmpDir(
+            root: Path,
+            relative: String,
+            chmod: (Path, Int) -> Unit,
+        ): Boolean {
+            val dir = root.resolve(relative)
+            if (!ensureRealDir(root, dir)) return false
+            if (!Fs.isDir(dir)) return false
+            runCatching { chmod(dir, "1777".toInt(8)) }
+            return true
+        }
 
         /** Serializa [refreshIntegration]: ele é chamado de várias threads ao mesmo tempo. */
         private val LOCK = Any()
