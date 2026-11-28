@@ -8,10 +8,12 @@ import android.text.style.BulletSpan
 import android.text.style.RelativeSizeSpan
 import android.text.style.StyleSpan
 import android.text.style.TypefaceSpan
+import android.text.style.URLSpan
+import java.util.Locale
 
 /**
  * Markdown simples para as respostas do agente: títulos, negrito, itálico,
- * `código` e listas. O suficiente para ler bem no celular.
+ * `código`, links `[texto](url)` e listas. O suficiente para ler bem no celular.
  * Recebe só texto já sem blocos ``` (o ChatActivity separa esses blocos antes).
  */
 object Markdown {
@@ -42,7 +44,7 @@ object Markdown {
         return out
     }
 
-    /** Negrito (**x**), itálico (*x* ou _x_) e código (`x`) dentro da linha. */
+    /** Negrito (**x**), itálico (*x* ou _x_), links ([texto](url)) e código (`x`) dentro da linha. */
     private fun appendInline(out: SpannableStringBuilder, text: String, codeBackground: Int) {
         var i = 0
         while (i < text.length) {
@@ -56,6 +58,18 @@ object Markdown {
                         out.setSpan(TypefaceSpan("monospace"), start, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                         out.setSpan(BackgroundColorSpan(codeBackground), start, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                         i = end + 1
+                        continue
+                    }
+                }
+                c == '[' -> {
+                    val link = parseLink(text, i)
+                    if (link != null) {
+                        val start = out.length
+                        appendInline(out, link.label, codeBackground)
+                        if (link.isWeb && out.length > start) {
+                            out.setSpan(URLSpan(link.target), start, out.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
+                        i = link.end
                         continue
                     }
                 }
@@ -103,6 +117,53 @@ object Markdown {
             end = text.indexOf(c, end + 1)
         }
         return -1
+    }
+
+    /** Link Markdown reconhecido em [parseLink]. [end] é o índice logo após `)`. */
+    internal data class ParsedLink(val label: String, val target: String, val end: Int, val isWeb: Boolean)
+
+    /**
+     * Lê um link `[label](target)` começando em [start] (`[`). Só reconhece esquemas `http://`,
+     * `https://` (clicável) e `file://` (mostra só [label], sem despejar caminhos absolutos no chat);
+     * qualquer outra forma (ex.: `arr[i](x)`) devolve null e fica literal.
+     */
+    internal fun parseLink(text: String, start: Int): ParsedLink? {
+        if (start >= text.length || text[start] != '[') return null
+        var closeBracket = -1
+        for (j in start + 1 until text.length) {
+            when (text[j]) {
+                '[' -> return null
+                ']' -> {
+                    closeBracket = j
+                    break
+                }
+            }
+        }
+        if (closeBracket <= start + 1) return null
+        if (closeBracket + 1 >= text.length || text[closeBracket + 1] != '(') return null
+        val targetStart = closeBracket + 2
+        var depth = 0
+        var closeParen = -1
+        for (j in targetStart until text.length) {
+            val ch = text[j]
+            if (ch.isWhitespace()) return null
+            when (ch) {
+                '(' -> depth++
+                ')' -> if (depth == 0) {
+                    closeParen = j
+                    break
+                } else {
+                    depth--
+                }
+            }
+        }
+        if (closeParen <= targetStart) return null
+        val target = text.substring(targetStart, closeParen)
+        val lower = target.lowercase(Locale.ROOT)
+        val isWeb = lower.startsWith("https://") || lower.startsWith("http://")
+        if (!isWeb && !lower.startsWith("file://")) return null
+        val label = text.substring(start + 1, closeBracket)
+        return ParsedLink(label = label, target = target, end = closeParen + 1, isWeb = isWeb)
     }
 
     private val HEADING = Regex("""^#{1,6}(\s.*)?$""")

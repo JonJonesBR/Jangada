@@ -50,6 +50,9 @@ class ConcisenessTest {
         // O normal é o desmentido de brevidade, e não se confunde com os outros.
         assertTrue(normal.contains("normal level of detail"))
         assertTrue(normal.contains("brief"))
+        assertTrue(short.contains("file://"))
+        assertTrue(tiny.contains("file://"))
+        assertTrue(tiny.contains("Override"))
         assertFalse(short == tiny)
         assertFalse(short == normal)
         assertFalse(tiny == normal)

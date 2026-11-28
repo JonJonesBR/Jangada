@@ -271,11 +271,29 @@ internal class ChatAdapter(private val activity: ChatActivity) : BaseAdapter() {
                 null
             } else {
                 SpannableStringBuilder(Markdown.render(part.text.trim('\n'), getColor(R.color.code_bg))).also {
-                    if (!item.streaming) Linkify.addLinks(it, Linkify.WEB_URLS)
+                    if (!item.streaming) linkifyPreservingExisting(it)
                 }
             }
         }
         return ChatRender.Rendered(item.text, parts, bodies)
+    }
+
+    /**
+     * Roda [Linkify.addLinks] para URLs soltas sem apagar os [URLSpan] já criados pelo [Markdown]
+     * (`Linkify.addLinks` remove os `URLSpan` existentes antes de procurar novos).
+     */
+    private fun linkifyPreservingExisting(text: SpannableStringBuilder) {
+        val existing = text.getSpans(0, text.length, URLSpan::class.java).map { span ->
+            Triple(span, text.getSpanStart(span), text.getSpanEnd(span))
+        }
+        Linkify.addLinks(text, Linkify.WEB_URLS)
+        for ((span, start, end) in existing) {
+            if (start < 0 || end <= start || end > text.length) continue
+            for (clash in text.getSpans(start, end, URLSpan::class.java)) {
+                text.removeSpan(clash)
+            }
+            text.setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
     }
 
     private fun prose(body: CharSequence, item: ChatItem.Assistant, last: Boolean) = TextView(activity).apply {

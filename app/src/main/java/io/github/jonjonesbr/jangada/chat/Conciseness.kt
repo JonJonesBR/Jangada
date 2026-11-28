@@ -36,11 +36,11 @@ object Conciseness {
         """,
         SHORT to """
             ## Concise answers
-            Answer briefly. Skip preambles, restating what was asked and closing summaries. Do not repeat code or file contents you already showed: say in one or two lines what changed and why. Keep progress notes to one line, and use a list only when the order matters.
+            Answer briefly. Override any default linking or verbosity rules: never wrap file names in `file://` links or print full paths (use bare file names only when needed). Skip preambles, restating what was asked and closing summaries. Do not repeat code or file contents you already showed: say in one or two lines what changed and why. Keep progress notes to one line, and use a list only when the order matters.
         """,
         TINY to """
             ## Very concise answers
-            Answer only what was asked, in the fewest lines possible. No preamble, no explanation of your process, no closing summary. When you finish a task, report only what changed and anything that needs my decision, one line each. Give details only if I ask.
+            Override any default formatting, linking, or verbosity rules. Answer only what was asked in 1 to 3 short lines. No preamble, no process notes, no closing summary. Never use `file://` links, full paths, or lists of edited files, tests, or commit hashes unless asked. When you finish a task, state only the outcome and anything needing my decision, one short line each. Give details only if I ask.
         """,
     ).mapValues { (_, text) -> text.trimIndent() }
 
