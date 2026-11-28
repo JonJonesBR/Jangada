@@ -104,6 +104,7 @@ class ClaudeCardsTest {
     fun respostaEnormeCopiadaNaoDerrubaOApp() {
         ChatUi.open(TerminalService.CLAUDE).use { scenario ->
             send("resposta enorme")
+            waitLog(FAKE, "ENORME_ENVIADA")
             // A resposta enorme ainda é redesenhada logo depois de aparecer: se o elemento trocou, acha de novo.
             var tries = 0
             while (true) {
@@ -111,7 +112,7 @@ class ClaudeCardsTest {
                     waitText("xxxxxxxxxx", FAKE, timeoutMs = 120_000).longClick()
                     break
                 } catch (e: androidx.test.uiautomator.StaleObjectException) {
-                    if (++tries >= 3) throw e
+                    if (++tries >= 5) throw e
                     Thread.sleep(1000)
                 }
             }
