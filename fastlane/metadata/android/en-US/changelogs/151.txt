@@ -1,0 +1,1 @@
+Token economy across agents: automatically installs chop (SHA-256 verified) and registers hooks for Claude Code, Codex, and Pi without overwriting user configs; preserves agy's 180K token cap over AutoCompact percentages, propagates economy env vars to jangada-call, and guides lightweight subagent orchestration.

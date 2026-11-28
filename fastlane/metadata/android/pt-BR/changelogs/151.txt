@@ -1,0 +1,1 @@
+Economia de tokens nos outros agentes: instala o chop (verificado por SHA-256) e registra os hooks no Claude Code, Codex e Pi sem sobrescrever configurações do usuário; protege o teto de 180K do agy contra percentuais do AutoCompact, propaga os cortes no jangada-call e orienta subagentes leves na orquestração.

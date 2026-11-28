@@ -1,5 +1,10 @@
 # Novidades
 
+## 1.39.1
+
+- Economia nos outros agentes: instalação automática do `chop` (com verificação SHA-256) e registro automático dos hooks `PreToolUse` no Claude Code e no Codex e da extensão `chop.ts` no Pi, sempre preservando configurações existentes do usuário.
+- Antigravity (agy) e Orchestrator: com a economia ligada, o teto absoluto de 180K tokens não é mais sobrescrito por percentuais do `AutoCompact`; chamadas via `jangada-call` também herdam as variáveis de corte e compactação, e as instruções globais orientam delegação para subagentes leves.
+
 ## 1.39.0
 
 - Antigravity (agy): instalação automática do `chop` (com hook `PreToolUse` e filtros padrão que preservam edições do usuário) e limpeza do plugin duplicado `context-mode`.
