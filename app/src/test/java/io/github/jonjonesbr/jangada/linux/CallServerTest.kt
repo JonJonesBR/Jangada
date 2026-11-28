@@ -206,7 +206,7 @@ class CallServerTest {
         assumeTrue(File("/bin/sh").canExecute())
         val home = Files.createDirectories(root.parent.resolve("home-flags"))
         val confDir = Files.createDirectories(home.resolve(".config/jangada"))
-        Files.writeString(confDir.resolve("call.conf"), "port=12345\nhost=127.0.0.1\ntoken=abc\n")
+        confDir.resolve("call.conf").toFile().writeText("port=12345\nhost=127.0.0.1\ntoken=abc\n")
 
         assertEquals(2, runJangadaCall(home, "--agent").first)
         assertEquals(2, runJangadaCall(home, "--role").first)
