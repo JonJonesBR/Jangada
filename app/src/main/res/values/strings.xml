@@ -141,6 +141,7 @@
     <string name="storage_allow">Allow access</string>
     <string name="storage_ready">Projects: ~/projetos · Phone files: ~/celular (Downloads in ~/celular/Download)</string>
     <string name="storage_denied">Access not granted. You can allow it in Android settings for Jangada.</string>
+    <string name="storage_open_settings">Open settings</string>
     <string name="notifications_off_title">Notifications are off</string>
     <string name="notifications_off_body">Without notifications, the app can’t alert you when an agent asks for permission, needs login or finishes a reply.</string>
     <string name="notifications_off_open">Open notification settings</string>

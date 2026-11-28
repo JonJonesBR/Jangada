@@ -175,6 +175,7 @@ class HomeActivity : JangadaActivity() {
     private var measuring: AtomicBoolean? = null
     private var askedStorage = false
     private var allFilesOpened = false
+    private var storageDenied = false
     private var paused = true
     /** Views do bloco Sistema (ver renderSystem). */
     private lateinit var systemTitle: TextView
@@ -359,8 +360,18 @@ class HomeActivity : JangadaActivity() {
 
     private fun renderStorage() {
         val granted = linux.hasStorageAccess
-        findViewById<TextView>(R.id.storage_text).setText(if (granted) R.string.storage_ready else R.string.storage_ask)
-        findViewById<View>(R.id.storage_allow).visibility = if (granted) View.GONE else View.VISIBLE
+        if (granted) storageDenied = false
+        findViewById<TextView>(R.id.storage_text).setText(
+            when {
+                granted -> R.string.storage_ready
+                storageDenied -> R.string.storage_denied
+                else -> R.string.storage_ask
+            },
+        )
+        findViewById<Button>(R.id.storage_allow).apply {
+            visibility = if (granted) View.GONE else View.VISIBLE
+            setText(if (storageDenied) R.string.storage_open_settings else R.string.storage_allow)
+        }
         findViewById<View>(R.id.storage_card).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         findViewById<View>(R.id.storage_details).visibility = if (linux.isReady) View.VISIBLE else View.GONE
         findViewById<View>(R.id.projects_open).visibility = if (linux.isReady) View.VISIBLE else View.GONE
@@ -483,6 +494,12 @@ class HomeActivity : JangadaActivity() {
      * quando a tela volta (onResume), sem depender de callbacks.
      */
     private fun requestStorage() {
+        if (storageDenied) {
+            askedStorage = true
+            allFilesOpened = true
+            openStorageSettings()
+            return
+        }
         askedStorage = true
         allFilesOpened = false
         requestPermissions(
@@ -491,6 +508,18 @@ class HomeActivity : JangadaActivity() {
         )
         // Se o Android nem mostrar a pergunta (negada antes), segue sozinho.
         window.decorView.postDelayed({ if (askedStorage && !paused) afterStorageRequest() }, 800)
+    }
+
+    /** Abre a tela de permissões do Jangada nos Ajustes do Android ("Acesso a todos os arquivos" no Android 11+, ou detalhes do app). */
+    private fun openStorageSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))
+            if (runCatching { startActivity(intent) }.isSuccess) return
+            if (runCatching { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }.isSuccess) return
+        }
+        runCatching {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }
     }
 
     override fun onResume() {
@@ -527,14 +556,17 @@ class HomeActivity : JangadaActivity() {
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !allFilesOpened) {
             allFilesOpened = true // continua "askedStorage" para conferir na volta
-            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName"))
-            runCatching { startActivity(intent) }.onFailure {
-                runCatching { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
-            }
+            openStorageSettings()
             return
         } else {
             askedStorage = false
-            Toast.makeText(this, R.string.storage_denied, Toast.LENGTH_LONG).show()
+            storageDenied = true
+            AlertDialog.Builder(this)
+                .setTitle(R.string.storage_title)
+                .setMessage(R.string.storage_denied)
+                .setPositiveButton(R.string.storage_open_settings) { _, _ -> openStorageSettings() }
+                .setNegativeButton(android.R.string.cancel, null)
+                .show()
         }
         renderStorage()
     }
