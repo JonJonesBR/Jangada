@@ -411,8 +411,15 @@ class LinuxEnv(context: Context) {
                 writeReplacing(file, toolEnv)
                 Fs.setMode(file.toPath(), "644".toInt(8))
             }
+            val chopHook = agyChopHookCache ?: linuxAsset("agy-chop-hook.mjs")?.also { agyChopHookCache = it }
+            if (chopHook != null) {
+                val file = File(jangadaLib, "agy-chop-hook.mjs")
+                writeReplacing(file, chopHook)
+                Fs.setMode(file.toPath(), "755".toInt(8))
+            }
         }
         ensureRealDir(linkInbox)
+        runCatching { AgyHooks.ensure(rootfs.toPath()) }.onFailure { Log.w(TAG, "hooks do agy", it) }
 
         // Pasta de trabalho dos agentes. Fora da home de propósito: o Claude Code
         // não guarda a confiança na pasta home e perguntaria toda vez.
@@ -599,6 +606,9 @@ class LinuxEnv(context: Context) {
 
         /** Texto do asset linux/tool-env.sh, lido uma vez (nulo até a primeira leitura bem-sucedida). */
         @Volatile private var toolEnvCache: String? = null
+
+        /** Texto do asset linux/agy-chop-hook.mjs, lido uma vez (nulo até a primeira leitura bem-sucedida). */
+        @Volatile private var agyChopHookCache: String? = null
 
         /** DNS públicos usados quando a rede do celular não fornece servidores suficientes. */
         private val FALLBACK_DNS = listOf("8.8.8.8", "1.1.1.1")

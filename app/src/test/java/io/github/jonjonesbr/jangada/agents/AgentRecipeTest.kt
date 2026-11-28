@@ -46,6 +46,11 @@ class AgentRecipeTest {
         assertTrue(agy.install.contains("antigravity-plugin-context-mode"))
         assertTrue(agy.install.contains("agy-context"))
         assertTrue(agy.install.contains("agy-usage"))
+        assertTrue(agy.install.contains("agy plugin uninstall antigravity-plugin-context-mode"))
+        assertTrue(agy.install.contains("chop-linux-"))
+        assertTrue(agy.install.contains("a36beb2c1965fdec189fd0d740c789922d2ef0dff5295102390bbf612d0f7454"))
+        assertTrue(agy.install.contains("db9fbd51faa4b5ba614e0fb43b2243ba682421319a55b46f4089f1201b29fab7"))
+        assertTrue(agy.install.contains("agy-chop-hook.mjs --register"))
     }
 
     @Test
