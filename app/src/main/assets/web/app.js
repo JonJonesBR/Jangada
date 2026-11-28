@@ -99,13 +99,93 @@
   let catalogTimer = null;
   let catalogHadRunning = false;
 
+  const isEn = !/^pt\b/i.test(navigator.language || "pt-BR");
+  const LOCALE = isEn ? "en-US" : "pt-BR";
+  const tr = (pt, en) => (isEn ? en : pt);
+
+  const STATIC_I18N = {
+    auth_subtitle: ["Seus agentes de IA, no computador", "Your AI agents, on your computer"],
+    auth_prompt: ["Digite o PIN de 6 dígitos exibido no celular para conectar pela rede local.", "Enter the 6-digit PIN shown on your phone to connect over the local network."],
+    auth_connect: ["Conectar", "Connect"],
+    connected: ["Conectado", "Connected"],
+    logout: ["Sair", "Sign out"],
+    nav_agents: ["Agentes", "Agents"],
+    nav_system: ["Sistema", "System"],
+    nav_settings: ["Configurações", "Settings"],
+    active_jobs: ["Trabalhos ativos", "Active jobs"],
+    new_job: ["Novo trabalho", "New job"],
+    add_project: ["+ Projeto", "+ Project"],
+    new_project_placeholder: ["Nome do novo projeto", "New project name"],
+    create_folder: ["Criar pasta", "Create folder"],
+    clone_url_placeholder: ["URL do repositório (https://...)", "Repository URL (https://...)"],
+    clone_folder_placeholder: ["Nome da pasta (opcional)", "Folder name (optional)"],
+    clone_repo: ["Clonar repositório", "Clone repository"],
+    agent_label: ["Agente", "Agent"],
+    project_label: ["Projeto", "Project"],
+    open_conversation: ["Abrir conversa", "Open conversation"],
+    history_title: ["Histórico", "History"],
+    refresh: ["Atualizar", "Refresh"],
+    history_search_placeholder: ["Buscar conversas…", "Search conversations…"],
+    terminals_title: ["Terminais", "Terminals"],
+    add_terminal: ["+ Terminal", "+ Terminal"],
+    reconnecting: ["Reconectando ao celular…", "Reconnecting to phone…"],
+    no_job_selected: ["Nenhum trabalho selecionado", "No job selected"],
+    new_conv_short: ["+ Nova", "+ New"],
+    new_conv_title: ["Iniciar nova conversa nesta pasta", "Start a new conversation in this folder"],
+    open_term_short: [">_ Terminal", ">_ Terminal"],
+    open_term_title: ["Abrir terminal nesta pasta", "Open terminal in this folder"],
+    changes: ["Mudanças", "Changes"],
+    export_short: ["Exportar", "Export"],
+    export_title: ["Exportar conversa em Markdown", "Export conversation as Markdown"],
+    handoff_short: ["Passar", "Hand off"],
+    handoff_title: ["Continuar esta conversa com outro agente", "Continue this conversation with another agent"],
+    stop: ["Parar", "Stop"],
+    chip_model_title: ["Modelo e nível de raciocínio", "Model and reasoning level"],
+    mode_select_title: ["Modo de permissão", "Permission mode"],
+    auto_approve_title: ["Aprovar automaticamente pedidos de permissão nesta conversa", "Automatically approve permission requests in this conversation"],
+    auto_approve: ["Aprovar tudo", "Approve all"],
+    view_select_title: ["Modo de visualização", "View mode"],
+    view_detailed: ["Detalhado", "Detailed"],
+    view_normal: ["Normal", "Normal"],
+    view_summary: ["Resumo", "Summary"],
+    chip_context_title: ["Uso da janela de contexto", "Context window usage"],
+    chip_limits_title: ["Limites e quota do plano", "Plan limits and quota"],
+    empty_state: ["Selecione um trabalho ativo na barra lateral ou abra uma nova conversa.", "Select an active job in the sidebar or open a new conversation."],
+    attach_title: ["Anexar arquivo ou imagem", "Attach file or image"],
+    composer_placeholder: ["Escreva uma mensagem, digite / para comandos ou cole um print (Ctrl+V)…", "Type a message, type / for commands or paste a screenshot (Ctrl+V)…"],
+    send: ["Enviar", "Send"],
+    git_changes_title: ["Mudanças (Git)", "Changes (Git)"],
+    back_to_chat: ["Voltar ao chat", "Back to chat"],
+    commit_msg_placeholder: ["Mensagem do commit…", "Commit message…"],
+    commit_all: ["Commitar tudo", "Commit all"],
+    term_close: ["Encerrar", "Close"],
+    term_cmd_placeholder: ["Digite um comando e pressione Enter (ou clique na tela acima para digitar direto)…", "Type a command and press Enter (or click the screen above to type directly)…"],
+  };
+
+  function applyStaticI18n() {
+    document.documentElement.lang = isEn ? "en" : "pt-BR";
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      const pair = STATIC_I18N[el.dataset.i18n];
+      if (pair) el.textContent = tr(pair[0], pair[1]);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+      const pair = STATIC_I18N[el.dataset.i18nPlaceholder];
+      if (pair) el.placeholder = tr(pair[0], pair[1]);
+    });
+    document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+      const pair = STATIC_I18N[el.dataset.i18nTitle];
+      if (pair) el.title = tr(pair[0], pair[1]);
+    });
+  }
+  applyStaticI18n();
+
   // Comandos "/" que o app atende (os mesmos da tela do Android).
   const APP_COMMANDS = [
-    { name: "new", description: "Nova conversa" },
-    { name: "clear", description: "Limpar a conversa e começar uma nova" },
-    { name: "reset", description: "Igual a /new" },
-    { name: "resume", description: "Retomar uma conversa anterior" },
-    { name: "compact", description: "Resumir a conversa para liberar espaço" },
+    { name: "new", description: tr("Nova conversa", "New conversation") },
+    { name: "clear", description: tr("Limpar a conversa e começar uma nova", "Clear the conversation and start a new one") },
+    { name: "reset", description: tr("Igual a /new", "Same as /new") },
+    { name: "resume", description: tr("Retomar uma conversa anterior", "Resume an earlier conversation") },
+    { name: "compact", description: tr("Resumir a conversa para liberar espaço", "Summarize the conversation to free up room") },
   ];
   const APP_COMMAND_NAMES = APP_COMMANDS.map((c) => c.name);
 
@@ -245,9 +325,9 @@
     html = html.replace(tokenRe, (_, idxStr) => {
       const block = codeBlocks[Number(idxStr)];
       if (!block) return _;
-      const safeLang = escapeHtml(block.lang || "código");
+      const safeLang = escapeHtml(block.lang || tr("código", "code"));
       const safeCode = escapeHtml(block.code);
-      return `<div class="code-wrap"><div class="code-bar"><span>${safeLang}</span><button type="button" class="btn ghost tiny copy-code-btn">Copiar</button></div><pre><code>${safeCode}</code></pre></div>`;
+      return `<div class="code-wrap"><div class="code-bar"><span>${safeLang}</span><button type="button" class="btn ghost tiny copy-code-btn">${tr("Copiar", "Copy")}</button></div><pre><code>${safeCode}</code></pre></div>`;
     });
     return html;
   }
@@ -261,16 +341,16 @@
 
   function limitKindLabel(w) {
     if (w.label) return w.label;
-    if (w.kind === "FIVE_HOUR") return "5 horas";
-    if (w.kind === "WEEKLY") return "Semanal";
-    if (w.kind === "MONTHLY") return "Mensal";
-    return "Limite";
+    if (w.kind === "FIVE_HOUR") return tr("5 horas", "5 hours");
+    if (w.kind === "WEEKLY") return tr("Semanal", "Weekly");
+    if (w.kind === "MONTHLY") return tr("Mensal", "Monthly");
+    return tr("Limite", "Limit");
   }
 
   function formatReset(ms) {
     if (!ms) return "";
     const d = new Date(ms);
-    return `Renova ${d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
+    return `${tr("Renova", "Resets")} ${d.toLocaleString(LOCALE, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`;
   }
 
   function openModal(title, renderFn) {
@@ -301,7 +381,7 @@
       opt.value = "";
       opt.disabled = true;
       opt.selected = true;
-      opt.textContent = "Nenhum agente instalado no celular";
+      opt.textContent = tr("Nenhum agente instalado no celular", "No agent installed on phone");
       agentSelect.appendChild(opt);
     } else {
       for (const a of agents) {
@@ -315,7 +395,7 @@
     projectSelect.innerHTML = "";
     const rootOpt = document.createElement("option");
     rootOpt.value = "";
-    rootOpt.textContent = "Raiz (~/projetos)";
+    rootOpt.textContent = tr("Raiz (~/projetos)", "Root (~/projetos)");
     projectSelect.appendChild(rootOpt);
     for (const p of projData.projects || []) {
       const opt = document.createElement("option");
@@ -326,7 +406,7 @@
   }
 
   async function loadHistory(agentId, folder, query = "") {
-    historyList.innerHTML = '<div class="muted">Carregando…</div>';
+    historyList.innerHTML = `<div class="muted">${tr("Carregando…", "Loading…")}</div>`;
     try {
       const qs = new URLSearchParams({ agentId, folder });
       if (query.trim()) qs.set("q", query.trim());
@@ -335,7 +415,7 @@
       const convs = data.conversations || [];
       historyList.innerHTML = "";
       if (convs.length === 0) {
-        historyList.innerHTML = '<div class="muted">Sem conversas anteriores nesta pasta.</div>';
+        historyList.innerHTML = `<div class="muted">${tr("Sem conversas anteriores nesta pasta.", "No earlier conversations in this folder.")}</div>`;
         return;
       }
       // Apagar conversa só existe no histórico do Claude (os agentes ACP apagam pelo próprio chat).
@@ -345,7 +425,7 @@
         btn.className = "chat-item-btn";
         const snippetHtml = c.snippet ? `<div class="history-snippet">${escapeHtml(c.snippet)}</div>` : "";
         const deleteHtml = canDelete
-          ? '<button type="button" class="btn ghost tiny del-hist-btn" title="Excluir conversa">×</button>'
+          ? `<button type="button" class="btn ghost tiny del-hist-btn" title="${tr("Excluir conversa", "Delete conversation")}">×</button>`
           : "";
         btn.innerHTML = `
           <div class="chat-item-top">
@@ -365,7 +445,7 @@
         if (delBtn) {
           delBtn.onclick = async (ev) => {
             ev.stopPropagation();
-            if (!confirm(`Excluir a conversa "${c.title}" do histórico?`)) return;
+            if (!confirm(tr(`Excluir a conversa "${c.title}" do histórico?`, `Delete conversation "${c.title}" from history?`))) return;
             await api("/api/history/delete", {
               method: "POST",
               body: JSON.stringify({ agentId, folder, id: c.id }),
@@ -376,7 +456,7 @@
         historyList.appendChild(btn);
       }
     } catch {
-      historyList.innerHTML = '<div class="muted">Erro ao carregar histórico.</div>';
+      historyList.innerHTML = `<div class="muted">${tr("Erro ao carregar histórico.", "Error loading history.")}</div>`;
     }
   }
 
@@ -399,12 +479,12 @@
 
     chatsList.innerHTML = "";
     if (chats.length === 0) {
-      chatsList.innerHTML = '<div class="muted">Nenhum trabalho aberto.</div>';
+      chatsList.innerHTML = `<div class="muted">${tr("Nenhum trabalho aberto.", "No open jobs.")}</div>`;
     } else {
       for (const c of chats) {
         const btn = document.createElement("div");
         btn.className = `chat-item-btn ${active && active.key === c.key ? "active" : ""}`;
-        const folderLabel = c.folder || "Raiz (~/projetos)";
+        const folderLabel = c.folder || tr("Raiz (~/projetos)", "Root (~/projetos)");
         const permBadge = c.pendingPermissions > 0 ? ` · ${c.pendingPermissions} perm.` : "";
         const canSleep = c.running && !c.busy && c.canResume;
         btn.innerHTML = `
@@ -412,8 +492,8 @@
             <span>${escapeHtml(c.agentName)}</span>
             <span class="chat-row-actions">
               <span class="state-pill state-${escapeHtml(c.state)}">${escapeHtml(c.state)}</span>
-              ${canSleep ? '<button type="button" class="btn ghost tiny sleep-chat-btn" title="Colocar para dormir">💤</button>' : ""}
-              <button type="button" class="btn ghost tiny close-chat-btn" title="Fechar trabalho">×</button>
+              ${canSleep ? `<button type="button" class="btn ghost tiny sleep-chat-btn" title="${tr("Colocar para dormir", "Put to sleep")}">💤</button>` : ""}
+              <button type="button" class="btn ghost tiny close-chat-btn" title="${tr("Fechar trabalho", "Close job")}">×</button>
             </span>
           </div>
           <div class="chat-item-sub">${escapeHtml(folderLabel)}${escapeHtml(permBadge)}</div>
@@ -457,18 +537,18 @@
     const terms = snapshot.terminals || [];
     terminalsList.innerHTML = "";
     if (terms.length === 0) {
-      terminalsList.innerHTML = '<div class="muted">Nenhum terminal aberto.</div>';
+      terminalsList.innerHTML = `<div class="muted">${tr("Nenhum terminal aberto.", "No open terminals.")}</div>`;
     } else {
       for (const t of terms) {
         const btn = document.createElement("div");
         btn.className = `chat-item-btn ${activeTermHandle === t.handle ? "active" : ""}`;
-        const folderLabel = t.folder || "Raiz (~/projetos)";
+        const folderLabel = t.folder || tr("Raiz (~/projetos)", "Root (~/projetos)");
         btn.innerHTML = `
           <div class="chat-item-top">
             <span>&gt;_ ${escapeHtml(t.title)}</span>
             <span class="chat-row-actions">
-              <span class="state-pill ${t.running ? "state-READY" : "state-STOPPED"}">${t.running ? "ATIVO" : "FIM"}</span>
-              <button type="button" class="btn ghost tiny close-term-btn" title="Encerrar terminal">×</button>
+              <span class="state-pill ${t.running ? "state-READY" : "state-STOPPED"}">${t.running ? tr("ATIVO", "ACTIVE") : tr("FIM", "DONE")}</span>
+              <button type="button" class="btn ghost tiny close-term-btn" title="${tr("Encerrar terminal", "Close terminal")}">×</button>
             </span>
           </div>
           <div class="chat-item-sub">${escapeHtml(folderLabel)}</div>
@@ -512,24 +592,24 @@
 
   async function loadGitDiff(path) {
     selectedGitPath = path || "";
-    gitDiffView.innerHTML = '<div class="muted">Carregando diff…</div>';
+    gitDiffView.innerHTML = `<div class="muted">${tr("Carregando diff…", "Loading diff…")}</div>`;
     try {
       const qs = new URLSearchParams({ folder: currentGitFolder() });
       if (selectedGitPath) qs.set("path", selectedGitPath);
       const res = await api(`/api/git/diff?${qs.toString()}`);
       const data = await res.json();
       if (!data.diff || !data.diff.trim()) {
-        gitDiffView.innerHTML = '<div class="muted">Sem alterações para exibir.</div>';
+        gitDiffView.innerHTML = `<div class="muted">${tr("Sem alterações para exibir.", "No changes to display.")}</div>`;
       } else {
         gitDiffView.innerHTML = renderDiff(data.diff);
       }
     } catch {
-      gitDiffView.innerHTML = '<div class="muted">Erro ao carregar diff.</div>';
+      gitDiffView.innerHTML = `<div class="muted">${tr("Erro ao carregar diff.", "Error loading diff.")}</div>`;
     }
   }
 
   async function refreshGitStatus() {
-    gitFiles.innerHTML = '<div class="muted">Carregando…</div>';
+    gitFiles.innerHTML = `<div class="muted">${tr("Carregando…", "Loading…")}</div>`;
     gitDiffView.innerHTML = "";
     try {
       const qs = new URLSearchParams({ folder: currentGitFolder() });
@@ -537,26 +617,26 @@
       const data = await res.json();
       if (!data.ok) {
         gitBranch.textContent = "";
-        gitFiles.innerHTML = '<div class="muted">Linux ainda não está pronto.</div>';
+        gitFiles.innerHTML = `<div class="muted">${tr("Linux ainda não está pronto.", "Linux is not ready yet.")}</div>`;
         return;
       }
       if (!data.isRepo) {
-        gitBranch.textContent = "Sem Git";
-        gitFiles.innerHTML = '<div class="muted">Esta pasta não é um repositório Git.</div>';
+        gitBranch.textContent = tr("Sem Git", "No Git");
+        gitFiles.innerHTML = `<div class="muted">${tr("Esta pasta não é um repositório Git.", "This folder is not a Git repository.")}</div>`;
         return;
       }
-      gitBranch.textContent = data.branch || "HEAD solto";
+      gitBranch.textContent = data.branch || tr("HEAD solto", "detached HEAD");
       const changes = data.changes || [];
       gitFiles.innerHTML = "";
       if (changes.length === 0) {
-        gitFiles.innerHTML = '<div class="muted">Árvore limpa.</div>';
-        gitDiffView.innerHTML = '<div class="muted">Nenhuma alteração pendente.</div>';
+        gitFiles.innerHTML = `<div class="muted">${tr("Árvore limpa.", "Clean working tree.")}</div>`;
+        gitDiffView.innerHTML = `<div class="muted">${tr("Nenhuma alteração pendente.", "No pending changes.")}</div>`;
         return;
       }
       const allBtn = document.createElement("button");
       allBtn.type = "button";
       allBtn.className = `git-file-btn ${selectedGitPath === "" ? "active" : ""}`;
-      allBtn.innerHTML = `<span class="git-code-badge">*</span><span>Todas as alterações (${changes.length})</span>`;
+      allBtn.innerHTML = `<span class="git-code-badge">*</span><span>${tr(`Todas as alterações (${changes.length})`, `All changes (${changes.length})`)}</span>`;
       allBtn.onclick = () => {
         selectedGitPath = "";
         refreshGitFilesActive();
@@ -579,7 +659,7 @@
       }
       loadGitDiff(selectedGitPath);
     } catch {
-      gitFiles.innerHTML = '<div class="muted">Erro ao consultar Git.</div>';
+      gitFiles.innerHTML = `<div class="muted">${tr("Erro ao consultar Git.", "Error querying Git.")}</div>`;
     }
   }
 
@@ -613,7 +693,7 @@
 
   function renderTerminalScreen(data) {
     termTitle.textContent = `${data.title || "Terminal"}${data.folder ? ` · ${data.folder}` : ""}`;
-    termStatus.textContent = data.running ? "Ativo" : "Encerrado";
+    termStatus.textContent = data.running ? tr("Ativo", "Active") : tr("Encerrado", "Closed");
     const nearBottom = termScreen.scrollHeight - termScreen.scrollTop - termScreen.clientHeight < 100;
     termScreen.textContent = data.text || "";
     if (nearBottom) {
@@ -708,7 +788,7 @@
 
   async function uploadFile(file) {
     if (!file) return;
-    const name = file.name || (file.type && file.type.startsWith("image/") ? "print.png" : "anexo");
+    const name = file.name || (file.type && file.type.startsWith("image/") ? "print.png" : tr("anexo", "attachment"));
     const qs = new URLSearchParams({ name });
     let res;
     try {
@@ -719,7 +799,7 @@
         body: file,
       });
     } catch {
-      alert(`Não foi possível enviar o anexo "${name}". Confira a conexão e tente de novo.`);
+      alert(tr(`Não foi possível enviar o anexo "${name}". Confira a conexão e tente de novo.`, `Could not upload attachment "${name}". Check the connection and try again.`));
       return;
     }
     if (res.status === 401) {
@@ -728,7 +808,7 @@
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok || !data.ok) {
-      alert(`Não foi possível anexar "${name}": ${data.error || `erro ${res.status}`}.`);
+      alert(tr(`Não foi possível anexar "${name}": ${data.error || `erro ${res.status}`}.`, `Could not attach "${name}": ${data.error || `error ${res.status}`}.`));
       return;
     }
     const previewUrl = data.isImage ? URL.createObjectURL(file) : null;
@@ -763,20 +843,20 @@
 
     const draw = () => {
       const elapsed = chat.busy ? busyBaseSec + Math.floor((Date.now() - busyBaseAt) / 1000) : 0;
-      let label = "Aguardando…";
-      if (chat.busy) label = `Trabalhando há ${formatDuration(elapsed)}`;
-      else if (chat.watching) label = "Acompanhando tarefa em segundo plano…";
-      else if (chat.interrupted) label = "Turno interrompido.";
+      let label = tr("Aguardando…", "Waiting…");
+      if (chat.busy) label = tr(`Trabalhando há ${formatDuration(elapsed)}`, `Working for ${formatDuration(elapsed)}`);
+      else if (chat.watching) label = tr("Acompanhando tarefa em segundo plano…", "Watching background task…");
+      else if (chat.interrupted) label = tr("Turno interrompido.", "Turn interrupted.");
 
       const bgHtml = bg.map((t) => `
         <span class="badge">
           ${escapeHtml(t.description)}
-          <button type="button" class="btn ghost tiny stop-bg-btn" data-id="${escapeHtml(t.id)}">Parar</button>
+          <button type="button" class="btn ghost tiny stop-bg-btn" data-id="${escapeHtml(t.id)}">${tr("Parar", "Stop")}</button>
         </span>
       `).join("");
 
       const contHtml = chat.interrupted
-        ? '<button type="button" id="continue-chat-btn" class="btn small primary">Continuar</button>'
+        ? `<button type="button" id="continue-chat-btn" class="btn small primary">${tr("Continuar", "Continue")}</button>`
         : "";
 
       statusStrip.innerHTML = `
@@ -809,10 +889,10 @@
   }
 
   function showModelModal(chat) {
-    openModal("Modelo e Raciocínio", (body) => {
+    openModal(tr("Modelo e Raciocínio", "Model and Reasoning"), (body) => {
       const opts = chat.configOptions || [];
       if (opts.length === 0) {
-        body.innerHTML = '<div class="muted">Este agente não expõe opções de modelo/esforço nesta sessão.</div>';
+        body.innerHTML = `<div class="muted">${tr("Este agente não expõe opções de modelo/esforço nesta sessão.", "This agent does not expose model/effort options in this session.")}</div>`;
         return;
       }
       for (const opt of opts) {
@@ -851,7 +931,7 @@
     if (!limits || ((!limits.windows || limits.windows.length === 0) && !limits.usage)) {
       const empty = document.createElement("div");
       empty.className = "muted";
-      empty.textContent = "Sem leitura de quota registrada ainda.";
+      empty.textContent = tr("Sem leitura de quota registrada ainda.", "No quota reading recorded yet.");
       container.appendChild(empty);
       return;
     }
@@ -873,22 +953,25 @@
       const u = limits.usage;
       const uDiv = document.createElement("div");
       uDiv.className = "muted small-text";
-      uDiv.textContent = `Uso (${u.days} dias): Zen US$ ${Number(u.zenCost || 0).toFixed(2)} · Tokens grátis: ${u.freeTokens || 0}`;
+      uDiv.textContent = tr(
+        `Uso (${u.days} dias): Zen US$ ${Number(u.zenCost || 0).toFixed(2)} · Tokens grátis: ${u.freeTokens || 0}`,
+        `Usage (${u.days} days): Zen US$ ${Number(u.zenCost || 0).toFixed(2)} · Free tokens: ${u.freeTokens || 0}`,
+      );
       container.appendChild(uDiv);
     }
   }
 
   function showLimitsModal(chat) {
-    openModal(`Limites do plano · ${chat.agentName}`, (body) => {
+    openModal(`${tr("Limites do plano", "Plan limits")} · ${chat.agentName}`, (body) => {
       renderLimitsInto(body, chat.limits, null);
     });
   }
 
   function showContextModal(chat) {
-    openModal("Uso da janela de contexto", (body) => {
+    openModal(tr("Uso da janela de contexto", "Context window usage"), (body) => {
       const cu = chat.contextUsage;
       if (!cu) {
-        body.innerHTML = '<div class="muted">Uso de contexto ainda não informado pelo agente.</div>';
+        body.innerHTML = `<div class="muted">${tr("Uso de contexto ainda não informado pelo agente.", "Context usage not reported by the agent yet.")}</div>`;
         return;
       }
       const warn = cu.percent >= 80 || cu.used >= 180000 ? "warn" : "";
@@ -896,7 +979,7 @@
       info.className = "modal-field";
       info.innerHTML = `
         <div class="section-title-row">
-          <span>${cu.used.toLocaleString("pt-BR")} / ${cu.size.toLocaleString("pt-BR")} tokens</span>
+          <span>${cu.used.toLocaleString(LOCALE)} / ${cu.size.toLocaleString(LOCALE)} tokens</span>
           <strong>${cu.percent}%</strong>
         </div>
         <div class="progress-track"><div class="progress-fill ${warn}" style="width:${cu.percent}%"></div></div>
@@ -906,7 +989,7 @@
       const compactBtn = document.createElement("button");
       compactBtn.type = "button";
       compactBtn.className = "btn primary";
-      compactBtn.textContent = "Compactar contexto (/compact)";
+      compactBtn.textContent = tr("Compactar contexto (/compact)", "Compact context (/compact)");
       compactBtn.onclick = async () => {
         closeModal();
         await api("/api/chats/send", {
@@ -931,10 +1014,10 @@
       const card = document.createElement("div");
       card.className = "catalog-card";
       const statusLabel = a.queued
-        ? "Na fila"
+        ? tr("Na fila", "Queued")
         : a.taskState === "RUNNING"
-          ? "Em andamento"
-          : a.installed ? "Instalado" : "Disponível";
+          ? tr("Em andamento", "Running")
+          : a.installed ? tr("Instalado", "Installed") : tr("Disponível", "Available");
       const pillCls = (a.queued || a.taskState === "RUNNING")
         ? "state-WORKING"
         : a.installed ? "state-READY" : "state-STOPPED";
@@ -943,11 +1026,11 @@
       if (a.taskState === "RUNNING" && a.taskLine) {
         noteHtml = `<div class="muted small-text">${escapeHtml(a.taskLine)}</div>`;
       } else if (a.taskState === "FAILED") {
-        noteHtml = `<div class="small-text" style="color:var(--coral)">Falhou${a.taskLine ? `: ${escapeHtml(a.taskLine)}` : ""}</div>`;
+        noteHtml = `<div class="small-text" style="color:var(--coral)">${tr("Falhou", "Failed")}${a.taskLine ? `: ${escapeHtml(a.taskLine)}` : ""}</div>`;
       } else if (a.taskState === "OK" && a.taskAction === "update") {
-        noteHtml = `<div class="small-text" style="color:var(--teal)">Atualizado nesta sessão.</div>`;
+        noteHtml = `<div class="small-text" style="color:var(--teal)">${tr("Atualizado nesta sessão.", "Updated in this session.")}</div>`;
       } else if (a.taskState === "OK" && a.taskAction === "install") {
-        noteHtml = `<div class="small-text" style="color:var(--teal)">Instalado nesta sessão.</div>`;
+        noteHtml = `<div class="small-text" style="color:var(--teal)">${tr("Instalado nesta sessão.", "Installed in this session.")}</div>`;
       }
 
       card.innerHTML = `
@@ -972,7 +1055,7 @@
         b.className = cls;
         b.textContent = label;
         b.onclick = async () => {
-          if (action === "uninstall" && !confirm(`Desinstalar ${a.name}? Os chats abertos dele serão fechados; suas pastas e conversas continuam salvas.`)) {
+          if (action === "uninstall" && !confirm(tr(`Desinstalar ${a.name}? Os chats abertos dele serão fechados; suas pastas e conversas continuam salvas.`, `Uninstall ${a.name}? Its open chats will be closed; your folders and conversations remain saved.`))) {
             return;
           }
           await api("/api/agents/task", {
@@ -984,16 +1067,16 @@
         actions.appendChild(b);
       };
       if (a.taskState === "RUNNING" || a.queued) {
-        addBtn("Cancelar", "cancel", "btn danger small");
+        addBtn(tr("Cancelar", "Cancel"), "cancel", "btn danger small");
       } else if (a.installed) {
         if (a.taskState === "OK" && a.taskAction === "update") {
-          addBtn("Reinstalar", "update", "btn ghost small");
+          addBtn(tr("Reinstalar", "Reinstall"), "update", "btn ghost small");
         } else {
-          addBtn("Atualizar", "update");
+          addBtn(tr("Atualizar", "Update"), "update");
         }
-        addBtn("Desinstalar", "uninstall", "btn danger small");
+        addBtn(tr("Desinstalar", "Uninstall"), "uninstall", "btn danger small");
       } else {
-        addBtn("Instalar", "install", "btn primary small");
+        addBtn(tr("Instalar", "Install"), "install", "btn primary small");
       }
       card.appendChild(actions);
       body.appendChild(card);
@@ -1017,14 +1100,14 @@
         renderCatalogInto(modalBody, data);
       }
     } catch {
-      modalBody.innerHTML = '<div class="muted">Erro ao carregar catálogo.</div>';
+      modalBody.innerHTML = `<div class="muted">${tr("Erro ao carregar catálogo.", "Error loading catalog.")}</div>`;
     }
   }
 
   async function showCatalogModal() {
     catalogHadRunning = false;
-    openModal("Agentes & Quotas", (body) => {
-      body.innerHTML = '<div class="muted">Carregando catálogo…</div>';
+    openModal(tr("Agentes & Quotas", "Agents & Quotas"), (body) => {
+      body.innerHTML = `<div class="muted">${tr("Carregando catálogo…", "Loading catalog…")}</div>`;
     });
     await refreshCatalogModal();
   }
@@ -1061,7 +1144,7 @@
       if (!text) return;
       let msg = text;
       try { msg = JSON.parse(text).error || text; } catch { /* texto puro */ }
-      if (msgEl) msgEl.textContent = `Não foi possível exportar: ${msg}`;
+      if (msgEl) msgEl.textContent = `${tr("Não foi possível exportar", "Could not export")}: ${msg}`;
     };
     if (msgEl) msgEl.textContent = "";
     // Limpa um JSON de erro anterior para não reaparecer num download que deu certo.
@@ -1085,15 +1168,15 @@
   }
 
   async function showSettingsModal() {
-    openModal("Configurações do App", (body) => {
-      body.innerHTML = '<div class="muted">Carregando configurações…</div>';
+    openModal(tr("Configurações do App", "App Settings"), (body) => {
+      body.innerHTML = `<div class="muted">${tr("Carregando configurações…", "Loading settings…")}</div>`;
     });
     try {
       const res = await api("/api/settings");
       const cfg = await res.json();
       renderSettingsBody(cfg);
     } catch {
-      modalBody.innerHTML = '<div class="muted">Erro ao carregar configurações.</div>';
+      modalBody.innerHTML = `<div class="muted">${tr("Erro ao carregar configurações.", "Error loading settings.")}</div>`;
     }
   }
 
@@ -1103,14 +1186,14 @@
     const statusLine = document.createElement("div");
     statusLine.className = "small-text";
     statusLine.style.color = "var(--teal)";
-    statusLine.textContent = "Alterações sincronizadas diretamente com o celular.";
+    statusLine.textContent = tr("Alterações sincronizadas diretamente com o celular.", "Changes synced directly with your phone.");
     body.appendChild(statusLine);
 
     const savePatch = async (patch) => {
-      statusLine.textContent = "Salvando…";
+      statusLine.textContent = tr("Salvando…", "Saving…");
       const r = await api("/api/settings", { method: "POST", body: JSON.stringify(patch) });
       const updated = await r.json();
-      statusLine.textContent = "Salvo!";
+      statusLine.textContent = tr("Salvo!", "Saved!");
       return updated;
     };
 
@@ -1178,65 +1261,65 @@
     // Rótulo das opções de dormir: 0 = nunca; múltiplos de 60 viram horas.
     const sleepLabel = (raw) => {
       const minutes = Number(raw);
-      if (!minutes) return "Nunca";
+      if (!minutes) return tr("Nunca", "Never");
       return minutes % 60 === 0 ? `${minutes / 60} h` : `${minutes} min`;
     };
 
-    const gChat = addGroup("Chat & Agentes");
-    addToggle(gChat, "Modo Simples (chat primeiro)", "simpleMode", cfg.simpleMode);
-    addToggle(gChat, "Enter envia no celular", "enterSends", cfg.enterSends);
-    addToggle(gChat, "Perguntar antes de agir (permissões)", "askPermissions", cfg.askPermissions);
-    addToggle(gChat, "Lembrar 'Aprovar tudo' entre chats", "rememberApproveAll", cfg.rememberApproveAll);
-    addSelect(gChat, "Modelo padrão (Claude)", "chatModel", cfg.chatModel, [
-      ["", "Padrão da conta"], ["opus", "Opus"], ["sonnet", "Sonnet"], ["haiku", "Haiku"],
+    const gChat = addGroup(tr("Chat & Agentes", "Chat & Agents"));
+    addToggle(gChat, tr("Modo Simples (chat primeiro)", "Simple Mode (chat first)"), "simpleMode", cfg.simpleMode);
+    addToggle(gChat, tr("Enter envia no celular", "Enter sends on phone"), "enterSends", cfg.enterSends);
+    addToggle(gChat, tr("Perguntar antes de agir (permissões)", "Ask before acting (permissions)"), "askPermissions", cfg.askPermissions);
+    addToggle(gChat, tr("Lembrar 'Aprovar tudo' entre chats", "Remember 'Approve all' across chats"), "rememberApproveAll", cfg.rememberApproveAll);
+    addSelect(gChat, tr("Modelo padrão (Claude)", "Default model (Claude)"), "chatModel", cfg.chatModel, [
+      ["", tr("Padrão da conta", "Account default")], ["opus", "Opus"], ["sonnet", "Sonnet"], ["haiku", "Haiku"],
     ]);
-    addSelect(gChat, "Esforço padrão (Claude)", "chatEffort", cfg.chatEffort, [
-      ["", "Padrão"], ["low", "Baixo"], ["medium", "Médio"], ["high", "Alto"], ["xhigh", "Muito alto"], ["max", "Máximo"],
+    addSelect(gChat, tr("Esforço padrão (Claude)", "Default effort (Claude)"), "chatEffort", cfg.chatEffort, [
+      ["", tr("Padrão", "Default")], ["low", tr("Baixo", "Low")], ["medium", tr("Médio", "Medium")], ["high", tr("Alto", "High")], ["xhigh", tr("Muito alto", "Extra high")], ["max", tr("Máximo", "Maximum")],
     ]);
-    addSelect(gChat, "Compactação automática", "autoCompact", cfg.autoCompact, [
-      ["default", "Padrão"], ["off", "Desligada"], ["20", "20%"], ["30", "30%"], ["40", "40%"], ["50", "50%"], ["60", "60%"], ["70", "70%"], ["80", "80%"], ["90", "90%"],
+    addSelect(gChat, tr("Compactação automática", "Auto-compaction"), "autoCompact", cfg.autoCompact, [
+      ["default", tr("Padrão", "Default")], ["off", tr("Desligada", "Off")], ["20", "20%"], ["30", "30%"], ["40", "40%"], ["50", "50%"], ["60", "60%"], ["70", "70%"], ["80", "80%"], ["90", "90%"],
     ]);
     addSelect(gChat, "Code Mode (Claude, experimental)", "codeMode", cfg.codeMode, [
-      ["off", "Desligado"], ["on", "Ligado"],
+      ["off", tr("Desligado", "Off")], ["on", tr("Ligado", "On")],
     ]);
-    addSelect(gChat, "Concisão das respostas", "conciseness", cfg.conciseness, [
-      ["normal", "Normal"], ["short", "Conciso"], ["tiny", "Muito conciso"],
+    addSelect(gChat, tr("Concisão das respostas", "Response conciseness"), "conciseness", cfg.conciseness, [
+      ["normal", "Normal"], ["short", tr("Conciso", "Concise")], ["tiny", tr("Muito conciso", "Very concise")],
     ]);
-    const maxOpts = [[0, `Automático (${cfg.autoAgents || 2})`]];
+    const maxOpts = [[0, `${tr("Automático", "Automatic")} (${cfg.autoAgents || 2})`]];
     for (let i = 1; i <= (cfg.maxAgentsLimit || 4); i++) maxOpts.push([i, String(i)]);
-    addSelect(gChat, "Agentes simultâneos", "maxAgents", cfg.maxAgents, maxOpts);
+    addSelect(gChat, tr("Agentes simultâneos", "Simultaneous agents"), "maxAgents", cfg.maxAgents, maxOpts);
     const sleepOptions = (cfg.sleepAfterOptions && cfg.sleepAfterOptions.length
       ? cfg.sleepAfterOptions
       : [0, 15, 30, 60, 120]
     ).map((minutes) => [minutes, sleepLabel(minutes)]);
-    addSelect(gChat, "Dormir após inatividade", "sleepAfterMinutes", cfg.sleepAfterMinutes, sleepOptions);
-    addSelect(gChat, "Aviso de agente sem sinal", "chatStallSeconds", cfg.chatStallSeconds, [
+    addSelect(gChat, tr("Dormir após inatividade", "Sleep after inactivity"), "sleepAfterMinutes", cfg.sleepAfterMinutes, sleepOptions);
+    addSelect(gChat, tr("Aviso de agente sem sinal", "Stalled agent warning"), "chatStallSeconds", cfg.chatStallSeconds, [
       [60, "1 min"], [120, "2 min"], [300, "5 min"], [600, "10 min"],
     ]);
-    addToggle(gChat, "Dicas de memória para agentes", "agentMemoryTips", cfg.agentMemoryTips);
-    addToggle(gChat, "Limpeza automática de caches", "autoClean", cfg.autoClean);
+    addToggle(gChat, tr("Dicas de memória para agentes", "Memory tips for agents"), "agentMemoryTips", cfg.agentMemoryTips);
+    addToggle(gChat, tr("Limpeza automática de caches", "Automatic cache cleanup"), "autoClean", cfg.autoClean);
 
-    const gEconomy = addGroup("Economia & Agentes");
-    addSelect(gEconomy, "Economia do OpenCode", "openCodeEconomy", cfg.openCodeEconomy, [
-      ["off", "Desligada"], ["on", "Ligada"],
+    const gEconomy = addGroup(tr("Economia & Agentes", "Economy & Agents"));
+    addSelect(gEconomy, tr("Economia do OpenCode", "OpenCode Economy"), "openCodeEconomy", cfg.openCodeEconomy, [
+      ["off", tr("Desligada", "Off")], ["on", tr("Ligada", "On")],
     ]);
-    addSelect(gEconomy, "Economia do agy", "agyEconomy", cfg.agyEconomy, [
-      ["off", "Desligada"], ["on", "Ligada"],
+    addSelect(gEconomy, tr("Economia do agy", "agy Economy"), "agyEconomy", cfg.agyEconomy, [
+      ["off", tr("Desligada", "Off")], ["on", tr("Ligada", "On")],
     ]);
-    addToggle(gEconomy, "Agentes podem chamar outros agentes", "agentCalls", cfg.agentCalls);
+    addToggle(gEconomy, tr("Agentes podem chamar outros agentes", "Agents can call other agents"), "agentCalls", cfg.agentCalls);
     const roleOptions = [
-      ["", "O chamador decide"],
-      ["revisor", "Revisor (só leitura)"],
-      ["planejador", "Planejador (só leitura)"],
-      ["implementador", "Implementador (escreve)"],
-      ["orquestrador", "Orquestrador (escreve)"],
+      ["", tr("O chamador decide", "Caller decides")],
+      ["revisor", tr("Revisor (só leitura)", "Reviewer (read-only)")],
+      ["planejador", tr("Planejador (só leitura)", "Planner (read-only)")],
+      ["implementador", tr("Implementador (escreve)", "Implementer (writes)")],
+      ["orquestrador", tr("Orquestrador (escreve)", "Orchestrator (writes)")],
     ];
     for (const cr of (cfg.callRoles || [])) {
-      addRoleSelect(gEconomy, `Papel de ${cr.agentName} (quando chamado)`, cr.agentId, cr.role || "", roleOptions);
+      addRoleSelect(gEconomy, tr(`Papel de ${cr.agentName} (quando chamado)`, `Role of ${cr.agentName} (when called)`), cr.agentId, cr.role || "", roleOptions);
     }
 
     if (cfg.acpDefaults && cfg.acpDefaults.length > 0) {
-      const gAcp = addGroup("Padrões lembrados (ACP)");
+      const gAcp = addGroup(tr("Padrões lembrados (ACP)", "Remembered defaults (ACP)"));
       for (const d of cfg.acpDefaults) {
         const row = document.createElement("div");
         row.className = "setting-row";
@@ -1244,7 +1327,7 @@
         const clr = document.createElement("button");
         clr.type = "button";
         clr.className = "btn small";
-        clr.textContent = "Limpar";
+        clr.textContent = tr("Limpar", "Clear");
         clr.onclick = async () => {
           await api("/api/settings/clear-acp-defaults", { method: "POST", body: JSON.stringify({ agentId: d.agentId }) });
           showSettingsModal();
@@ -1254,31 +1337,31 @@
       }
     }
 
-    const gDevice = addGroup("Celular & Aparência");
-    addToggle(gDevice, "Manter CPU acordada em sessões", "keepCpuAwake", cfg.keepCpuAwake);
-    addToggle(gDevice, "Manter tela do terminal acesa", "keepScreenOn", cfg.keepScreenOn);
-    addToggle(gDevice, "Barra de teclas extras no terminal", "showExtraKeys", cfg.showExtraKeys);
-    addToggle(gDevice, "Vibrar ao concluir resposta", "hapticOnFinish", cfg.hapticOnFinish);
-    addSelect(gDevice, "Tema do app Android", "appTheme", cfg.appTheme, [
-      ["system", "Sistema"], ["light", "Claro"], ["dark", "Escuro"],
+    const gDevice = addGroup(tr("Celular & Aparência", "Phone & Appearance"));
+    addToggle(gDevice, tr("Manter CPU acordada em sessões", "Keep CPU awake during sessions"), "keepCpuAwake", cfg.keepCpuAwake);
+    addToggle(gDevice, tr("Manter tela do terminal acesa", "Keep terminal screen on"), "keepScreenOn", cfg.keepScreenOn);
+    addToggle(gDevice, tr("Barra de teclas extras no terminal", "Extra keys bar in terminal"), "showExtraKeys", cfg.showExtraKeys);
+    addToggle(gDevice, tr("Vibrar ao concluir resposta", "Vibrate when reply finishes"), "hapticOnFinish", cfg.hapticOnFinish);
+    addSelect(gDevice, tr("Tema do app Android", "Android app theme"), "appTheme", cfg.appTheme, [
+      ["system", tr("Sistema", "System")], ["light", tr("Claro", "Light")], ["dark", tr("Escuro", "Dark")],
     ]);
-    addSelect(gDevice, "Tema do terminal", "terminalTheme", cfg.terminalTheme, [
-      ["default", "Padrão"], ["sea", "Mar à noite"], ["dracula", "Dracula"], ["solarized_dark", "Solarized Dark"], ["solarized_light", "Solarized Light"],
+    addSelect(gDevice, tr("Tema do terminal", "Terminal theme"), "terminalTheme", cfg.terminalTheme, [
+      ["default", tr("Padrão", "Default")], ["sea", tr("Mar à noite", "Night sea")], ["dracula", "Dracula"], ["solarized_dark", "Solarized Dark"], ["solarized_light", "Solarized Light"],
     ]);
-    addSelect(gDevice, "Tamanho do texto do chat", "chatTextScale", cfg.chatTextScale, [
-      [0.85, "Pequeno"], [1, "Normal"], [1.15, "Grande"], [1.3, "Maior"], [1.5, "Enorme"],
+    addSelect(gDevice, tr("Tamanho do texto do chat", "Chat text size"), "chatTextScale", cfg.chatTextScale, [
+      [0.85, tr("Pequeno", "Small")], [1, "Normal"], [1.15, tr("Grande", "Large")], [1.3, tr("Maior", "Larger")], [1.5, tr("Enorme", "Huge")],
     ]);
 
-    const gBackup = addGroup("Backup e Linux");
+    const gBackup = addGroup(tr("Backup e Linux", "Backup & Linux"));
     gBackup.insertAdjacentHTML(
       "beforeend",
-      '<div class="muted small-text">Salve os projetos (e, se quiser, as configurações e logins dos agentes) num .tar.gz para restaurar depois de reinstalar o Linux ou trocar de celular.</div>',
+      `<div class="muted small-text">${tr("Salve os projetos (e, se quiser, as configurações e logins dos agentes) num .tar.gz para restaurar depois de reinstalar o Linux ou trocar de celular.", "Save your projects (and optionally agent settings and logins) in a .tar.gz to restore after reinstalling Linux or switching phones.")}</div>`,
     );
     const backupActions = document.createElement("div");
     backupActions.className = "catalog-actions";
     backupActions.innerHTML = `
-      <button id="web-backup-projects" type="button" class="btn small">Só projetos</button>
-      <button id="web-backup-everything" type="button" class="btn primary small">Tudo</button>
+      <button id="web-backup-projects" type="button" class="btn small">${tr("Só projetos", "Projects only")}</button>
+      <button id="web-backup-everything" type="button" class="btn primary small">${tr("Tudo", "Everything")}</button>
     `;
     gBackup.appendChild(backupActions);
     const backupMsg = document.createElement("div");
@@ -1292,14 +1375,14 @@
     };
     gBackup.insertAdjacentHTML(
       "beforeend",
-      '<div class="muted small-text">"Tudo" inclui configurações e logins dos agentes. Guarde o arquivo em local seguro e não o compartilhe.</div>',
+      `<div class="muted small-text">${tr('"Tudo" inclui configurações e logins dos agentes. Guarde o arquivo em local seguro e não o compartilhe.', '"Everything" includes agent settings and logins. Keep the file in a safe place and do not share it.')}</div>`,
     );
 
     const restoreRow = document.createElement("div");
     restoreRow.className = "inline-form";
     restoreRow.innerHTML = `
       <input id="web-backup-file" class="compact-input" type="file" accept=".gz,.tgz,.tar.gz,application/gzip" />
-      <button id="web-backup-restore" type="button" class="btn small">Restaurar</button>
+      <button id="web-backup-restore" type="button" class="btn small">${tr("Restaurar", "Restore")}</button>
     `;
     gBackup.appendChild(restoreRow);
     const restoreMsg = document.createElement("div");
@@ -1310,15 +1393,15 @@
       const fileInput = restoreRow.querySelector("#web-backup-file");
       const file = fileInput.files && fileInput.files[0];
       if (!file) {
-        restoreMsg.textContent = "Escolha o arquivo .tar.gz do backup.";
+        restoreMsg.textContent = tr("Escolha o arquivo .tar.gz do backup.", "Choose the backup .tar.gz file.");
         return;
       }
-      if (!confirm("Restaurar este backup? Arquivos do backup substituem os arquivos de mesmo nome dentro do Linux. As sessões abertas serão fechadas primeiro.")) {
+      if (!confirm(tr("Restaurar este backup? Arquivos do backup substituem os arquivos de mesmo nome dentro do Linux. As sessões abertas serão fechadas primeiro.", "Restore this backup? Files in the backup replace files with the same name inside Linux. Open sessions will be closed first."))) {
         return;
       }
       const btn = restoreRow.querySelector("#web-backup-restore");
       btn.disabled = true;
-      restoreMsg.textContent = "Restaurando… não feche esta aba.";
+      restoreMsg.textContent = tr("Restaurando… não feche esta aba.", "Restoring… do not close this tab.");
       try {
         // O corpo é o próprio arquivo (sem multipart): o servidor lê em pedaços, sem carregar tudo na memória.
         const r = await api("/api/backup/restore", {
@@ -1328,14 +1411,14 @@
         });
         const data = await r.json().catch(() => ({}));
         if (r.ok && data.ok !== false) {
-          restoreMsg.textContent = "Backup restaurado. Se algum agente aparecer como não instalado, instale de novo pelo catálogo: as configurações e o login voltam.";
+          restoreMsg.textContent = tr("Backup restaurado. Se algum agente aparecer como não instalado, instale de novo pelo catálogo: as configurações e o login voltam.", "Backup restored. If an agent appears as not installed, install it again from the catalog: its settings and login are back.");
         } else {
-          restoreMsg.textContent = `Não foi possível restaurar: ${data.error || "arquivo inválido"}`;
+          restoreMsg.textContent = `${tr("Não foi possível restaurar", "Could not restore")}: ${data.error || tr("arquivo inválido", "invalid file")}`;
         }
       } catch (e) {
         restoreMsg.textContent = e && e.message === "unauthorized"
-          ? "Sessão expirada. Entre de novo pelo PIN e repita a restauração."
-          : "A conexão caiu durante a restauração. Confira no celular se o Linux voltou e, se preciso, reabra o acesso pelo PC.";
+          ? tr("Sessão expirada. Entre de novo pelo PIN e repita a restauração.", "Session expired. Sign in again with the PIN and repeat the restore.")
+          : tr("A conexão caiu durante a restauração. Confira no celular se o Linux voltou e, se preciso, reabra o acesso pelo PC.", "Connection dropped during restore. Check on your phone if Linux is back and reopen computer access if needed.");
       } finally {
         btn.disabled = false;
       }
@@ -1344,8 +1427,8 @@
     const linuxActions = document.createElement("div");
     linuxActions.className = "catalog-actions";
     linuxActions.innerHTML = `
-      <button id="web-linux-repair" type="button" class="btn small">Reparar ferramentas básicas</button>
-      <button id="web-linux-reinstall" type="button" class="btn danger small">Reinstalar Linux</button>
+      <button id="web-linux-repair" type="button" class="btn small">${tr("Reparar ferramentas básicas", "Repair basic tools")}</button>
+      <button id="web-linux-reinstall" type="button" class="btn danger small">${tr("Reinstalar Linux", "Reinstall Linux")}</button>
     `;
     gBackup.appendChild(linuxActions);
     const linuxMsg = document.createElement("div");
@@ -1353,43 +1436,46 @@
     gBackup.appendChild(linuxMsg);
 
     linuxActions.querySelector("#web-linux-repair").onclick = async () => {
-      if (!confirm("Reparar as ferramentas básicas do Linux? Os agentes instalados e os projetos não são apagados.")) return;
-      linuxMsg.textContent = "Abrindo a preparação no celular…";
+      if (!confirm(tr("Reparar as ferramentas básicas do Linux? Os agentes instalados e os projetos não são apagados.", "Repair Linux basic tools? Installed agents and projects are not erased."))) return;
+      linuxMsg.textContent = tr("Abrindo a preparação no celular…", "Opening setup on phone…");
       try {
         const r = await api("/api/linux/repair", { method: "POST", body: "{}" });
         const data = await r.json().catch(() => ({}));
         if (data.ok === false) {
-          linuxMsg.textContent = `Não foi possível iniciar o reparo: ${data.error || "erro desconhecido"}.`;
+          linuxMsg.textContent = `${tr("Não foi possível iniciar o reparo", "Could not start repair")}: ${data.error || tr("erro desconhecido", "unknown error")}.`;
         } else {
-          linuxMsg.textContent = "A tela de preparação abriu no celular. Acompanhe por lá; a conexão com o PC continua.";
+          linuxMsg.textContent = tr("A tela de preparação abriu no celular. Acompanhe por lá; a conexão com o PC continua.", "Setup screen opened on your phone. Follow it there; the PC connection stays active.");
         }
       } catch {
-        linuxMsg.textContent = "Não foi possível iniciar o reparo. Tente de novo pelo celular.";
+        linuxMsg.textContent = tr("Não foi possível iniciar o reparo. Tente de novo pelo celular.", "Could not start repair. Try again on your phone.");
       }
     };
 
     linuxActions.querySelector("#web-linux-reinstall").onclick = async () => {
-      const aviso = "Reinstalar o Linux do zero?\n\nIsso apaga TUDO dentro do Linux do Jangada: agentes instalados, logins, conversas e ~/projetos. A conexão com o PC vai cair.\n\nDepois, toque na preparação no celular e reabra o acesso pelo PC. Os arquivos do celular (~/celular) não são tocados.";
+      const aviso = tr(
+        "Reinstalar o Linux do zero?\n\nIsso apaga TUDO dentro do Linux do Jangada: agentes instalados, logins, conversas e ~/projetos. A conexão com o PC vai cair.\n\nDepois, toque na preparação no celular e reabra o acesso pelo PC. Os arquivos do celular (~/celular) não são tocados.",
+        "Reinstall Linux from scratch?\n\nThis erases EVERYTHING inside Jangada's Linux: installed agents, logins, conversations and ~/projetos. The PC connection will drop.\n\nAfterwards, tap setup on your phone and reopen computer access. Files on your phone (~/celular) are not touched.",
+      );
       if (!confirm(aviso)) return;
-      linuxMsg.textContent = "Apagando o Linux…";
+      linuxMsg.textContent = tr("Apagando o Linux…", "Erasing Linux…");
       try {
         const r = await api("/api/linux/reinstall", { method: "POST", body: "{}" });
         const data = await r.json().catch(() => ({}));
         if (data.ok === false) {
-          linuxMsg.textContent = `Não foi possível reinstalar: ${data.error || "erro desconhecido"}.`;
+          linuxMsg.textContent = `${tr("Não foi possível reinstalar", "Could not reinstall")}: ${data.error || tr("erro desconhecido", "unknown error")}.`;
         } else {
-          linuxMsg.textContent = "Reinstalação iniciada. O Linux será apagado e a conexão com o PC vai cair; depois toque na preparação no celular e reabra o acesso pelo PC.";
+          linuxMsg.textContent = tr("Reinstalação iniciada. O Linux será apagado e a conexão com o PC vai cair; depois toque na preparação no celular e reabra o acesso pelo PC.", "Reinstall started. Linux will be erased and the PC connection will drop; afterwards tap setup on your phone and reopen computer access.");
         }
       } catch {
         // O servidor cai junto com o Linux: a queda de conexão é esperada.
-        linuxMsg.textContent = "A conexão com o celular caiu para apagar o Linux. Toque na preparação no celular para reinstalar; depois reabra o acesso pelo PC.";
+        linuxMsg.textContent = tr("A conexão com o celular caiu para apagar o Linux. Toque na preparação no celular para reinstalar; depois reabra o acesso pelo PC.", "Connection to phone dropped to erase Linux. Tap setup on your phone to reinstall; then reopen computer access.");
       }
     };
 
-    const gSecrets = addGroup("Chaves de API (criptografadas no celular)");
+    const gSecrets = addGroup(tr("Chaves de API (criptografadas no celular)", "API Keys (encrypted on phone)"));
     const names = cfg.secretNames || [];
     if (names.length === 0) {
-      gSecrets.insertAdjacentHTML("beforeend", '<div class="muted small-text">Nenhuma chave salva.</div>');
+      gSecrets.insertAdjacentHTML("beforeend", `<div class="muted small-text">${tr("Nenhuma chave salva.", "No saved keys.")}</div>`);
     } else {
       for (const sName of names) {
         const row = document.createElement("div");
@@ -1398,9 +1484,9 @@
         const del = document.createElement("button");
         del.type = "button";
         del.className = "btn danger small";
-        del.textContent = "Remover";
+        del.textContent = tr("Remover", "Remove");
         del.onclick = async () => {
-          if (!confirm(`Remover a chave "${sName}"?`)) return;
+          if (!confirm(tr(`Remover a chave "${sName}"?`, `Remove key "${sName}"?`))) return;
           await api("/api/secrets/delete", { method: "POST", body: JSON.stringify({ name: sName }) });
           showSettingsModal();
         };
@@ -1411,9 +1497,9 @@
     const secForm = document.createElement("form");
     secForm.className = "inline-form";
     secForm.innerHTML = `
-      <input class="compact-input" type="text" placeholder="NOME_DA_CHAVE (ex: OPENAI_API_KEY)" required />
-      <input class="compact-input" type="password" placeholder="Valor da chave" required />
-      <button type="submit" class="btn primary small">Salvar</button>
+      <input class="compact-input" type="text" placeholder="${tr("NOME_DA_CHAVE (ex: OPENAI_API_KEY)", "KEY_NAME (e.g. OPENAI_API_KEY)")}" required />
+      <input class="compact-input" type="password" placeholder="${tr("Valor da chave", "Key value")}" required />
+      <button type="submit" class="btn primary small">${tr("Salvar", "Save")}</button>
     `;
     secForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -1425,22 +1511,22 @@
       if (r.ok) {
         showSettingsModal();
       } else {
-        statusLine.textContent = "Nome de chave inválido (use MAIÚSCULAS e _).";
+        statusLine.textContent = tr("Nome de chave inválido (use MAIÚSCULAS e _).", "Invalid key name (use UPPERCASE and _).");
       }
     });
     gSecrets.appendChild(secForm);
   }
 
   async function showSystemModal() {
-    openModal("Sistema & Armazenamento", (body) => {
-      body.innerHTML = '<div class="muted">Carregando informações do sistema…</div>';
+    openModal(tr("Sistema & Armazenamento", "System & Storage"), (body) => {
+      body.innerHTML = `<div class="muted">${tr("Carregando informações do sistema…", "Loading system information…")}</div>`;
     });
     try {
       const res = await api("/api/system/info");
       const info = await res.json();
       renderSystemBody(info);
     } catch {
-      modalBody.innerHTML = '<div class="muted">Erro ao carregar informações do sistema.</div>';
+      modalBody.innerHTML = `<div class="muted">${tr("Erro ao carregar informações do sistema.", "Error loading system information.")}</div>`;
     }
   }
 
@@ -1451,10 +1537,10 @@
     const gEnv = document.createElement("div");
     gEnv.className = "settings-group";
     gEnv.innerHTML = `
-      <div class="section-title">Ambiente</div>
-      <div class="setting-row"><span>Linux Debian</span><strong>${info.linuxReady ? "Pronto" : "Não instalado"}</strong></div>
-      <div class="setting-row"><span>Acesso a arquivos do celular</span><strong>${info.hasStorageAccess ? "Liberado" : "Sem permissão"}</strong></div>
-      <div class="setting-row"><span>Versão do app</span><strong>${escapeHtml(info.appVersion || "?")}</strong></div>
+      <div class="section-title">${tr("Ambiente", "Environment")}</div>
+      <div class="setting-row"><span>Linux Debian</span><strong>${info.linuxReady ? tr("Pronto", "Ready") : tr("Não instalado", "Not installed")}</strong></div>
+      <div class="setting-row"><span>${tr("Acesso a arquivos do celular", "Phone file access")}</span><strong>${info.hasStorageAccess ? tr("Liberado", "Granted") : tr("Sem permissão", "Not granted")}</strong></div>
+      <div class="setting-row"><span>${tr("Versão do app", "App version")}</span><strong>${escapeHtml(info.appVersion || "?")}</strong></div>
     `;
     body.appendChild(gEnv);
 
@@ -1467,14 +1553,14 @@
       const gMem = document.createElement("div");
       gMem.className = "settings-group";
       gMem.innerHTML = `
-        <div class="section-title">Memória RAM</div>
+        <div class="section-title">${tr("Memória RAM", "RAM Memory")}</div>
         <div class="mem-bar">
           <div class="mem-seg-agents" style="width:${pAgents}%"></div>
           <div class="mem-seg-other" style="width:${pOther}%"></div>
           <div class="mem-seg-free" style="width:${pFree}%"></div>
         </div>
         <div class="muted small-text">
-          Total: ${formatBytes(total)} · Utilizável: ${formatBytes(mem.usableBytes)} · Outros: ${formatBytes(mem.otherBytes)}
+          Total: ${formatBytes(total)} · ${tr("Utilizável", "Usable")}: ${formatBytes(mem.usableBytes)} · ${tr("Outros", "Other")}: ${formatBytes(mem.otherBytes)}
         </div>
       `;
       body.appendChild(gMem);
@@ -1482,13 +1568,13 @@
 
     const gDisk = document.createElement("div");
     gDisk.className = "settings-group";
-    const diskText = info.disk ? `${formatBytes(info.disk.freeBytes)} livres de ${formatBytes(info.disk.totalBytes)}` : "Indisponível";
+    const diskText = info.disk ? tr(`${formatBytes(info.disk.freeBytes)} livres de ${formatBytes(info.disk.totalBytes)}`, `${formatBytes(info.disk.freeBytes)} free of ${formatBytes(info.disk.totalBytes)}`) : tr("Indisponível", "Unavailable");
     gDisk.innerHTML = `
-      <div class="section-title">Armazenamento & Caches</div>
-      <div class="setting-row"><span>Espaço no celular</span><strong>${diskText}</strong></div>
+      <div class="section-title">${tr("Armazenamento & Caches", "Storage & Caches")}</div>
+      <div class="setting-row"><span>${tr("Espaço no celular", "Phone storage")}</span><strong>${diskText}</strong></div>
       <div class="catalog-actions">
-        <button id="sys-measure-btn" type="button" class="btn small">Analisar espaço do Linux</button>
-        <button id="sys-clean-btn" type="button" class="btn primary small">Limpar caches</button>
+        <button id="sys-measure-btn" type="button" class="btn small">${tr("Analisar espaço do Linux", "Analyze Linux space")}</button>
+        <button id="sys-clean-btn" type="button" class="btn primary small">${tr("Limpar caches", "Clear caches")}</button>
       </div>
       <div id="sys-storage-out" class="muted small-text"></div>
     `;
@@ -1496,33 +1582,33 @@
 
     const storageOut = gDisk.querySelector("#sys-storage-out");
     gDisk.querySelector("#sys-measure-btn").onclick = async () => {
-      storageOut.textContent = "Calculando espaço do Linux…";
+      storageOut.textContent = tr("Calculando espaço do Linux…", "Measuring Linux space…");
       const r = await api("/api/system/storage");
       const d = await r.json();
       if (!d.ok) {
-        storageOut.textContent = "Não foi possível medir.";
+        storageOut.textContent = tr("Não foi possível medir.", "Could not measure space.");
         return;
       }
       storageOut.innerHTML = `
         Total Linux: <strong>${formatBytes(d.linuxBytes)}</strong><br>
-        Projetos: ${formatBytes(d.projectsBytes)} · Conversas: ${formatBytes(d.conversationsBytes)} · Caches: ${formatBytes(d.cachesBytes)} · Sistema: ${formatBytes(d.systemBytes)}
+        ${tr("Projetos", "Projects")}: ${formatBytes(d.projectsBytes)} · ${tr("Conversas", "Conversations")}: ${formatBytes(d.conversationsBytes)} · Caches: ${formatBytes(d.cachesBytes)} · ${tr("Sistema", "System")}: ${formatBytes(d.systemBytes)}
       `;
     };
     gDisk.querySelector("#sys-clean-btn").onclick = async () => {
-      storageOut.textContent = "Limpando caches no celular…";
+      storageOut.textContent = tr("Limpando caches no celular…", "Clearing caches on phone…");
       const r = await api("/api/system/clean-caches", { method: "POST", body: "{}" });
       const d = await r.json();
       storageOut.textContent = d.ok
-        ? `Limpeza concluída: ${formatBytes((d.freedKb || 0) * 1024)} liberados.`
-        : `Não foi possível limpar agora (${d.error || "ocupado"}).`;
+        ? tr(`Limpeza concluída: ${formatBytes((d.freedKb || 0) * 1024)} liberados.`, `Cleanup finished: ${formatBytes((d.freedKb || 0) * 1024)} freed.`)
+        : tr(`Não foi possível limpar agora (${d.error || "ocupado"}).`, `Could not clean right now (${d.error || "busy"}).`);
     };
 
     const gProj = document.createElement("div");
     gProj.className = "settings-group";
-    gProj.innerHTML = `<div class="section-title">Projetos (~/projetos)</div>`;
+    gProj.innerHTML = `<div class="section-title">${tr("Projetos (~/projetos)", "Projects (~/projetos)")}</div>`;
     const projects = info.projects || [];
     if (projects.length === 0) {
-      gProj.insertAdjacentHTML("beforeend", '<div class="muted small-text">Nenhum projeto criado.</div>');
+      gProj.insertAdjacentHTML("beforeend", `<div class="muted small-text">${tr("Nenhum projeto criado.", "No projects created.")}</div>`);
     } else {
       for (const p of projects) {
         const row = document.createElement("div");
@@ -1536,7 +1622,7 @@
           wtBtn.className = "btn small";
           wtBtn.textContent = "Worktree";
           wtBtn.onclick = async () => {
-            const wtName = prompt(`Nome do trabalho isolado para ${p.name}:`);
+            const wtName = prompt(tr(`Nome do trabalho isolado para ${p.name}:`, `Isolated copy name for ${p.name}:`));
             if (!wtName || !wtName.trim()) return;
             const r = await api("/api/projects/worktree", {
               method: "POST",
@@ -1547,7 +1633,7 @@
               await loadMetadata();
               showSystemModal();
             } else {
-              alert(`Não foi possível criar worktree: ${d.output || d.error || "erro"}`);
+              alert(`${tr("Não foi possível criar worktree", "Could not create worktree")}: ${d.output || d.error || tr("erro", "error")}`);
             }
           };
           btns.appendChild(wtBtn);
@@ -1555,9 +1641,9 @@
         const copyBtn = document.createElement("button");
         copyBtn.type = "button";
         copyBtn.className = "btn small";
-        copyBtn.textContent = "Duplicar";
+        copyBtn.textContent = tr("Duplicar", "Duplicate");
         copyBtn.onclick = async () => {
-          const dst = prompt(`Nome da cópia de ${p.name}:`, `${p.name}-copia`);
+          const dst = prompt(tr(`Nome da cópia de ${p.name}:`, `Copy name for ${p.name}:`), `${p.name}-${tr("copia", "copy")}`);
           if (!dst || !dst.trim()) return;
           const r = await api("/api/projects/copy", {
             method: "POST",
@@ -1567,16 +1653,16 @@
           if (d.ok) {
             setTimeout(() => { loadMetadata(); showSystemModal(); }, 2500);
           } else {
-            alert("Não foi possível duplicar agora.");
+            alert(tr("Não foi possível duplicar agora.", "Could not duplicate right now."));
           }
         };
         btns.appendChild(copyBtn);
         const renBtn = document.createElement("button");
         renBtn.type = "button";
         renBtn.className = "btn small";
-        renBtn.textContent = "Renomear";
+        renBtn.textContent = tr("Renomear", "Rename");
         renBtn.onclick = async () => {
-          const next = prompt(`Novo nome para ${p.name}:`, p.name);
+          const next = prompt(tr(`Novo nome para ${p.name}:`, `New name for ${p.name}:`), p.name);
           if (!next || next.trim() === p.name) return;
           const r = await api("/api/projects/rename", {
             method: "POST",
@@ -1587,15 +1673,15 @@
             await loadMetadata();
             showSystemModal();
           } else {
-            alert(`Não foi possível renomear (${d.status || d.error || "erro"}).`);
+            alert(tr(`Não foi possível renomear (${d.status || d.error || "erro"}).`, `Could not rename (${d.status || d.error || "error"}).`));
           }
         };
         const delBtn = document.createElement("button");
         delBtn.type = "button";
         delBtn.className = "btn danger small";
-        delBtn.textContent = "Excluir";
+        delBtn.textContent = tr("Excluir", "Delete");
         delBtn.onclick = async () => {
-          if (!confirm(`Excluir o projeto "${p.name}" e todos os arquivos dele?`)) return;
+          if (!confirm(tr(`Excluir o projeto "${p.name}" e todos os arquivos dele?`, `Delete project "${p.name}" and all its files?`))) return;
           const r = await api("/api/projects/delete", {
             method: "POST",
             body: JSON.stringify({ name: p.name }),
@@ -1605,7 +1691,7 @@
             await loadMetadata();
             showSystemModal();
           } else {
-            alert(`Erro ao excluir: ${d.output || d.error || "falha"}`);
+            alert(`${tr("Erro ao excluir", "Error deleting")}: ${d.output || d.error || tr("falha", "failed")}`);
           }
         };
         btns.appendChild(renBtn);
@@ -1646,7 +1732,7 @@
   function renderChat() {
     const chat = currentChat();
     if (!chat) {
-      chatTitle.textContent = "Nenhum trabalho selecionado";
+      chatTitle.textContent = tr("Nenhum trabalho selecionado", "No job selected");
       chatSubtitle.textContent = "";
       chatTopActions.classList.add("hidden");
       chatQuickbar.classList.add("hidden");
@@ -1657,7 +1743,7 @@
       return;
     }
 
-    chatTitle.textContent = `${chat.agentName} · ${chat.folder || "Raiz (~/projetos)"}`;
+    chatTitle.textContent = `${chat.agentName} · ${chat.folder || tr("Raiz (~/projetos)", "Root (~/projetos)")}`;
     const parts = [chat.state];
     if (chat.model) parts.push(chat.model);
     chatSubtitle.textContent = parts.join(" · ");
@@ -1672,7 +1758,7 @@
     if (opts.length > 0) {
       const modelOpt = opts.find((o) => o.category === "model");
       const effOpt = opts.find((o) => o.category === "thought_level");
-      const mLabel = modelOpt?.choices?.find((c) => c.id === modelOpt.current)?.label || chat.model || "Modelo";
+      const mLabel = modelOpt?.choices?.find((c) => c.id === modelOpt.current)?.label || chat.model || tr("Modelo", "Model");
       const eLabel = effOpt?.choices?.find((c) => c.id === effOpt.current)?.label;
       chipModel.textContent = eLabel ? `${mLabel} · ${eLabel}` : mLabel;
       chipModel.classList.remove("hidden");
@@ -1684,7 +1770,7 @@
     }
 
     if (chat.contextUsage) {
-      chipContext.textContent = `Contexto ${chat.contextUsage.percent}%`;
+      chipContext.textContent = `${tr("Contexto", "Context")} ${chat.contextUsage.percent}%`;
       chipContext.classList.toggle("warn", chat.contextUsage.percent >= 80 || chat.contextUsage.used >= 180000);
       chipContext.classList.remove("hidden");
     } else {
@@ -1758,14 +1844,14 @@
       const detailsKey = `${chat.key}:${item.type}:${item.id || item.requestId || item.index || itemIdx}`;
       if (item.type === "user") {
         card.className = "msg msg-user";
-        const suffix = item.queued ? " · na fila" : item.dropped ? " · descartada" : "";
+        const suffix = item.queued ? tr(" · na fila", " · queued") : item.dropped ? tr(" · descartada", " · dropped") : "";
         const attHtml = item.attachments && item.attachments.length > 0
           ? `<div class="msg-attachments">${item.attachments.map((a) => `<span class="badge">📎 ${escapeHtml(a)}</span>`).join("")}</div>`
           : "";
-        card.innerHTML = `<div class="msg-meta">Você${suffix}</div><div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>${attHtml}`;
+        card.innerHTML = `<div class="msg-meta">${tr("Você", "You")}${suffix}</div><div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>${attHtml}`;
       } else if (item.type === "assistant") {
         card.className = "msg msg-assistant";
-        const badge = item.streaming ? " · escrevendo…" : "";
+        const badge = item.streaming ? tr(" · escrevendo…", " · writing…") : "";
         card.innerHTML = `<div class="msg-meta">${escapeHtml(chat.agentName)}${badge}</div><div class="md">${renderMarkdown(item.text)}</div>`;
       } else if (item.type === "tool") {
         if (item.hiddenByChild) continue;
@@ -1781,11 +1867,11 @@
         card.dataset.detailsKey = groupKey;
         const openAttr = openDetailsKeys.has(groupKey) ? " open" : "";
         const rows = item.tools.map((t) => `<li>[${escapeHtml(t.state)}] ${escapeHtml(t.name)} ${t.summary ? `— ${escapeHtml(t.summary)}` : ""}</li>`).join("");
-        card.innerHTML = `<details${openAttr}><summary>${item.tools.length} ações executadas</summary><ul>${rows}</ul></details>`;
+        card.innerHTML = `<details${openAttr}><summary>${tr(`${item.tools.length} ações executadas`, `${item.tools.length} actions executed`)}</summary><ul>${rows}</ul></details>`;
       } else if (item.type === "permission") {
         card.className = "msg msg-permission";
         card.dataset.permId = String(item.requestId);
-        const header = `<div class="msg-meta">Permissão · ${escapeHtml(item.title)}</div>`;
+        const header = `<div class="msg-meta">${tr("Permissão", "Permission")} · ${escapeHtml(item.title)}</div>`;
         const body = item.markdown
           ? `<div class="md">${renderMarkdown(item.summary)}</div>`
           : `<div><strong>${escapeHtml(item.summary)}</strong></div>`;
@@ -1797,7 +1883,7 @@
           const chosenInfo = document.createElement("div");
           chosenInfo.className = "muted";
           chosenInfo.style.marginTop = "8px";
-          chosenInfo.textContent = `Respondido: ${item.chosen.label || "ok"}`;
+          chosenInfo.textContent = `${tr("Respondido", "Answered")}: ${item.chosen.label || "ok"}`;
           card.appendChild(chosenInfo);
         } else if (item.questions && item.questions.length > 0) {
           const draft = questionDrafts.get(String(item.requestId));
@@ -1807,7 +1893,7 @@
             const savedSet = draft?.checkedByQ?.[qiKey];
             const block = document.createElement("div");
             block.className = "question-block";
-            block.innerHTML = `<div><strong>${escapeHtml(q.header || `Pergunta ${qi + 1}`)}</strong>: ${escapeHtml(q.text)}</div>`;
+            block.innerHTML = `<div><strong>${escapeHtml(q.header || `${tr("Pergunta", "Question")} ${qi + 1}`)}</strong>: ${escapeHtml(q.text)}</div>`;
             const optsDiv = document.createElement("div");
             optsDiv.className = "question-opts";
             (q.options || []).forEach((qo) => {
@@ -1828,7 +1914,7 @@
             const other = document.createElement("input");
             other.type = "text";
             other.className = "question-other";
-            other.placeholder = "Outra resposta (opcional)";
+            other.placeholder = tr("Outra resposta (opcional)", "Other answer (optional)");
             other.dataset.qi = qiKey;
             if (draft?.otherByQ?.[qiKey]) other.value = draft.otherByQ[qiKey];
             block.appendChild(optsDiv);
@@ -1843,7 +1929,7 @@
           sendQ.type = "button";
           sendQ.className = "btn primary small";
           sendQ.style.marginTop = "10px";
-          sendQ.textContent = "Enviar respostas";
+          sendQ.textContent = tr("Enviar respostas", "Send answers");
           sendQ.onclick = async () => {
             const answers = {};
             let missing = false;
@@ -1855,7 +1941,7 @@
               answers[q.text] = checked.join(", ");
             });
             if (missing) {
-              qErr.textContent = "Responda todas as perguntas antes de enviar.";
+              qErr.textContent = tr("Responda todas as perguntas antes de enviar.", "Answer all questions before sending.");
               qErr.classList.remove("hidden");
               return;
             }
@@ -1888,25 +1974,25 @@
       } else if (item.type === "plan") {
         card.className = "msg msg-plan";
         const rows = (item.entries || []).map((e) => `<li>[${escapeHtml(e.status)}] ${escapeHtml(e.text)}</li>`).join("");
-        card.innerHTML = `<div class="msg-meta">Plano</div><ul>${rows}</ul>`;
+        card.innerHTML = `<div class="msg-meta">${tr("Plano", "Plan")}</div><ul>${rows}</ul>`;
       } else if (item.type === "thinking") {
         card.className = "msg msg-thinking";
         card.dataset.detailsKey = detailsKey;
         const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
-        card.innerHTML = `<details${openAttr}><summary>Raciocínio</summary><div class="md" style="margin-top:6px">${renderMarkdown(item.text)}</div></details>`;
+        card.innerHTML = `<details${openAttr}><summary>${tr("Raciocínio", "Thinking")}</summary><div class="md" style="margin-top:6px">${renderMarkdown(item.text)}</div></details>`;
       } else if (item.type === "child") {
         card.className = "msg msg-child";
         card.dataset.detailsKey = detailsKey;
         const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
-        card.innerHTML = `<details${openAttr}><summary>Subagente ${escapeHtml(item.agent || item.title)} [${escapeHtml(item.state)}]</summary><div class="muted">${escapeHtml(item.description || "")}</div>${item.result ? `<div class="md" style="margin-top:6px">${renderMarkdown(item.result)}</div>` : ""}</details>`;
+        card.innerHTML = `<details${openAttr}><summary>${tr("Subagente", "Subagent")} ${escapeHtml(item.agent || item.title)} [${escapeHtml(item.state)}]</summary><div class="muted">${escapeHtml(item.description || "")}</div>${item.result ? `<div class="md" style="margin-top:6px">${renderMarkdown(item.result)}</div>` : ""}</details>`;
       } else if (item.type === "login") {
         card.className = "msg msg-info";
-        card.innerHTML = `<strong>Login necessário</strong><div class="muted">Conclua o login deste agente diretamente no celular.</div>`;
+        card.innerHTML = `<strong>${tr("Login necessário", "Sign-in required")}</strong><div class="muted">${tr("Conclua o login deste agente diretamente no celular.", "Complete sign-in for this agent directly on your phone.")}</div>`;
       } else if (item.type === "info") {
         card.className = `msg msg-info ${item.isError ? "error" : ""}`;
         card.dataset.detailsKey = detailsKey;
         const openAttr = openDetailsKeys.has(detailsKey) ? " open" : "";
-        card.innerHTML = `<div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>${item.details ? `<details style="margin-top:6px"${openAttr}><summary>Detalhes</summary><pre class="tool-output">${escapeHtml(item.details)}</pre></details>` : ""}`;
+        card.innerHTML = `<div>${escapeHtml(item.text).replace(/\n/g, "<br>")}</div>${item.details ? `<details style="margin-top:6px"${openAttr}><summary>${tr("Detalhes", "Details")}</summary><pre class="tool-output">${escapeHtml(item.details)}</pre></details>` : ""}`;
       } else {
         continue;
       }
@@ -1917,8 +2003,8 @@
       btn.onclick = async () => {
         const code = btn.closest(".code-wrap").querySelector("pre").textContent;
         const ok = await copyToClipboard(code);
-        btn.textContent = ok ? "Copiado!" : "Falhou";
-        setTimeout(() => { btn.textContent = "Copiar"; }, 1200);
+        btn.textContent = ok ? tr("Copiado!", "Copied!") : tr("Falhou", "Failed");
+        setTimeout(() => { btn.textContent = tr("Copiar", "Copy"); }, 1200);
       };
     });
 
@@ -1975,11 +2061,11 @@
    */
   async function startNewConversation(chat) {
     if (chat.busy) {
-      alert("O agente ainda está respondendo. Espere o turno terminar para começar uma conversa nova.");
+      alert(tr("O agente ainda está respondendo. Espere o turno terminar para começar uma conversa nova.", "The agent is still replying. Wait for the turn to finish before starting a new conversation."));
       return false;
     }
     if (chat.running && (chat.background || []).length > 0) {
-      alert("O agente ainda tem uma tarefa em segundo plano. Espere terminar para começar uma conversa nova.");
+      alert(tr("O agente ainda tem uma tarefa em segundo plano. Espere terminar para começar uma conversa nova.", "The agent still has a background task running. Wait for it to finish before starting a new conversation."));
       return false;
     }
     const res = await api("/api/chats/open", {
@@ -1993,11 +2079,11 @@
       return true;
     }
     if (data.error === "max_chats_reached") {
-      alert("Não há memória para abrir outro agente agora. Feche um trabalho ou ponha outro para dormir.");
+      alert(tr("Não há memória para abrir outro agente agora. Feche um trabalho ou ponha outro para dormir.", "Not enough memory to open another agent right now. Close a job or put another one to sleep."));
     } else if (data.error === "linux_not_ready") {
-      alert("O Linux ainda não está pronto.");
+      alert(tr("O Linux ainda não está pronto.", "Linux is not ready yet."));
     } else {
-      alert("Não foi possível começar uma conversa nova.");
+      alert(tr("Não foi possível começar uma conversa nova.", "Could not start a new conversation."));
     }
     return false;
   }
@@ -2005,11 +2091,11 @@
   /** Abre e recarrega o histórico do chat atual (o /resume do app). */
   function showHistoryFor(chat) {
     if (!chat.supportsHistory) {
-      alert(`O ${chat.agentName} não compartilha as conversas anteriores com o app.`);
+      alert(tr(`O ${chat.agentName} não compartilha as conversas anteriores com o app.`, `${chat.agentName} does not share earlier conversations with the app.`));
       return;
     }
     if (chat.agentId !== "claude-code" && !chat.running) {
-      alert(`${chat.agentName} não está rodando. Mande uma mensagem para acordar e use /resume de novo.`);
+      alert(tr(`${chat.agentName} não está rodando. Mande uma mensagem para acordar e use /resume de novo.`, `${chat.agentName} is not running. Send a message to wake it up and use /resume again.`));
       return;
     }
     historySection.classList.remove("hidden");
@@ -2123,7 +2209,7 @@
     try {
       const res = await fetch("/api/state", { credentials: "same-origin" });
       if (res.status === 401) {
-        showAuth(params.get("error") === "invalid" ? "PIN inválido." : null);
+        showAuth(params.get("error") === "invalid" ? tr("PIN inválido.", "Invalid PIN.") : null);
         return;
       }
       snapshot = await res.json();
@@ -2152,9 +2238,9 @@
     }
     const data = await res.json().catch(() => ({}));
     if (res.status === 429) {
-      showAuth(`Muitas tentativas. Aguarde ${data.retryAfter || 30}s.`);
+      showAuth(tr(`Muitas tentativas. Aguarde ${data.retryAfter || 30}s.`, `Too many attempts. Wait ${data.retryAfter || 30}s.`));
     } else {
-      showAuth("PIN inválido. Confira o código no celular.");
+      showAuth(tr("PIN inválido. Confira o código no celular.", "Invalid PIN. Check the code on your phone."));
     }
   });
 
@@ -2229,18 +2315,21 @@
     const sumData = await sumRes.json();
     const agData = await agRes.json();
     const others = (agData.agents || []).filter((a) => a.id !== chat.agentId);
-    openModal("Continuar com outro agente", (body) => {
+    openModal(tr("Continuar com outro agente", "Continue with another agent"), (body) => {
       if (!sumData.ok) {
-        body.innerHTML = '<div class="muted">Não foi possível resumir a conversa.</div>';
+        body.innerHTML = `<div class="muted">${tr("Não foi possível resumir a conversa.", "Could not summarize the conversation.")}</div>`;
         return;
       }
       if (others.length === 0) {
-        body.innerHTML = '<div class="muted">Instale outro agente para passar a conversa.</div>';
+        body.innerHTML = `<div class="muted">${tr("Instale outro agente para passar a conversa.", "Install another agent to hand off the conversation.")}</div>`;
         return;
       }
       const note = document.createElement("div");
       note.className = "muted small-text";
-      note.textContent = "Escolha o agente de destino. O resumo será colocado na caixa de mensagem para você revisar antes de enviar:";
+      note.textContent = tr(
+        "Escolha o agente de destino. O resumo será colocado na caixa de mensagem para você revisar antes de enviar:",
+        "Choose the target agent. The summary will be placed in the message box for you to review before sending:",
+      );
       body.appendChild(note);
       if (sumData.secretWarning) {
         const warn = document.createElement("div");
@@ -2315,7 +2404,7 @@
     e.preventDefault();
     const name = newProjectName.value.trim();
     if (!name) return;
-    projectToolsMsg.textContent = "Criando projeto…";
+    projectToolsMsg.textContent = tr("Criando projeto…", "Creating project…");
     const res = await api("/api/projects/create", {
       method: "POST",
       body: JSON.stringify({ name, gitInit: newProjectGit.checked }),
@@ -2323,11 +2412,11 @@
     const data = await res.json();
     if (data.ok) {
       newProjectName.value = "";
-      projectToolsMsg.textContent = `Projeto ${data.folder} criado.`;
+      projectToolsMsg.textContent = tr(`Projeto ${data.folder} criado.`, `Project ${data.folder} created.`);
       await loadMetadata();
       projectSelect.value = data.folder;
     } else {
-      projectToolsMsg.textContent = `Erro: ${data.error || "falha ao criar"}`;
+      projectToolsMsg.textContent = `${tr("Erro", "Error")}: ${data.error || tr("falha ao criar", "failed to create")}`;
     }
   });
 
@@ -2336,7 +2425,7 @@
     const url = cloneUrl.value.trim();
     const folder = cloneFolder.value.trim();
     if (!url) return;
-    projectToolsMsg.textContent = "Iniciando clone no celular…";
+    projectToolsMsg.textContent = tr("Iniciando clone no celular…", "Starting clone on phone…");
     const res = await api("/api/projects/clone", {
       method: "POST",
       body: JSON.stringify({ url, folder }),
@@ -2345,10 +2434,10 @@
     if (data.ok) {
       cloneUrl.value = "";
       cloneFolder.value = "";
-      projectToolsMsg.textContent = `Clonando em ${data.folder}…`;
+      projectToolsMsg.textContent = tr(`Clonando em ${data.folder}…`, `Cloning into ${data.folder}…`);
       setTimeout(() => loadMetadata(), 4000);
     } else {
-      projectToolsMsg.textContent = `Erro: ${data.error || "URL ou pasta inválida"}`;
+      projectToolsMsg.textContent = `${tr("Erro", "Error")}: ${data.error || tr("URL ou pasta inválida", "invalid URL or folder")}`;
     }
   });
 
@@ -2471,13 +2560,13 @@
     e.preventDefault();
     const message = gitCommitMsg.value.trim();
     if (!message) return;
-    showGitOutput("Commitando…");
+    showGitOutput(tr("Commitando…", "Committing…"));
     const res = await api("/api/git/commit", {
       method: "POST",
       body: JSON.stringify({ folder: currentGitFolder(), message }),
     });
     const data = await res.json();
-    showGitOutput(data.output || (data.ok ? "Commit realizado." : "Falha no commit."));
+    showGitOutput(data.output || (data.ok ? tr("Commit realizado.", "Commit completed.") : tr("Falha no commit.", "Commit failed.")));
     if (data.ok) {
       gitCommitMsg.value = "";
       refreshGitStatus();
@@ -2485,13 +2574,13 @@
   });
 
   async function runGitSync(action) {
-    showGitOutput(`Executando git ${action}…`);
+    showGitOutput(tr(`Executando git ${action}…`, `Running git ${action}…`));
     const res = await api("/api/git/sync", {
       method: "POST",
       body: JSON.stringify({ folder: currentGitFolder(), action }),
     });
     const data = await res.json();
-    showGitOutput(data.output || (data.ok ? `git ${action} concluído.` : `Falha em git ${action}.`));
+    showGitOutput(data.output || (data.ok ? tr(`git ${action} concluído.`, `git ${action} completed.`) : tr(`Falha em git ${action}.`, `git ${action} failed.`)));
     if (action === "pull" && data.ok) refreshGitStatus();
   }
 

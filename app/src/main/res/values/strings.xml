@@ -1155,4 +1155,10 @@
     <string name="lan_address_label">Address</string>
     <string name="lan_security_note">Use only on trusted Wi-Fi networks.</string>
     <string name="lan_shortcut_desc">Computer access</string>
+    <string name="lan_model_label">Model</string>
+    <string name="lan_effort_label">Effort</string>
+    <string name="lan_default_label">Default</string>
+    <string name="lan_root_slug">root</string>
+    <string name="lan_error_linux_not_ready">Linux is not ready.</string>
+    <string name="lan_error_close_timeout">Timed out closing sessions</string>
 </resources>

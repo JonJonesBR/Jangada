@@ -17,10 +17,10 @@
         </svg>
         <div>
           <h1>Jangada</h1>
-          <div class="muted small-text">Seus agentes de IA, no computador</div>
+          <div class="muted small-text" data-i18n="auth_subtitle">Seus agentes de IA, no computador</div>
         </div>
       </div>
-      <p class="muted">Digite o PIN de 6 dígitos exibido no celular para conectar pela rede local.</p>
+      <p class="muted" data-i18n="auth_prompt">Digite o PIN de 6 dígitos exibido no celular para conectar pela rede local.</p>
       <input
         id="pin-input"
         type="password"
@@ -32,7 +32,7 @@
         required
       />
       <div id="auth-error" class="auth-error hidden"></div>
-      <button type="submit" class="btn primary full">Conectar</button>
+      <button type="submit" class="btn primary full" data-i18n="auth_connect">Conectar</button>
     </form>
   </div>
 
@@ -47,110 +47,110 @@
           </svg>
           <div>
             <strong>Jangada</strong>
-            <div class="conn-sub"><span class="brand-dot"></span> Conectado</div>
+            <div class="conn-sub"><span class="brand-dot"></span> <span data-i18n="connected">Conectado</span></div>
           </div>
         </div>
-        <button id="logout-btn" class="btn ghost small" type="button" title="Sair">Sair</button>
+        <button id="logout-btn" class="btn ghost small" type="button" title="Sair" data-i18n="logout" data-i18n-title="logout">Sair</button>
       </div>
 
       <div class="sidebar-nav">
-        <button id="catalog-btn" class="btn small" type="button">Agentes</button>
-        <button id="system-btn" class="btn small" type="button">Sistema</button>
-        <button id="settings-btn" class="btn small" type="button">Configurações</button>
+        <button id="catalog-btn" class="btn small" type="button" data-i18n="nav_agents">Agentes</button>
+        <button id="system-btn" class="btn small" type="button" data-i18n="nav_system">Sistema</button>
+        <button id="settings-btn" class="btn small" type="button" data-i18n="nav_settings">Configurações</button>
       </div>
 
       <section class="sidebar-section">
-        <div class="section-title">Trabalhos ativos</div>
+        <div class="section-title" data-i18n="active_jobs">Trabalhos ativos</div>
         <div id="chats-list" class="list-stack"></div>
       </section>
 
       <section class="sidebar-section">
         <div class="section-title-row">
-          <span class="section-title">Novo trabalho</span>
-          <button id="toggle-project-tools" class="btn ghost tiny" type="button">+ Projeto</button>
+          <span class="section-title" data-i18n="new_job">Novo trabalho</span>
+          <button id="toggle-project-tools" class="btn ghost tiny" type="button" data-i18n="add_project">+ Projeto</button>
         </div>
         <div id="project-tools" class="project-tools hidden">
           <form id="create-project-form" class="new-chat-form">
-            <input id="new-project-name" class="compact-input" type="text" placeholder="Nome do novo projeto" required />
+            <input id="new-project-name" class="compact-input" type="text" placeholder="Nome do novo projeto" data-i18n-placeholder="new_project_placeholder" required />
             <label class="toggle-chip"><input id="new-project-git" type="checkbox" checked /><span>git init</span></label>
-            <button type="submit" class="btn small">Criar pasta</button>
+            <button type="submit" class="btn small" data-i18n="create_folder">Criar pasta</button>
           </form>
           <form id="clone-project-form" class="new-chat-form">
-            <input id="clone-url" class="compact-input" type="url" placeholder="URL do repositório (https://...)" required />
-            <input id="clone-folder" class="compact-input" type="text" placeholder="Nome da pasta (opcional)" />
-            <button type="submit" class="btn small">Clonar repositório</button>
+            <input id="clone-url" class="compact-input" type="url" placeholder="URL do repositório (https://...)" data-i18n-placeholder="clone_url_placeholder" required />
+            <input id="clone-folder" class="compact-input" type="text" placeholder="Nome da pasta (opcional)" data-i18n-placeholder="clone_folder_placeholder" />
+            <button type="submit" class="btn small" data-i18n="clone_repo">Clonar repositório</button>
           </form>
           <div id="project-tools-msg" class="muted"></div>
         </div>
         <form id="new-chat-form" class="new-chat-form">
-          <label class="field-label" for="agent-select">Agente</label>
+          <label class="field-label" for="agent-select" data-i18n="agent_label">Agente</label>
           <select id="agent-select"></select>
-          <label class="field-label" for="project-select">Projeto</label>
+          <label class="field-label" for="project-select" data-i18n="project_label">Projeto</label>
           <select id="project-select"></select>
-          <button type="submit" class="btn primary full">Abrir conversa</button>
+          <button type="submit" class="btn primary full" data-i18n="open_conversation">Abrir conversa</button>
         </form>
       </section>
 
       <section id="history-section" class="sidebar-section hidden">
         <div class="section-title-row">
-          <span class="section-title">Histórico</span>
-          <button id="refresh-history-btn" class="btn ghost tiny" type="button">Atualizar</button>
+          <span class="section-title" data-i18n="history_title">Histórico</span>
+          <button id="refresh-history-btn" class="btn ghost tiny" type="button" data-i18n="refresh">Atualizar</button>
         </div>
-        <input id="history-search" class="compact-input" type="search" placeholder="Buscar conversas…" />
+        <input id="history-search" class="compact-input" type="search" placeholder="Buscar conversas…" data-i18n-placeholder="history_search_placeholder" />
         <div id="history-list" class="list-stack"></div>
       </section>
 
       <section class="sidebar-section">
         <div class="section-title-row">
-          <span class="section-title">Terminais</span>
-          <button id="new-terminal-btn" class="btn ghost tiny" type="button">+ Terminal</button>
+          <span class="section-title" data-i18n="terminals_title">Terminais</span>
+          <button id="new-terminal-btn" class="btn ghost tiny" type="button" data-i18n="add_terminal">+ Terminal</button>
         </div>
         <div id="terminals-list" class="list-stack"></div>
       </section>
     </aside>
 
     <main class="chat-main">
-      <div id="conn-banner" class="conn-banner hidden">Reconectando ao celular…</div>
+      <div id="conn-banner" class="conn-banner hidden" data-i18n="reconnecting">Reconectando ao celular…</div>
 
       <header id="chat-header" class="chat-header">
         <div class="header-top-row">
           <div class="header-left">
             <button id="menu-toggle" class="btn ghost small mobile-only" type="button">☰</button>
             <div>
-              <div id="chat-title" class="chat-title">Nenhum trabalho selecionado</div>
+              <div id="chat-title" class="chat-title" data-i18n="no_job_selected">Nenhum trabalho selecionado</div>
               <div id="chat-subtitle" class="chat-subtitle muted"></div>
             </div>
           </div>
           <div id="chat-top-actions" class="header-controls hidden">
-            <button id="new-conv-btn" class="btn small" type="button" title="Iniciar nova conversa nesta pasta">+ Nova</button>
-            <button id="open-term-btn" class="btn small" type="button" title="Abrir terminal nesta pasta">&gt;_ Terminal</button>
-            <button id="git-toggle-btn" class="btn small" type="button">Mudanças</button>
-            <button id="export-chat-btn" class="btn small" type="button" title="Exportar conversa em Markdown">Exportar</button>
-            <button id="handoff-btn" class="btn small" type="button" title="Continuar esta conversa com outro agente">Passar</button>
-            <button id="stop-btn" class="btn danger small hidden" type="button">Parar</button>
+            <button id="new-conv-btn" class="btn small" type="button" title="Iniciar nova conversa nesta pasta" data-i18n="new_conv_short" data-i18n-title="new_conv_title">+ Nova</button>
+            <button id="open-term-btn" class="btn small" type="button" title="Abrir terminal nesta pasta" data-i18n="open_term_short" data-i18n-title="open_term_title">&gt;_ Terminal</button>
+            <button id="git-toggle-btn" class="btn small" type="button" data-i18n="changes">Mudanças</button>
+            <button id="export-chat-btn" class="btn small" type="button" title="Exportar conversa em Markdown" data-i18n="export_short" data-i18n-title="export_title">Exportar</button>
+            <button id="handoff-btn" class="btn small" type="button" title="Continuar esta conversa com outro agente" data-i18n="handoff_short" data-i18n-title="handoff_title">Passar</button>
+            <button id="stop-btn" class="btn danger small hidden" type="button" data-i18n="stop">Parar</button>
           </div>
         </div>
 
         <div id="chat-quickbar" class="quickbar hidden">
-          <button id="chip-model" class="chip-btn hidden" type="button" title="Modelo e nível de raciocínio"></button>
-          <select id="mode-select" class="chip-select hidden" title="Modo de permissão"></select>
-          <label class="chip-toggle" title="Aprovar automaticamente pedidos de permissão nesta conversa">
+          <button id="chip-model" class="chip-btn hidden" type="button" title="Modelo e nível de raciocínio" data-i18n-title="chip_model_title"></button>
+          <select id="mode-select" class="chip-select hidden" title="Modo de permissão" data-i18n-title="mode_select_title"></select>
+          <label class="chip-toggle" title="Aprovar automaticamente pedidos de permissão nesta conversa" data-i18n-title="auto_approve_title">
             <input id="auto-approve-toggle" type="checkbox" />
-            <span>Aprovar tudo</span>
+            <span data-i18n="auto_approve">Aprovar tudo</span>
           </label>
-          <select id="view-select" class="chip-select" title="Modo de visualização">
-            <option value="detailed">Detalhado</option>
-            <option value="normal" selected>Normal</option>
-            <option value="summary">Resumo</option>
+          <select id="view-select" class="chip-select" title="Modo de visualização" data-i18n-title="view_select_title">
+            <option value="detailed" data-i18n="view_detailed">Detalhado</option>
+            <option value="normal" selected data-i18n="view_normal">Normal</option>
+            <option value="summary" data-i18n="view_summary">Resumo</option>
           </select>
-          <button id="chip-context" class="chip-btn hidden" type="button" title="Uso da janela de contexto"></button>
-          <button id="chip-limits" class="chip-btn hidden" type="button" title="Limites e quota do plano"></button>
+          <button id="chip-context" class="chip-btn hidden" type="button" title="Uso da janela de contexto" data-i18n-title="chip_context_title"></button>
+          <button id="chip-limits" class="chip-btn hidden" type="button" title="Limites e quota do plano" data-i18n-title="chip_limits_title"></button>
         </div>
       </header>
 
       <div id="messages" class="messages">
         <div id="empty-state" class="empty-state">
-          <p>Selecione um trabalho ativo na barra lateral ou abra uma nova conversa.</p>
+          <p data-i18n="empty_state">Selecione um trabalho ativo na barra lateral ou abra uma nova conversa.</p>
         </div>
       </div>
 
@@ -161,27 +161,28 @@
         <div id="pending-attachments" class="pending-attachments hidden"></div>
         <form id="composer" class="composer">
           <input id="file-input" type="file" multiple class="hidden" />
-          <button id="attach-btn" class="btn ghost small" type="button" title="Anexar arquivo ou imagem">📎</button>
+          <button id="attach-btn" class="btn ghost small" type="button" title="Anexar arquivo ou imagem" data-i18n-title="attach_title">📎</button>
           <textarea
             id="message-input"
             rows="1"
             placeholder="Escreva uma mensagem, digite / para comandos ou cole um print (Ctrl+V)…"
+            data-i18n-placeholder="composer_placeholder"
           ></textarea>
-          <button id="send-btn" class="btn primary" type="submit">Enviar</button>
+          <button id="send-btn" class="btn primary" type="submit" data-i18n="send">Enviar</button>
         </form>
       </div>
 
       <section id="git-panel" class="git-panel hidden">
         <div class="git-bar">
           <div class="git-bar-left">
-            <strong>Mudanças (Git)</strong>
+            <strong data-i18n="git_changes_title">Mudanças (Git)</strong>
             <span id="git-branch" class="badge"></span>
           </div>
           <div class="git-bar-actions">
-            <button id="git-refresh-btn" class="btn small" type="button">Atualizar</button>
+            <button id="git-refresh-btn" class="btn small" type="button" data-i18n="refresh">Atualizar</button>
             <button id="git-pull-btn" class="btn small" type="button">Pull</button>
             <button id="git-push-btn" class="btn small" type="button">Push</button>
-            <button id="git-back-btn" class="btn ghost small" type="button">Voltar ao chat</button>
+            <button id="git-back-btn" class="btn ghost small" type="button" data-i18n="back_to_chat">Voltar ao chat</button>
           </div>
         </div>
         <div class="git-body">
@@ -189,8 +190,8 @@
           <div id="git-diff-view" class="git-diff-view"></div>
         </div>
         <form id="git-commit-form" class="git-commit-bar">
-          <input id="git-commit-msg" type="text" placeholder="Mensagem do commit…" required />
-          <button type="submit" class="btn primary small">Commitar tudo</button>
+          <input id="git-commit-msg" type="text" placeholder="Mensagem do commit…" data-i18n-placeholder="commit_msg_placeholder" required />
+          <button type="submit" class="btn primary small" data-i18n="commit_all">Commitar tudo</button>
         </form>
         <pre id="git-output" class="git-output hidden"></pre>
       </section>
@@ -208,14 +209,14 @@
             <button type="button" class="btn small term-key-btn" data-key="esc">Esc</button>
             <button type="button" class="btn small term-key-btn" data-key="up">↑</button>
             <button type="button" class="btn small term-key-btn" data-key="down">↓</button>
-            <button id="term-close-btn" class="btn danger small" type="button">Encerrar</button>
-            <button id="term-back-btn" class="btn ghost small" type="button">Voltar ao chat</button>
+            <button id="term-close-btn" class="btn danger small" type="button" data-i18n="term_close">Encerrar</button>
+            <button id="term-back-btn" class="btn ghost small" type="button" data-i18n="back_to_chat">Voltar ao chat</button>
           </div>
         </div>
         <pre id="term-screen" class="term-screen" tabindex="0"></pre>
         <form id="term-input-form" class="git-commit-bar">
-          <input id="term-cmd-input" type="text" placeholder="Digite um comando e pressione Enter (ou clique na tela acima para digitar direto)…" />
-          <button type="submit" class="btn primary small">Enviar</button>
+          <input id="term-cmd-input" type="text" placeholder="Digite um comando e pressione Enter (ou clique na tela acima para digitar direto)…" data-i18n-placeholder="term_cmd_placeholder" />
+          <button type="submit" class="btn primary small" data-i18n="send">Enviar</button>
         </form>
       </section>
     </main>

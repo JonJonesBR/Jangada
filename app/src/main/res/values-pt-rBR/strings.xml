@@ -1151,4 +1151,10 @@
     <string name="lan_address_label">Endereço</string>
     <string name="lan_security_note">Use apenas em redes Wi-Fi confiáveis.</string>
     <string name="lan_shortcut_desc">Acesso pelo computador</string>
+    <string name="lan_model_label">Modelo</string>
+    <string name="lan_effort_label">Esforço</string>
+    <string name="lan_default_label">Padrão</string>
+    <string name="lan_root_slug">raiz</string>
+    <string name="lan_error_linux_not_ready">Linux não está pronto.</string>
+    <string name="lan_error_close_timeout">tempo esgotado ao fechar as sessões</string>
 </resources>

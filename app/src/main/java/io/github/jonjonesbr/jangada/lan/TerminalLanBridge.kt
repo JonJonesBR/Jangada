@@ -76,23 +76,28 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
         is ChatEngine -> listOf(
             LanJson.ConfigOptionDto(
                 id = "claude_model",
-                name = "Modelo",
+                name = service.getString(R.string.lan_model_label),
                 category = "model",
                 current = settings.chatModel,
-                choices = listOf("" to "Padrão", "opus" to "Opus", "sonnet" to "Sonnet", "haiku" to "Haiku"),
+                choices = listOf(
+                    "" to service.getString(R.string.lan_default_label),
+                    "opus" to "Opus",
+                    "sonnet" to "Sonnet",
+                    "haiku" to "Haiku",
+                ),
             ),
             LanJson.ConfigOptionDto(
                 id = "claude_effort",
-                name = "Esforço",
+                name = service.getString(R.string.lan_effort_label),
                 category = "thought_level",
                 current = settings.chatEffort,
                 choices = listOf(
-                    "" to "Padrão",
-                    "low" to "Baixo",
-                    "medium" to "Médio",
-                    "high" to "Alto",
-                    "xhigh" to "Muito alto",
-                    "max" to "Máximo",
+                    "" to service.getString(R.string.lan_default_label),
+                    "low" to service.getString(R.string.effort_low),
+                    "medium" to service.getString(R.string.effort_medium),
+                    "high" to service.getString(R.string.effort_high),
+                    "xhigh" to service.getString(R.string.effort_xhigh),
+                    "max" to service.getString(R.string.effort_max),
                 ),
             ),
         )
@@ -524,7 +529,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
             main.post { service.closeEverything(keepLanServer = true) { closed.countDown() } }
             // Pior caso interno: ~5 s por chat/worker + 60 s do cacheCleaner e 60 s do legacyCleanup.
             if (!closed.await(150, TimeUnit.SECONDS)) {
-                return JSONObject().put("ok", false).put("error", "tempo esgotado ao fechar as sessões")
+                return JSONObject().put("ok", false).put("error", service.getString(R.string.lan_error_close_timeout))
             }
             Backup.readArchive(service, input)
             return JSONObject().put("ok", true)
@@ -649,7 +654,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     override fun gitCommit(folder: String, message: String): JSONObject {
         val (linux, cwd) = gitCwd(folder) ?: return JSONObject()
             .put("ok", false)
-            .put("output", "Linux não está pronto.")
+            .put("output", service.getString(R.string.lan_error_linux_not_ready))
             .put("identityMissing", false)
         val addRes = Git.run(linux, cwd, "add", "-A")
         if (addRes.code != 0) {
@@ -668,7 +673,7 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     override fun gitSync(folder: String, action: String): JSONObject {
         val (linux, cwd) = gitCwd(folder) ?: return JSONObject()
             .put("ok", false)
-            .put("output", "Linux não está pronto.")
+            .put("output", service.getString(R.string.lan_error_linux_not_ready))
         val res = Git.run(linux, cwd, *Projects.SAFE_NETWORK, action)
         return JSONObject()
             .put("ok", res.code == 0)
@@ -1027,9 +1032,9 @@ class TerminalLanBridge(private val service: TerminalService) : LanBridge {
     override fun exportChat(key: String): Pair<String, String>? = onMain {
         val slot = service.chats[key] ?: return@onMain null
         val agentName = agentNames[slot.agentId] ?: slot.agentId
-        val folderName = slot.folder.ifEmpty { "raiz" }
+        val folderName = slot.folder.ifEmpty { service.getString(R.string.lan_root_slug) }
         val title = "$agentName · $folderName"
-        val md = ChatExport.markdown(title, slot.chat.items.toList(), "Você", agentName)
+        val md = ChatExport.markdown(title, slot.chat.items.toList(), service.getString(R.string.chat_export_you), agentName)
         "jangada-${slot.agentId}-$folderName.md" to md
     }
 
