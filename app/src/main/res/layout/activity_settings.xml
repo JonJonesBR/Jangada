@@ -448,6 +448,46 @@
                 style="@style/SettingsOption"
                 android:text="@string/settings_cpu_awake" />
 
+            <!-- Economia de bateria/Doze do Android: trabalhos longos podem ser interrompidos com a tela apagada. -->
+            <LinearLayout
+                android:id="@+id/settings_battery_card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/card_bg"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_battery_title"
+                    android:textColor="@color/setup_text"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:lineSpacingMultiplier="1.15"
+                    android:text="@string/settings_battery_desc"
+                    android:textColor="@color/setup_muted_text"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/settings_battery_open"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:minHeight="48dp"
+                    android:text="@string/settings_battery_open"
+                    android:textAllCaps="false"
+                    android:textColor="@color/accent_text" />
+            </LinearLayout>
+
             <Switch
                 android:id="@+id/settings_screen_on"
                 style="@style/SettingsOption"

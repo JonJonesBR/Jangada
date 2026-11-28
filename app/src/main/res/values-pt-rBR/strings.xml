@@ -470,6 +470,9 @@
 
     <string name="settings_advanced">Avançado (Pro)</string>
     <string name="settings_cpu_awake">Manter o processador e o Wi-Fi ativos enquanto há sessões abertas (os agentes seguem trabalhando com a tela apagada; gasta mais bateria)</string>
+    <string name="settings_battery_title">Economia de bateria (Doze)</string>
+    <string name="settings_battery_desc">A economia de bateria do Android pode pausar ou encerrar trabalhos longos com a tela apagada ou quando o Jangada está em segundo plano. Permitir uso sem restrições para o Jangada evita interrupções.</string>
+    <string name="settings_battery_open">Abrir ajustes de bateria</string>
     <string name="settings_screen_on">Manter a tela ligada no terminal</string>
     <string name="settings_extra_keys">Mostrar a barra de teclas extras no terminal</string>
     <string name="settings_linux">Linux</string>

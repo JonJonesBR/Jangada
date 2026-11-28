@@ -428,6 +428,7 @@ class SettingsActivity : JangadaActivity() {
 
         // ---- Avançado (Pro) ----
         bindSwitch(R.id.settings_cpu_awake, settings.keepCpuAwake) { settings.keepCpuAwake = it }
+        findViewById<View>(R.id.settings_battery_open).setOnClickListener { openBatterySettings() }
         bindSwitch(R.id.settings_screen_on, settings.keepScreenOn) { settings.keepScreenOn = it }
         bindSwitch(R.id.settings_extra_keys, settings.showExtraKeys) { settings.showExtraKeys = it }
         findViewById<View>(R.id.settings_api_keys).setOnClickListener {
@@ -444,6 +445,14 @@ class SettingsActivity : JangadaActivity() {
         val switch = findViewById<Switch>(id)
         switch.isChecked = value
         switch.setOnCheckedChangeListener { _, checked -> save(checked) }
+    }
+
+    /** Abre a tela de otimização de bateria do Android (com fallback para os detalhes do app). */
+    private fun openBatterySettings() {
+        val listIntent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        if (runCatching { startActivity(listIntent) }.isSuccess) return
+        val appIntent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName"))
+        runCatching { startActivity(appIntent) }
     }
 
     /** Memória total do aparelho em bytes para o automático (0 se o Android não informar). */
