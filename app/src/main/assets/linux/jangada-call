@@ -33,14 +33,30 @@ role=""
 cwd="$PWD"
 while [ $# -gt 0 ]; do
   case "$1" in
-    --agent) agent="$2"; shift 2 ;;
-    --role) role="$2"; shift 2 ;;
-    --cwd) cwd="$2"; shift 2 ;;
+    --agent)
+      if [ $# -lt 2 ]; then echo "jangada-call: falta o valor de $1" >&2; exit 2; fi
+      agent="$2"; shift 2 ;;
+    --agent=*)
+      agent="${1#--agent=}"; shift ;;
+    --role)
+      if [ $# -lt 2 ]; then echo "jangada-call: falta o valor de $1" >&2; exit 2; fi
+      role="$2"; shift 2 ;;
+    --role=*)
+      role="${1#--role=}"; shift ;;
+    --cwd)
+      if [ $# -lt 2 ]; then echo "jangada-call: falta o valor de $1" >&2; exit 2; fi
+      cwd="$2"; shift 2 ;;
+    --cwd=*)
+      cwd="${1#--cwd=}"; shift ;;
     --help|-h)
       echo "uso: jangada-call --agent ID [--role revisor|planejador|implementador|orquestrador] [--cwd PASTA] [pedido]"
       exit 0
       ;;
     --) shift; break ;;
+    -*)
+      echo "jangada-call: opção desconhecida: $1" >&2
+      exit 2
+      ;;
     *) break ;;
   esac
 done
@@ -66,6 +82,20 @@ if [ -z "$prompt" ]; then
   exit 2
 fi
 
+urlencode() {
+  ENC="$1" LC_ALL=C awk 'BEGIN {
+    for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i
+    s = ENVIRON["ENC"]
+    out = ""
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (c ~ /^[A-Za-z0-9._~-]$/) out = out c
+      else out = out sprintf("%%%02X", ord[c])
+    }
+    printf "%s", out
+  }'
+}
+
 tmp=$(mktemp) || exit 1
 out="$tmp.out"
 err="$tmp.err"
@@ -78,13 +108,16 @@ case "$host" in
   *) base="http://$host:$port" ;;
 esac
 
+q_agent=$(urlencode "$agent")
+q_role=$(urlencode "$role")
+
 code=$(curl -sS -o "$out" -w '%{http_code}' --max-time 330 \
   -X POST \
   -H "X-Jangada-Token: $token" \
   -H "X-Jangada-Cwd: $cwd" \
   -H "X-Jangada-Chat: ${JANGADA_CHAT:-}" \
   --data-binary @"$tmp" \
-  "$base/call?agent=$agent&role=$role" 2>"$err")
+  "$base/call?agent=$q_agent&role=$q_role" 2>"$err")
 
 cat "$out" 2>/dev/null
 if [ "$code" != "200" ]; then

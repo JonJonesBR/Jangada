@@ -39,6 +39,43 @@ object HeadlessAgent {
     /** Agentes que aceitam chamada hoje (os mesmos que o seletor oferece). */
     val AGENTS = listOf("claude-code", "opencode", "antigravity")
 
+    /** Registro dos processos ativos para encerrar tudo em [stopAll]. */
+    private const val STOP_GRACE_MS = 2_000L
+    private val processLock = Any()
+    private val activeProcesses = LinkedHashSet<Process>()
+
+    internal fun registerProcess(process: Process) {
+        synchronized(processLock) { activeProcesses.add(process) }
+    }
+
+    internal fun unregisterProcess(process: Process) {
+        synchronized(processLock) { activeProcesses.remove(process) }
+    }
+
+    /** Encerra todos os processos ativos de chamadas entre agentes (ex.: ao sair ou fechar o Linux). */
+    fun stopAll() {
+        val snapshot = synchronized(processLock) {
+            val copy = activeProcesses.toList()
+            activeProcesses.clear()
+            copy
+        }
+        if (snapshot.isEmpty()) return
+        snapshot.forEach { runCatching { it.destroy() } }
+        val alive = snapshot.filter { runCatching { it.isAlive }.getOrDefault(false) }
+        if (alive.isNotEmpty()) {
+            Thread({
+                runCatching { Thread.sleep(STOP_GRACE_MS) }
+                alive.forEach { runCatching { if (it.isAlive) it.destroyForcibly() } }
+            }, "jangada-headless-stop").apply {
+                isDaemon = true
+                start()
+            }
+        }
+    }
+
+    /** Texto com a instrução do papel prefixada (para agentes sem `--append-system-prompt`). */
+    internal fun prefixedPrompt(role: AgentRoles.Role, prompt: String): String = "${role.prompt}\n\n$prompt"
+
     /**
      * Comando do turno (sem o `cd`). [readOnlyConfig] é o caminho da config de leitura do OpenCode;
      * devolve null para agente sem chamada implementada.
@@ -67,14 +104,16 @@ object HeadlessAgent {
             "opencode" -> {
                 val config = if (read) "OPENCODE_CONFIG=${AgentRecipe.q(readOnlyConfig.orEmpty())} " else ""
                 val auto = if (read) "" else "--auto "
-                timeout + "env $config" + "opencode run --standalone ${auto}--format json$model $q"
+                val qWithRole = AgentRecipe.q(prefixedPrompt(role, prompt))
+                timeout + "env $config" + "opencode run --standalone ${auto}--format json$model $qWithRole"
             }
             "antigravity" -> {
                 val perms = if (read) "--mode plan" else "--mode auto --dangerously-skip-permissions"
                 // Economia do agy: variáveis de corte/compactação + esforço médio. Sem --model: não dá para saber se o modelo existe sem consultar o agy.
                 val env = if (agyEconomy) AgyEconomy.envPrefix() else ""
                 val effort = if (agyEconomy) " --effort ${AgyEconomy.EFFORT}" else ""
-                env + timeout + "agy $perms$effort -p $q"
+                val qWithRole = AgentRecipe.q(prefixedPrompt(role, prompt))
+                env + timeout + "agy $perms$effort -p $qWithRole"
             }
             else -> null
         }
@@ -92,18 +131,54 @@ object HeadlessAgent {
         prompt: String,
         onStart: ((Process) -> Unit)? = null,
         agyEconomy: Boolean = false,
+    ): Result = runWith(
+        agentId = agentId,
+        role = role,
+        cwd = cwd,
+        prompt = prompt,
+        onStart = onStart,
+        agyEconomy = agyEconomy,
+        readOnlyConfig = {
+            if (agentId == "opencode" && role.scope == AgentRoles.Scope.READ) readOnlyConfig(linux) else null
+        },
+        execute = { script, startCb, onLine ->
+            linux.runBash(script, onStart = startCb, secrets = true, agentEnv = true, onLine = onLine)
+        },
+    )
+
+    internal fun runWith(
+        agentId: String,
+        role: AgentRoles.Role,
+        cwd: String,
+        prompt: String,
+        onStart: ((Process) -> Unit)? = null,
+        agyEconomy: Boolean = false,
+        readOnlyConfig: () -> String?,
+        execute: (script: String, onStart: (Process) -> Unit, onLine: (String) -> Unit) -> Int,
     ): Result {
         if (prompt.isBlank()) return Result(false, "pedido vazio")
         if (prompt.length > MAX_PROMPT) return Result(false, "pedido grande demais (máximo $MAX_PROMPT caracteres)")
-        val config = if (role.scope == AgentRoles.Scope.READ) readOnlyConfig(linux) else null
-        if (role.scope == AgentRoles.Scope.READ && config == null) return Result(false, "não deu para preparar a config de leitura")
-        val body = command(agentId, role, prompt, config, agyEconomy) ?: return Result(false, "este agente ainda não aceita chamada")
-        val out = StringBuilder()
+        val needsReadConfig = agentId == "opencode" && role.scope == AgentRoles.Scope.READ
+        val config = if (needsReadConfig) readOnlyConfig() else null
+        if (needsReadConfig && config == null) return Result(false, "não deu para preparar a config de leitura")
+        val body = command(agentId, role, prompt, config, agyEconomy)
+            ?: return Result(false, "este agente ainda não aceita chamada")
+        val collector = OutputCollector(agentId)
         // O filho não pode chamar outro: a profundidade já é 1.
         val script = "cd ${AgentRecipe.q(cwd)} || exit 1; export JANGADA_CALL_DEPTH=1; $body"
-        val code = runCatching { linux.runBash(script, onStart) { line -> if (out.length < MAX_OUTPUT) out.append(line).append('\n') } }
-            .getOrElse { return Result(false, "falha ao rodar: ${it.message}") }
-        val text = if (agentId == "opencode") openCodeText(out.toString()) else clean(out.toString())
+        var started: Process? = null
+        val startCb: (Process) -> Unit = { process ->
+            started = process
+            registerProcess(process)
+            onStart?.invoke(process)
+        }
+        val code = try {
+            runCatching { execute(script, startCb) { line -> collector.accept(line) } }
+                .getOrElse { return Result(false, "falha ao rodar: ${it.message}") }
+        } finally {
+            started?.let { unregisterProcess(it) }
+        }
+        val text = collector.finish()
         return when {
             text.isNotBlank() -> Result(true, text)
             code != 0 -> Result(false, "o agente terminou com erro (código $code)")
@@ -118,18 +193,52 @@ object HeadlessAgent {
         return if (OpenCodePreset.writeFile(root, file, READ_ONLY_CONFIG) != null) READ_ONLY_GUEST else null
     }
 
+    /** Texto de uma linha JSON do `opencode run --format json` (null se não for evento `text`). */
+    internal fun openCodeLineText(line: String): String? {
+        val trimmed = line.trim()
+        if (!trimmed.startsWith("{")) return null
+        val event = runCatching { JSONObject(trimmed) }.getOrNull() ?: return null
+        if (event.optString("type") != "text") return null
+        val part = event.optJSONObject("part") ?: return null
+        return part.optString("text").takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Acumula a saída linha a linha até [limit] caracteres: no OpenCode, extrai só os eventos
+     * `text` antes de limitar, para eventos de ferramentas/progresso não cortarem a resposta.
+     */
+    internal class OutputCollector(
+        private val agentId: String,
+        private val limit: Int = MAX_OUTPUT,
+    ) {
+        private val out = StringBuilder()
+
+        fun accept(line: String) {
+            if (out.length >= limit) return
+            if (agentId == "opencode") {
+                val chunk = openCodeLineText(line) ?: return
+                appendLimited(chunk)
+            } else {
+                appendLimited(line)
+                appendLimited("\n")
+            }
+        }
+
+        fun finish(): String = clean(out.toString())
+
+        private fun appendLimited(chunk: String) {
+            val remaining = limit - out.length
+            if (remaining <= 0 || chunk.isEmpty()) return
+            if (chunk.length <= remaining) out.append(chunk)
+            else out.append(chunk, 0, remaining)
+        }
+    }
+
     /** Texto final de uma saída do `opencode run --format json`: só as partes de texto do agente. */
     internal fun openCodeText(raw: String): String {
-        val text = StringBuilder()
-        for (line in raw.lineSequence()) {
-            val trimmed = line.trim()
-            if (!trimmed.startsWith("{")) continue
-            val event = runCatching { JSONObject(trimmed) }.getOrNull() ?: continue
-            if (event.optString("type") != "text") continue
-            val part = event.optJSONObject("part") ?: continue
-            text.append(part.optString("text"))
-        }
-        return clean(text.toString())
+        val collector = OutputCollector("opencode")
+        for (line in raw.lineSequence()) collector.accept(line)
+        return collector.finish()
     }
 
     /** Tira códigos ANSI e espaços sobrando. */

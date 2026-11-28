@@ -44,4 +44,14 @@ class AgentRolesTest {
             assertTrue(role.prompt.length > 40)
         }
     }
+
+    @Test
+    fun resolveUsaPapelFixoQuandoDefinidoECasoContrarioOPedido() {
+        assertEquals(AgentRoles.REVISOR, AgentRoles.resolve(AgentRoles.REVISOR, "")?.id)
+        assertEquals(AgentRoles.REVISOR, AgentRoles.resolve(AgentRoles.REVISOR, AgentRoles.IMPLEMENTADOR)?.id)
+        assertEquals(AgentRoles.PLANEJADOR, AgentRoles.resolve("", AgentRoles.PLANEJADOR)?.id)
+        assertEquals(AgentRoles.REVISOR, AgentRoles.resolve("desconhecido", AgentRoles.REVISOR)?.id)
+        assertNull(AgentRoles.resolve("", ""))
+        assertNull(AgentRoles.resolve("", "desconhecido"))
+    }
 }

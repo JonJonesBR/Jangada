@@ -531,7 +531,7 @@ class TerminalService : Service() {
         if (call.agent !in HeadlessAgent.AGENTS) return CallServer.Reply(400, "agente sem chamada: ${call.agent}")
         // O papel fixo dos Ajustes vence o que o chamador pediu; sem ele, vale o pedido.
         val fixed = settings.callRole(call.agent)
-        val role = (if (fixed.isEmpty()) null else AgentRoles.byId(fixed)) ?: AgentRoles.byId(call.role)
+        val role = AgentRoles.resolve(fixed, call.role)
             ?: return CallServer.Reply(
                 400,
                 if (call.role.isEmpty()) "informe --role (ou fixe um papel nos Ajustes)" else "papel desconhecido: ${call.role}",
@@ -565,7 +565,11 @@ class TerminalService : Service() {
         // Economia do agy no turno chamado: o ajuste do trabalho chamador ou, vindo do terminal, o geral.
         val agyEconomy = if (call.chat.isEmpty()) settings.agyEconomy == AgyEconomy.ON
         else settings.agyEconomyFor(call.chat)
-        val result = HeadlessAgent.run(linux, call.agent, role, cwd, call.prompt, agyEconomy = agyEconomy)
+        val result = HeadlessAgent.run(
+            linux, call.agent, role, cwd, call.prompt,
+            onStart = { call.registerProcess(it) },
+            agyEconomy = agyEconomy,
+        )
         val text = if (result.text.length > cardText) result.text.take(cardText) + "…" else result.text
         tell(if (result.ok) getString(R.string.call_done, who, text) else getString(R.string.call_failed, who, text), !result.ok)
         return if (result.ok) CallServer.Reply(200, result.text) else CallServer.Reply(500, result.text)
@@ -701,6 +705,7 @@ class TerminalService : Service() {
     override fun onDestroy() {
         callServer?.stop()
         callServer = null
+        HeadlessAgent.stopAll()
         lanServer?.stop()
         lanServer = null
         memoryWatch.stop()
@@ -1456,6 +1461,9 @@ class TerminalService : Service() {
     }
 
     private fun exit() {
+        callServer?.stop()
+        callServer = null
+        HeadlessAgent.stopAll()
         lanServer?.stop()
         lanServer = null
         tearDownSessions().forEach { it.stop() }
@@ -1474,6 +1482,10 @@ class TerminalService : Service() {
      * navegador) e o serviço segue em primeiro plano para o trabalho terminar.
      */
     fun closeEverything(keepLanServer: Boolean = false, then: () -> Unit) {
+        val activeCall = callServer
+        callServer = null
+        activeCall?.stop()
+        HeadlessAgent.stopAll()
         if (!keepLanServer) {
             lanServer?.stop()
             lanServer = null
@@ -1491,6 +1503,7 @@ class TerminalService : Service() {
         val workers = tasks.values.mapNotNull { it.worker } + clones.values.mapNotNull { it.worker }
         thread(name = "jangada-close") {
             runCatching { chatsGone.await(5, java.util.concurrent.TimeUnit.SECONDS) }
+            runCatching { activeCall?.awaitStopped(5_000) }
             workers.forEach { runCatching { it.join(5_000) } }
             // Apagar o Linux enquanto a limpeza apaga parte dele faria as duas falharem.
             legacyCleanup?.let { runCatching { it.join(60_000) } }

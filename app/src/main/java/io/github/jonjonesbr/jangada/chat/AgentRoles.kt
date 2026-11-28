@@ -64,6 +64,10 @@ object AgentRoles {
 
     fun byId(id: String): Role? = ALL.firstOrNull { it.id == id }
 
+    /** Papel efetivo: o fixo dos Ajustes vence o pedido; sem fixo válido, vale o pedido. */
+    fun resolve(fixedId: String, requestedId: String): Role? =
+        (if (fixedId.isEmpty()) null else byId(fixedId)) ?: byId(requestedId)
+
     /** Ids que o seletor mostra (ordem fixa). */
     val IDS: List<String> = ALL.map { it.id }
 }

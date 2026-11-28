@@ -185,10 +185,10 @@ class LinuxEnv(context: Context) {
 
     /**
      * Igual ao anterior, mas sem terminal: para consultas rápidas do app.
-     * Sem as chaves de API: quem roda aqui são scripts de instalação de terceiros.
+     * Sem as chaves de API por padrão: quem roda aqui são scripts de instalação de terceiros.
      */
-    fun bashCommand(script: String): List<String> =
-        guestEnv(secrets = false) + listOf("/bin/bash", "--login", "-i", "-c", script)
+    fun bashCommand(script: String, secrets: Boolean = false, agentEnv: Boolean = false): List<String> =
+        guestEnv(secrets = secrets, agentEnv = agentEnv) + listOf("/bin/bash", "--login", "-i", "-c", script)
 
     /** Script não interativo (usado na instalação). Sem as chaves de API. */
     fun scriptCommand(script: String): List<String> =
@@ -219,8 +219,13 @@ class LinuxEnv(context: Context) {
         runArgv(scriptCommand(script), onStart, onLine)
 
     /** Como [run], mas num bash interativo (enxerga o PATH dos instaladores). */
-    fun runBash(script: String, onStart: ((Process) -> Unit)? = null, onLine: (String) -> Unit): Int =
-        runArgv(bashCommand(script), onStart, onLine)
+    fun runBash(
+        script: String,
+        onStart: ((Process) -> Unit)? = null,
+        secrets: Boolean = false,
+        agentEnv: Boolean = false,
+        onLine: (String) -> Unit,
+    ): Int = runArgv(bashCommand(script, secrets = secrets, agentEnv = agentEnv), onStart, onLine)
 
     /**
      * Inicia [script] num bash de login dentro do Debian e devolve o processo

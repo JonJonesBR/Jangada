@@ -21,7 +21,19 @@ import java.util.concurrent.Semaphore
 class CallServer(private val handle: (Call) -> Reply) {
 
     /** Pedido do `jangada-call`. [chat] vazio quando veio de um terminal. */
-    class Call(val agent: String, val role: String, val cwd: String, val chat: String, val prompt: String)
+    class Call(
+        val agent: String,
+        val role: String,
+        val cwd: String,
+        val chat: String,
+        val prompt: String,
+        private val onProcess: ((Process) -> Unit)? = null,
+    ) {
+        /** Registra o processo em execução para encerrá-lo caso a ponte pare. */
+        fun registerProcess(process: Process) {
+            onProcess?.invoke(process)
+        }
+    }
 
     /** Resposta: [code] HTTP e [text] devolvido ao chamador. */
     class Reply(val code: Int, val text: String)
@@ -32,6 +44,10 @@ class CallServer(private val handle: (Call) -> Reply) {
     private var conf: File? = null
     @Volatile private var token = ""
     private val busy = Semaphore(1)
+    private val activeLock = Any()
+    private var activeProcess: Process? = null
+    private var activeWorker: Thread? = null
+    @Volatile private var stopped = false
 
     /** Porta em uso (0 = desligado). */
     @Volatile
@@ -79,6 +95,11 @@ class CallServer(private val handle: (Call) -> Reply) {
         conf = file.toFile()
         socket = server
         port = server.localPort
+        synchronized(activeLock) {
+            stopped = false
+            activeProcess = null
+            activeWorker = null
+        }
         thread = Thread({ acceptLoop(server) }, "jangada-calls").apply {
             isDaemon = true
             start()
@@ -87,6 +108,14 @@ class CallServer(private val handle: (Call) -> Reply) {
     }
 
     fun stop() {
+        val toKill: Process?
+        val worker: Thread?
+        synchronized(activeLock) {
+            stopped = true
+            toKill = activeProcess
+            activeProcess = null
+            worker = activeWorker
+        }
         port = 0
         socket?.let { runCatching { it.close() } }
         socket = null
@@ -97,6 +126,40 @@ class CallServer(private val handle: (Call) -> Reply) {
         conf = null
         token = ""
         host = ""
+        toKill?.let { killProcess(it) }
+        worker?.interrupt()
+        HeadlessAgent.stopAll()
+    }
+
+    /** Aguarda o encerramento do worker de chamada em andamento, até [timeoutMs]. */
+    fun awaitStopped(timeoutMs: Long) {
+        val worker = synchronized(activeLock) { activeWorker } ?: return
+        if (worker !== Thread.currentThread()) {
+            runCatching { worker.join(timeoutMs) }
+        }
+    }
+
+    private fun registerActiveProcess(process: Process) {
+        val alreadyStopped = synchronized(activeLock) {
+            if (stopped) true else {
+                activeProcess = process
+                false
+            }
+        }
+        if (alreadyStopped) killProcess(process)
+    }
+
+    private fun killProcess(process: Process) {
+        runCatching { process.destroy() }
+        if (runCatching { process.isAlive }.getOrDefault(false)) {
+            Thread({
+                runCatching { Thread.sleep(2_000L) }
+                runCatching { if (process.isAlive) process.destroyForcibly() }
+            }, "jangada-call-kill").apply {
+                isDaemon = true
+                start()
+            }
+        }
     }
 
     private fun acceptLoop(server: ServerSocket) {
@@ -124,20 +187,29 @@ class CallServer(private val handle: (Call) -> Reply) {
     private fun runCall(request: LanHttp.HttpRequest): Reply {
         if (!busy.tryAcquire()) return Reply(429, "já há uma chamada em andamento; tente de novo em instantes")
         try {
+            synchronized(activeLock) {
+                if (stopped) return Reply(503, "ponte encerrada")
+                activeWorker = Thread.currentThread()
+            }
             val call = Call(
                 agent = request.query["agent"].orEmpty(),
                 role = request.query["role"].orEmpty(),
                 cwd = request.headers["x-jangada-cwd"].orEmpty(),
                 chat = request.headers["x-jangada-chat"].orEmpty(),
                 prompt = request.body.toString(Charsets.UTF_8),
+                onProcess = { registerActiveProcess(it) },
             )
-            if (call.agent.isEmpty() || call.role.isEmpty()) return Reply(400, "informe --agent e --role")
+            if (call.agent.isEmpty()) return Reply(400, "informe --agent")
             return runCatching { handle(call) }
                 .getOrElse {
                     Log.w(TAG, "chamada falhou", it)
                     Reply(500, "falha na chamada: ${it.message ?: "erro"}")
                 }
         } finally {
+            synchronized(activeLock) {
+                activeProcess = null
+                activeWorker = null
+            }
             busy.release()
         }
     }
@@ -162,6 +234,7 @@ class CallServer(private val handle: (Call) -> Reply) {
         404 -> "Not Found"
         405 -> "Method Not Allowed"
         429 -> "Too Many Requests"
+        503 -> "Service Unavailable"
         else -> "Internal Server Error"
     }
 
