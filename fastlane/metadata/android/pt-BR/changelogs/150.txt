@@ -1,0 +1,1 @@
+Economia do Antigravity (agy) e chat mais limpo: instala o chop com hook e filtros padrão, liga a economia do agy por padrão com teto de 180K tokens e alerta para continuar em conversa nova, renderiza links Markdown sem caminhos file:// crus no chat e reforça os modos Conciso e Muito conciso.

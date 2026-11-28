@@ -1,0 +1,1 @@
+Antigravity (agy) economy & cleaner chat: installs chop with PreToolUse hook and default filters, enables agy economy by default with a 180K token cap and proactive "Continue in new chat" alert, renders Markdown links cleanly in chat without raw file:// paths, and tightens Concise and Very concise instructions.

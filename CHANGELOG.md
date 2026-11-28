@@ -1,5 +1,11 @@
 # Novidades
 
+## 1.39.0
+
+- Antigravity (agy): instalação automática do `chop` (com hook `PreToolUse` e filtros padrão que preservam edições do usuário) e limpeza do plugin duplicado `context-mode`.
+- Economia do agy reforçada: ligada por padrão, compactação com teto absoluto de 180K tokens, alerta proativo aos 180K com atalho "Continuar em conversa nova", `AutoCompact` com faixas de 20%, 30% e 40%, e limpeza de dados antigos do `context.db` em Armazenamento.
+- Chat e concisão: links Markdown `[texto](url)` agora aparecem limpos no chat (clicáveis para `http(s)://` e sem despejar caminhos `file:///...`), e os modos Conciso e Muito conciso reforçam a proibição de links de arquivo, caminhos absolutos e listas longas.
+
 ## 1.38.1
 
 - Limites do plano: botão "Atualizar agora" no painel do chip, nos agentes que conseguem reler sem esperar uma resposta (Codex, OpenCode e agy). No Claude o botão não aparece: o limite só chega junto com a resposta.
