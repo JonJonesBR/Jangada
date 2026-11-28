@@ -574,6 +574,8 @@
     <string name="about_title">About Jangada</string>
     <string name="about_tagline">AI command-line agents on your Android.</string>
     <string name="about_version">Version %s</string>
+    <string name="about_updates">Check for updates</string>
+    <string name="about_updates_note">Installing a new APK restarts the app and closes open conversations and terminals.</string>
     <string name="about_repo">Source code on GitHub</string>
     <string name="about_licenses">Licenses and credits</string>
     <string name="about_privacy">No ads, no tracking. Jangada only goes online to install the Linux and the agents and to check for new versions; your conversations go only to the AI services you choose to use.</string>

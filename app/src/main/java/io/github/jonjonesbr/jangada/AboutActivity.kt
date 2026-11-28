@@ -28,6 +28,8 @@ class AboutActivity : JangadaActivity() {
         content.addView(text(getString(R.string.about_version, version), 14f, R.color.setup_muted_text))
         content.addView(text(getString(R.string.about_tagline), 16f, R.color.setup_text, top = 16))
         content.addView(text(getString(R.string.about_privacy), 14f, R.color.setup_muted_text, top = 12))
+        content.addView(link(getString(R.string.about_updates), "$REPO/releases"))
+        content.addView(text(getString(R.string.about_updates_note), 13f, R.color.setup_muted_text, top = 2))
         content.addView(link(getString(R.string.about_repo), REPO))
         content.addView(link(getString(R.string.about_licenses), "$REPO/blob/main/THIRD_PARTY_NOTICES.md"))
         content.addView(text(getString(R.string.about_credits), 12f, R.color.setup_muted_text, top = 20, center = false))

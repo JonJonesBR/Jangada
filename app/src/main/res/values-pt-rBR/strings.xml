@@ -572,6 +572,8 @@
     <string name="about_title">Sobre o Jangada</string>
     <string name="about_tagline">Agentes de IA de linha de comando no seu Android.</string>
     <string name="about_version">Versão %s</string>
+    <string name="about_updates">Verificar atualizações</string>
+    <string name="about_updates_note">Instalar um APK novo reinicia o app e fecha as conversas e terminais abertos.</string>
     <string name="about_repo">Código-fonte no GitHub</string>
     <string name="about_licenses">Licenças e créditos</string>
     <string name="about_privacy">Sem anúncios e sem rastreamento. O Jangada só acessa a internet para instalar o Linux e os agentes e para ver se há versões novas; suas conversas vão só para os serviços de IA que você escolher usar.</string>
